@@ -41,3 +41,14 @@ imports execute under vitest.
 `next build` emits one expected Turbopack warning: dynamic filesystem access
 in `provider-store.ts` (traced from `/api/providers`) pulls the project into
 tracing. Harmless for this local app — no action needed.
+
+## Clean-install verification
+
+- Date: 2026-09-04 (UTC); fresh clone → temp `clean-install-check2`, documented flow (`npm install`).
+- Env: node v22.13.1, npm 11.5.2.
+- `npm install` — pass (~16s, 511 packages audited, 0 vulnerabilities).
+- `npm run typecheck` (`tsc --noEmit`) — pass (~4s).
+- `npx vitest run` — FAIL (exit 1, ~1.5s; rolldown startup error: `Cannot find native binding` / `Cannot find module '@rolldown/binding-wasm32-wasi'` via `./rolldown-binding.wasi.cjs`; captured as-is, no workaround applied).
+- `npm run build` (`next build`) — pass (~15s; only the expected Turbopack dynamic-filesystem-access warning in `provider-db.ts`).
+- Note: `npm ci` currently hits the same npm optional-dependencies bug for rolldown native bindings on this platform (workaround: use `npm install`).
+- Secret sweep (2026-09-04): no real keys in tracked files or history (only `sk-FAKE*` placeholders in `src/shared/api/llm/errors.test.ts`); secret store `providers.json` lives outside the repo and is untracked.

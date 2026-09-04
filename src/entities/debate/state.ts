@@ -18,9 +18,20 @@ export function canTransition(from: DebatePhase, to: DebatePhase): boolean {
   return NEXT_PHASE[from] === to;
 }
 
+export class InvalidTransitionError extends Error {
+  readonly from: DebatePhase;
+  readonly to: DebatePhase;
+  constructor(from: DebatePhase, to: DebatePhase) {
+    super(`Invalid debate transition: ${from} -> ${to}`);
+    this.name = "InvalidTransitionError";
+    this.from = from;
+    this.to = to;
+  }
+}
+
 export function transitionPhase(state: DebateState, to: DebatePhase): DebateState {
   if (!canTransition(state.phase, to)) {
-    throw new Error(`Invalid debate transition: ${state.phase} -> ${to}`);
+    throw new InvalidTransitionError(state.phase, to);
   }
   return { ...state, phase: to };
 }

@@ -4,6 +4,11 @@
  * The reducer is intentionally narrow: it mirrors the server event order
  * (phase → tokens → turn → judge-start → verdict → done) so each event
  * produces a deterministic state mutation without timers or mocks.
+ *
+ * Terminal states follow a strict precedence: `error` wins over `cancelled`,
+ * and `finished` (a real verdict) wins over `cancelled`. Cancellation only
+ * sticks when the match ended cleanly from the user's side; we never want to
+ * hide a provider failure or fabricate a draw.
  */
 
 import type { DebateSide } from "@/entities/debate";
@@ -30,8 +35,17 @@ export interface SpeechPanel {
 
 export type SpeechPhase = Exclude<DebateStreamPhase, "CREATED" | "FINISHED">;
 
+export type DebateRuntimeStatus =
+  | "idle"
+  | "starting"
+  | "streaming"
+  | "judging"
+  | "finished"
+  | "error"
+  | "cancelled";
+
 export interface DebateRuntimeState {
-  readonly status: "idle" | "starting" | "streaming" | "judging" | "finished" | "error";
+  readonly status: DebateRuntimeStatus;
   readonly topic?: string;
   readonly mode: "quick";
   readonly currentPhase: DebateStreamPhase;
@@ -41,6 +55,12 @@ export interface DebateRuntimeState {
   readonly panels: readonly SpeechPanel[];
   readonly verdict?: DebateStreamVerdict;
   readonly errorMessage?: string;
+  /**
+   * Set when the user ended the match via the UI before a verdict arrived.
+   * Preserves the in-flight panels/topic so the cancelled screen can show
+   * what had been streamed so far.
+   */
+  readonly cancelled: boolean;
 }
 
 export const initialRuntimeState: DebateRuntimeState = {
@@ -51,6 +71,7 @@ export const initialRuntimeState: DebateRuntimeState = {
   judgeActive: false,
   judgeReasoning: "",
   panels: [],
+  cancelled: false,
 };
 
 // --- Actions ----------------------------------------------------------------
@@ -59,7 +80,10 @@ export type DebateRuntimeAction =
   | { readonly type: "start"; readonly topic: string }
   | { readonly type: "stream-event"; readonly event: DebateStreamEvent }
   | { readonly type: "stream-error"; readonly message: string }
+  /** Internal silent cleanup — does not surface a cancelled screen. */
   | { readonly type: "abort" }
+  /** User-initiated stop — drives the calm cancelled presentation. */
+  | { readonly type: "cancel" }
   | { readonly type: "reset" };
 
 // --- Reducer ----------------------------------------------------------------
@@ -78,14 +102,35 @@ export function reduceDebateRuntime(
     case "stream-event":
       return applyStreamEvent(state, action.event);
     case "stream-error":
-      return { ...state, status: "error", errorMessage: action.message };
+      return { ...state, status: "error", cancelled: false, errorMessage: action.message };
+    case "cancel":
+      return applyCancel(state);
     case "abort":
-      return { ...state, status: "idle", errorMessage: undefined };
+      // Silent cleanup (e.g. on unmount); never surfaces cancelled to the UI.
+      return { ...state, status: "idle", cancelled: false, errorMessage: undefined };
     case "reset":
       return initialRuntimeState;
     default:
       return state;
   }
+}
+
+function applyCancel(state: DebateRuntimeState): DebateRuntimeState {
+  // Error beats cancelled: never let a successful user stop hide a real
+  // failure that the server reported.
+  if (state.status === "error") return state;
+  // A real verdict beats cancelled: if the judge already decided, show the
+  // verdict, not the "ended before verdict" screen.
+  if (state.status === "finished" || state.verdict) return state;
+  // Already cancelled: keep it idempotent (e.g. abort fires twice).
+  if (state.cancelled) return state;
+  return {
+    ...state,
+    status: "cancelled",
+    cancelled: true,
+    judgeActive: false,
+    currentSide: null,
+  };
 }
 
 function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): DebateRuntimeState {
@@ -107,6 +152,7 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
         status: "judging",
         judgeActive: true,
         judgeReasoning: "",
+        cancelled: false,
         currentPhase: "JUDGING",
         currentSide: null,
       };
@@ -116,16 +162,20 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
         status: "finished",
         verdict: event.verdict,
         judgeActive: false,
+        cancelled: false,
         currentPhase: "FINISHED",
         currentSide: null,
       };
     case "error":
-      return { ...state, status: "error", errorMessage: event.message };
+      return { ...state, status: "error", cancelled: false, errorMessage: event.message };
     case "done":
       if (state.status === "finished") return state;
       // A judge/server failure must survive `done`: never overwrite an error
       // with a graceful finish, otherwise the UI would render a fake verdict.
       if (state.status === "error") return state;
+      // Cancellation must also survive `done`: if the user stopped the match
+      // we should not flip back to a (potentially fabricated) finished state.
+      if (state.cancelled || state.status === "cancelled") return state;
       if (state.verdict) {
         return { ...state, status: "finished", currentPhase: "FINISHED", currentSide: null };
       }
@@ -134,6 +184,7 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
       return {
         ...state,
         status: "error",
+        cancelled: false,
         errorMessage: state.errorMessage ?? "Match ended without a verdict",
         judgeActive: false,
         currentSide: null,
@@ -246,9 +297,27 @@ export function statusLineFor(state: DebateRuntimeState): string {
       return state.judgeActive ? "Judge is evaluating…" : "Waiting for the judge…";
     case "finished":
       return state.verdict ? "Verdict reached." : "Match complete.";
+    case "cancelled":
+      return "Match ended before a verdict.";
     case "error":
       return state.errorMessage ?? "Something went wrong.";
     default:
       return "";
   }
+}
+
+/** True when the runtime is in a "match in progress" view (not a terminal screen). */
+export function isInMatch(state: DebateRuntimeState): boolean {
+  return (
+    state.status === "starting" ||
+    state.status === "streaming" ||
+    state.status === "judging" ||
+    state.status === "finished" ||
+    state.status === "cancelled"
+  );
+}
+
+/** How far the match progressed before it stopped — used by the cancelled screen. */
+export function lastReachedPhase(state: DebateRuntimeState): DebateStreamPhase {
+  return state.currentPhase;
 }

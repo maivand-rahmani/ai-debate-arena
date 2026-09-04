@@ -75,13 +75,15 @@ function RoundDots({ activeIndex }: { activeIndex: number }) {
   );
 }
 
-export function StatusLine({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "judge" | "error" }) {
+export function StatusLine({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "judge" | "error" | "cancelled" }) {
   const toneClass =
     tone === "judge"
-      ? "bg-arena-gold-100/10 text-arena-gold-50"
+      ? "bg-gold-100/10 text-gold-50"
       : tone === "error"
         ? "bg-arena-coral-300/10 text-arena-coral-100"
-        : "bg-white/[0.06] text-arena-200";
+        : tone === "cancelled"
+          ? "bg-gold-100/[0.08] text-gold-50"
+          : "bg-white/[0.06] text-arena-200";
   return (
     <div className={`status-strip border border-white/[0.07] ${toneClass}`}>
       <span className="pulse-dot" aria-hidden="true" />

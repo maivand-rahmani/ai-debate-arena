@@ -3,6 +3,7 @@ import {
   ACTIVE_TOKEN_POLICY,
   AGENT_MAX_OUTPUT_TOKENS,
   JUDGE_MAX_OUTPUT_TOKENS,
+  MATCH_TIMEOUT_MS,
   TOKEN_POLICIES,
   getTokenPolicy,
 } from "./token-policy";
@@ -34,5 +35,9 @@ describe("token policy", () => {
       expect(tiers[0][key]).toBeLessThanOrEqual(tiers[1][key]);
       expect(tiers[1][key]).toBeLessThanOrEqual(tiers[2][key]);
     }
+  });
+
+  it("bounds streamed matches with a lifecycle timeout", () => {
+    expect(MATCH_TIMEOUT_MS).toBe(180_000);
   });
 });

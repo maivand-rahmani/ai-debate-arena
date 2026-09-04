@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DebatePhase, type DebateTurn } from "./types";
-import { appendTurn, attachVerdict, createDebateState } from "./state";
+import { appendTurn, attachVerdict, createDebateState, InvalidTransitionError, transitionPhase } from "./state";
 
 describe("state helpers", () => {
   it("appends turns immutably", () => {
@@ -42,5 +42,24 @@ describe("state helpers", () => {
     expect(next.phase).toBe(DebatePhase.FINISHED);
     expect(next.verdict).toEqual(verdict);
     expect(state.verdict).toBeUndefined();
+  });
+
+  it("throws a typed error on illegal transitions", () => {
+    const state = createDebateState();
+    let caught: unknown;
+    try {
+      transitionPhase(state, DebatePhase.JUDGING);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(InvalidTransitionError);
+    expect(caught).toBeInstanceOf(Error);
+    if (caught instanceof InvalidTransitionError) {
+      expect(caught.from).toBe(DebatePhase.CREATED);
+      expect(caught.to).toBe(DebatePhase.JUDGING);
+      expect(caught.message).toBe("Invalid debate transition: CREATED -> JUDGING");
+    } else {
+      expect.unreachable("expected an InvalidTransitionError");
+    }
   });
 });

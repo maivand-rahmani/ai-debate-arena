@@ -8,9 +8,10 @@ import { useProviders } from "@/features/create-debate/use-providers";
 import type { MatchDraft } from "@/features/create-debate/draft";
 import { useDebateStream } from "@/features/run-debate/lib/use-debate-stream";
 import { AgentCorner } from "@/features/run-debate/ui/agent-corner";
+import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
 import { JudgePanel } from "@/features/run-debate/ui/judge-panel";
 import { MatchHeader, StatusLine } from "@/features/run-debate/ui/match-header";
-import { panelsForSide, statusLineFor } from "@/features/run-debate/lib/reducer";
+import { isInMatch, panelsForSide, statusLineFor } from "@/features/run-debate/lib/reducer";
 
 const TOP_STRIP_LINKS = [
   { label: "How it works", primary: false },
@@ -18,10 +19,14 @@ const TOP_STRIP_LINKS = [
 
 export default function ArenaScreen() {
   const { providers } = useProviders();
-  const { state, start, reset } = useDebateStream();
+  const { state, start, reset, cancel } = useDebateStream();
   const [matchDraft, setMatchDraft] = useState<MatchDraft | null>(null);
 
-  const inMatch = state.status !== "idle" && state.status !== "error";
+  // Cancelled is a terminal *presentation* — the live arena keeps rendering
+  // so the user can see what was streamed — but it is no longer "in match"
+  // from a control-flow perspective. We still want the End-match button to
+  // work (it just bounces through `cancel` again, which is a no-op).
+  const inMatch = isInMatch(state);
 
   const handleStart = useCallback(
     (draft: MatchDraft) => {
@@ -33,9 +38,26 @@ export default function ArenaScreen() {
   );
 
   const handleNewMatch = useCallback(() => {
+    // From any terminal state we drop the saved draft so the next setup
+    // form is freshly derived from the providers list.
     reset();
     setMatchDraft(null);
   }, [reset]);
+
+  const handleEndMatch = useCallback(() => {
+    if (state.status === "cancelled" || state.status === "finished") {
+      // Already terminal — nothing to abort; just clear.
+      reset();
+      setMatchDraft(null);
+      return;
+    }
+    cancel();
+  }, [cancel, reset, state.status]);
+
+  const handleRunAgain = useCallback(() => {
+    if (!matchDraft) return;
+    start(toRequest(matchDraft));
+  }, [matchDraft, start]);
 
   const topic = matchDraft?.topic ?? state.topic ?? "";
   const agentA = useMemo(() => providerById(providers, matchDraft?.sideA.providerId), [providers, matchDraft]);
@@ -44,7 +66,7 @@ export default function ArenaScreen() {
   return (
     <main className="min-h-screen overflow-hidden bg-arena-900 text-arena-50">
       <div className="ambient-glow" aria-hidden="true" />
-      <Nav inMatch={inMatch} onEndMatch={handleNewMatch} />
+      <Nav inMatch={inMatch} onEndMatch={handleEndMatch} />
       <div className="relative z-10 mx-auto w-full max-w-[1240px] px-5 pb-20 pt-8 sm:px-8 lg:px-10">
         {inMatch ? (
           <LiveArena
@@ -53,10 +75,17 @@ export default function ArenaScreen() {
             agentA={agentA}
             agentB={agentB}
             draft={matchDraft}
-            onAbort={handleNewMatch}
+            onAbort={handleEndMatch}
+            onNewMatch={handleNewMatch}
+            onRunAgain={handleRunAgain}
           />
         ) : (
-          <SetupHero onStart={handleStart} errorMessage={state.errorMessage} />
+          <SetupHero
+            onStart={handleStart}
+            errorMessage={state.errorMessage}
+            canRunAgain={Boolean(matchDraft)}
+            onRunAgain={handleRunAgain}
+          />
         )}
       </div>
       <footer className="relative z-10 border-t border-white/[0.06] px-5 py-5 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-arena-400">
@@ -101,7 +130,14 @@ function Nav({ inMatch, onEndMatch }: { inMatch: boolean; onEndMatch: () => void
   );
 }
 
-function SetupHero({ onStart, errorMessage }: { onStart: (draft: MatchDraft) => void; errorMessage?: string }) {
+interface SetupHeroProps {
+  readonly onStart: (draft: MatchDraft) => void;
+  readonly errorMessage?: string;
+  readonly canRunAgain: boolean;
+  readonly onRunAgain: () => void;
+}
+
+function SetupHero({ onStart, errorMessage, canRunAgain, onRunAgain }: SetupHeroProps) {
   return (
     <>
       <header className="mb-12 max-w-3xl pt-6 sm:pt-12">
@@ -118,11 +154,27 @@ function SetupHero({ onStart, errorMessage }: { onStart: (draft: MatchDraft) => 
         </p>
       </header>
       {errorMessage ? (
-        <div className="topic-panel mb-6 border-arena-coral-300/30 bg-arena-coral-300/[0.07]" role="alert">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-coral-200">
-            Match could not start
-          </p>
-          <p className="mt-2 text-sm text-arena-100">{errorMessage}</p>
+        <div
+          className="topic-panel mb-6 border-arena-coral-300/30 bg-arena-coral-300/[0.07]"
+          role="alert"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-coral-200">
+                Match could not start
+              </p>
+              <p className="mt-2 text-sm text-arena-100">{errorMessage}</p>
+            </div>
+            {canRunAgain ? (
+              <button
+                type="button"
+                onClick={onRunAgain}
+                className="rounded-lg border border-arena-coral-300/40 bg-arena-coral-300/[0.08] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-arena-coral-100 transition hover:border-arena-coral-300/70 hover:text-arena-50"
+              >
+                Run again
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
       <SetupForm onStart={onStart} />
@@ -137,12 +189,31 @@ interface LiveArenaProps {
   readonly agentB?: RedactedProvider;
   readonly draft: MatchDraft | null;
   readonly onAbort: () => void;
+  readonly onNewMatch: () => void;
+  readonly onRunAgain: () => void;
 }
 
-function LiveArena({ topic, state, agentA, agentB, draft, onAbort }: LiveArenaProps) {
+function LiveArena({ topic, state, agentA, agentB, draft, onAbort, onNewMatch, onRunAgain }: LiveArenaProps) {
   const showJudge = state.status === "judging" || state.status === "finished";
-  const judgeState = state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
-  const tone = state.status === "error" ? "error" : state.status === "judging" || state.status === "finished" ? "judge" : "neutral";
+  const judgeState =
+    state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
+  const showCancelled = state.status === "cancelled";
+  const showErrorMidMatch = state.status === "error";
+  const tone =
+    state.status === "error"
+      ? "error"
+      : state.status === "cancelled"
+        ? "cancelled"
+        : state.status === "judging" || state.status === "finished"
+          ? "judge"
+          : "neutral";
+
+  const action =
+    showCancelled
+      ? { label: "New match", handler: onNewMatch, emphasis: "primary" as const }
+      : showErrorMidMatch && draft
+        ? { label: "Run again", handler: onRunAgain, emphasis: "primary" as const }
+        : { label: "End match", handler: onAbort, emphasis: "ghost" as const };
 
   return (
     <div className="grid gap-8">
@@ -166,6 +237,7 @@ function LiveArena({ topic, state, agentA, agentB, draft, onAbort }: LiveArenaPr
         <VSPillar
           currentPhase={state.currentPhase}
           finished={state.status === "finished"}
+          cancelled={showCancelled}
         />
         <AgentCorner
           side="B"
@@ -179,7 +251,9 @@ function LiveArena({ topic, state, agentA, agentB, draft, onAbort }: LiveArenaPr
         />
       </div>
 
-      {showJudge ? (
+      {showCancelled ? (
+        <CancelledPanel state={state} onNewMatch={onNewMatch} />
+      ) : showJudge ? (
         <JudgePanel
           state={judgeState ?? "evaluating"}
           reasoning={state.verdict?.reasoning}
@@ -190,21 +264,36 @@ function LiveArena({ topic, state, agentA, agentB, draft, onAbort }: LiveArenaPr
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <StatusLine tone={tone}>{statusLineFor(state)}</StatusLine>
-        <button
-          type="button"
-          onClick={onAbort}
-          className="rounded-lg border border-white/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-arena-200 transition hover:border-white/25 hover:text-arena-50"
-        >
-          End match
-        </button>
+        <ActionButton {...action} />
       </div>
     </div>
   );
 }
 
-function VSPillar({ currentPhase, finished }: { currentPhase: string; finished: boolean }) {
-  const stageLabel =
-    finished
+interface ActionButtonProps {
+  readonly label: string;
+  readonly handler: () => void;
+  readonly emphasis: "primary" | "ghost";
+}
+
+function ActionButton({ label, handler, emphasis }: ActionButtonProps) {
+  const base =
+    "rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] transition";
+  const cls =
+    emphasis === "primary"
+      ? `${base} border border-arena-coral-300/40 bg-arena-coral-300/[0.08] text-arena-coral-100 hover:border-arena-coral-300/70 hover:text-arena-50`
+      : `${base} border border-white/10 text-arena-200 hover:border-white/25 hover:text-arena-50`;
+  return (
+    <button type="button" onClick={handler} className={cls}>
+      {label}
+    </button>
+  );
+}
+
+function VSPillar({ currentPhase, finished, cancelled }: { currentPhase: string; finished: boolean; cancelled: boolean }) {
+  const stageLabel = cancelled
+    ? "Ended"
+    : finished
       ? "Finished"
       : currentPhase === "JUDGING"
         ? "Judge"
@@ -219,7 +308,7 @@ function VSPillar({ currentPhase, finished }: { currentPhase: string; finished: 
         <span
           aria-hidden="true"
           className={`font-display text-[clamp(3rem,5vw,4.5rem)] font-bold tracking-[-0.08em] ${
-            finished ? "text-arena-gold-100" : currentPhase === "JUDGING" ? "text-arena-gold-100" : "text-arena-400"
+            cancelled ? "text-gold-100" : finished ? "text-gold-100" : currentPhase === "JUDGING" ? "text-gold-100" : "text-arena-400"
           }`}
         >
           VS

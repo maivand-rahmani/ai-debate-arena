@@ -46,3 +46,6 @@ export const QUICK_TOKEN_POLICY = ACTIVE_TOKEN_POLICY;
 export function getTokenPolicy(name: TokenPolicyName = "Quick"): TokenPolicy {
   return TOKEN_POLICIES[name];
 }
+
+/* Match lifecycle: bounded wall-clock for a streamed match (client abort or timeout). */
+export const MATCH_TIMEOUT_MS = 180_000;

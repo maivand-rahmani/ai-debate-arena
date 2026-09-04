@@ -59,10 +59,12 @@ export interface ModelCallArgs {
   readonly system: string;
   readonly prompt: string;
   readonly maxOutputTokens: number;
+  readonly abortSignal?: AbortSignal;
 }
 
 export interface RunDebateDeps {
   readonly callModel?: (args: ModelCallArgs) => Promise<{ readonly text: string; readonly chunks: readonly string[] }>;
+  readonly abortSignal?: AbortSignal;
 }
 
 const AGENT_PHASES: ReadonlyArray<{ readonly phase: DebateTurn["phase"]; readonly side: DebateSide }> = [
@@ -88,6 +90,7 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
         system: args.system,
         prompt: args.prompt,
         maxOutputTokens: args.maxOutputTokens,
+        abortSignal: args.abortSignal,
         providerOptions,
         output: ai.Output.object({ schema: debateVerdictSchema }),
       });
@@ -109,6 +112,7 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
           `${args.prompt}\n\nRespond with ONLY valid JSON matching the required schema: ` +
           `concrete integer scores 0-100, no markdown fences, no prose.`,
         maxOutputTokens: args.maxOutputTokens,
+        abortSignal: args.abortSignal,
         temperature: 0,
         providerOptions,
       });
@@ -120,6 +124,7 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
     system: args.system,
     prompt: args.prompt,
     maxOutputTokens: args.maxOutputTokens,
+    abortSignal: args.abortSignal,
     providerOptions,
   });
   const chunks: string[] = [];
@@ -171,6 +176,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           system,
           prompt,
           maxOutputTokens: policy.agentMaxOutputTokens,
+          abortSignal: deps.abortSignal,
         });
       } catch (error) {
         yield { type: "error", message: toSafeErrorMessage(error) };
@@ -211,6 +217,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
         system: JUDGE_SYSTEM_PROMPT,
         prompt: judgePrompt,
         maxOutputTokens: policy.judgeMaxOutputTokens,
+        abortSignal: deps.abortSignal,
       });
       judgeText = result.text;
     } catch (error) {
@@ -235,6 +242,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           system: JUDGE_SYSTEM_PROMPT,
           prompt: retryPrompt,
           maxOutputTokens: policy.judgeMaxOutputTokens,
+          abortSignal: deps.abortSignal,
         });
         retryText = retry.text;
       } catch (error) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DebatePhase } from "../../../entities/debate/types";
-import { runDebate, type DebateStreamEvent } from "./debate-runner";
+import { runDebate, type DebateStreamEvent, type ModelCallArgs } from "./debate-runner";
 
 const verdictJson = JSON.stringify({
   winner: "A",
@@ -277,5 +277,74 @@ describe("runDebate", () => {
     if (verdictEvent?.type === "verdict") {
       expect(verdictEvent.verdict.winner).toBe("A");
     }
+  });
+
+  it("passes the run abortSignal through to every model call", async () => {
+    const controller = new AbortController();
+    const seen: Array<AbortSignal | undefined> = [];
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(
+      {
+        topic: "Should AI be regulated?",
+        mode: "quick",
+        agentA: { providerId: "p1", model: "m1", position: "FOR" },
+        agentB: { providerId: "p2", model: "m2", position: "AGAINST" },
+      },
+      {
+        abortSignal: controller.signal,
+        callModel: async (args: ModelCallArgs) => {
+          seen.push(args.abortSignal);
+          if (args.kind === "judge") return { text: verdictJson, chunks: [] };
+          return { text: "agent text", chunks: [] };
+        },
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(seen.length).toBeGreaterThan(0);
+    for (const signal of seen) {
+      expect(signal).toBeInstanceOf(AbortSignal);
+      expect(signal).toBe(controller.signal);
+    }
+    expect(events[events.length - 1].type).toBe("done");
+  });
+
+  it("aborting mid-run yields exactly one error and one done", async () => {
+    const controller = new AbortController();
+    let agentCalls = 0;
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(
+      {
+        topic: "Should AI be regulated?",
+        mode: "quick",
+        agentA: { providerId: "p1", model: "m1", position: "FOR" },
+        agentB: { providerId: "p2", model: "m2", position: "AGAINST" },
+      },
+      {
+        abortSignal: controller.signal,
+        callModel: async (args: ModelCallArgs) => {
+          if (args.kind === "judge") return { text: verdictJson, chunks: [] };
+          agentCalls += 1;
+          if (agentCalls === 2) {
+            controller.abort();
+          }
+          if (args.abortSignal?.aborted) {
+            throw new DOMException("This operation was aborted", "AbortError");
+          }
+          return { text: "agent text", chunks: [] };
+        },
+      },
+    )) {
+      events.push(event);
+    }
+
+    const types = events.map((event) => event.type);
+    expect(types.filter((type) => type === "error")).toHaveLength(1);
+    expect(types.filter((type) => type === "done")).toHaveLength(1);
+    expect(types[types.length - 2]).toBe("error");
+    expect(types[types.length - 1]).toBe("done");
+    expect(types).toContain("turn");
+    expect(types).not.toContain("verdict");
   });
 });

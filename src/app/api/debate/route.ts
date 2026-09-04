@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { runDebate } from "@/features/run-debate/server/debate-runner";
+import { getProvider } from "@/shared/config/provider-store";
+import { MATCH_TIMEOUT_MS } from "@/shared/token-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,8 +31,19 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const events = runDebate(parsed.data);
-  const signal = request.signal;
+  // Fail fast on unknown provider ids: the API contract reports bad input as
+  // 400 instead of surfacing it as a mid-stream error event.
+  const [configA, configB] = await Promise.all([
+    getProvider(parsed.data.agentA.providerId),
+    getProvider(parsed.data.agentB.providerId),
+  ]);
+  if (!configA || !configB) {
+    const missing = !configA ? parsed.data.agentA.providerId : parsed.data.agentB.providerId;
+    return Response.json({ error: `Unknown provider: ${missing}` }, { status: 400 });
+  }
+
+  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(MATCH_TIMEOUT_MS)]);
+  const events = runDebate(parsed.data, { abortSignal: signal });
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
