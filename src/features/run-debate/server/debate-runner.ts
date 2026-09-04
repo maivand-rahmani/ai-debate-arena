@@ -87,15 +87,25 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
         maxOutputTokens: args.maxOutputTokens,
         output: ai.Output.object({ schema: debateVerdictSchema }),
       });
-      return { text: JSON.stringify(structured.output), chunks: [] };
+      // Some providers (notably Responses API) can resolve without throwing
+      // yet leave `output` undefined/null. Never serialize that into
+      // "undefined"/"null" text — fall through to the plain-text fallback.
+      const structuredOutput: unknown = (structured as { readonly output?: unknown }).output;
+      if (!structuredOutput || typeof structuredOutput !== "object" || Array.isArray(structuredOutput)) {
+        throw new Error("Judge structured output was empty");
+      }
+      return { text: JSON.stringify(structuredOutput), chunks: [] };
     } catch {
-      // Provider/model rejected structured output; fall back to plain text
-      // with a repair-oriented nudge so the existing JSON parser still applies.
+      // Provider/model rejected structured output or returned nothing usable;
+      // fall back to deterministic plain JSON so the existing parser applies.
       const fallback = await ai.generateText({
         model,
         system: args.system,
-        prompt: `${args.prompt}\n\nIf structured output is unavailable, respond with ONLY the JSON object matching the required schema.`,
+        prompt:
+          `${args.prompt}\n\nRespond with ONLY valid JSON matching the required schema: ` +
+          `concrete integer scores 0-100, no markdown fences, no prose.`,
         maxOutputTokens: args.maxOutputTokens,
+        temperature: 0,
       });
       return { text: fallback.text, chunks: [] };
     }

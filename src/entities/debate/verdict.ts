@@ -35,6 +35,30 @@ export type VerdictParseResult =
   | { readonly success: true; readonly data: DebateVerdict }
   | { readonly success: false; readonly error: z.ZodError };
 
+/**
+ * Extract a JSON object from model text that may be plain JSON, wrapped in a
+ * single ```json ... ``` (or ``` ... ```) fence, or embedded in prose.
+ * Returns the outermost `{...}` slice when present, otherwise trimmed input.
+ * Never invents scores — unparsable input is left for the caller to reject.
+ */
+export function extractJsonObject(text: string): string {
+  const trimmed = text.trim();
+  const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fence?.[1] ?? trimmed).trim();
+  try {
+    JSON.parse(candidate);
+    return candidate;
+  } catch {
+    // Fall through to outermost-brace extraction below.
+  }
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) {
+    return candidate.slice(start, end + 1);
+  }
+  return candidate;
+}
+
 function defaultCriteria(scoreA: number, scoreB: number): DebateCriteria {
   const a = Number.isFinite(scoreA) ? Math.min(100, Math.max(0, scoreA)) : 0;
   const b = Number.isFinite(scoreB) ? Math.min(100, Math.max(0, scoreB)) : 0;
@@ -54,7 +78,7 @@ export function parseDebateVerdict(input: unknown): VerdictParseResult {
   let value: unknown = input;
   if (typeof input === "string") {
     try {
-      value = JSON.parse(input);
+      value = JSON.parse(extractJsonObject(input));
     } catch {
       const invalid = debateVerdictSchema.safeParse({});
       if (!invalid.success) return { success: false, error: invalid.error };

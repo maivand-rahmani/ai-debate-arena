@@ -212,4 +212,70 @@ describe("runDebate", () => {
     expect(events[events.length - 1].type).toBe("done");
     expect(events.some((event) => event.type === "verdict")).toBe(false);
   });
+
+  it("accepts markdown-fenced judge JSON without retrying (plain-fallback shape)", async () => {
+    const fenced = `\`\`\`json\n${verdictJson}\n\`\`\``;
+    let judgeCalls = 0;
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(
+      {
+        topic: "Should AI be regulated?",
+        mode: "quick",
+        agentA: { providerId: "p1", model: "m1", position: "FOR" },
+        agentB: { providerId: "p2", model: "m2", position: "AGAINST" },
+      },
+      {
+        callModel: async (args) => {
+          if (args.kind === "judge") {
+            judgeCalls += 1;
+            return { text: fenced, chunks: [] };
+          }
+          return { text: "agent text", chunks: [] };
+        },
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(judgeCalls).toBe(1);
+    const verdictEvent = events.find((event) => event.type === "verdict");
+    expect(verdictEvent?.type).toBe("verdict");
+    if (verdictEvent?.type === "verdict") {
+      expect(verdictEvent.verdict.winner).toBe("A");
+      expect(verdictEvent.verdict.scoreA).toBe(82);
+      expect(verdictEvent.verdict.scoreB).toBe(74);
+    }
+  });
+
+  it("accepts prose-wrapped judge JSON without retrying", async () => {
+    const wrapped = `Here is my verdict:\n${verdictJson}\nThat concludes the judging.`;
+    let judgeCalls = 0;
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(
+      {
+        topic: "Should AI be regulated?",
+        mode: "quick",
+        agentA: { providerId: "p1", model: "m1", position: "FOR" },
+        agentB: { providerId: "p2", model: "m2", position: "AGAINST" },
+      },
+      {
+        callModel: async (args) => {
+          if (args.kind === "judge") {
+            judgeCalls += 1;
+            return { text: wrapped, chunks: [] };
+          }
+          return { text: "agent text", chunks: [] };
+        },
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(judgeCalls).toBe(1);
+    const verdictEvent = events.find((event) => event.type === "verdict");
+    expect(verdictEvent?.type).toBe("verdict");
+    if (verdictEvent?.type === "verdict") {
+      expect(verdictEvent.verdict.winner).toBe("A");
+    }
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDegenerateVerdict, normalizeVerdictWinner, parseDebateVerdict } from "./verdict";
+import { extractJsonObject, isDegenerateVerdict, normalizeVerdictWinner, parseDebateVerdict } from "./verdict";
 
 const criteria = {
   argumentQualityA: 80,
@@ -89,5 +89,63 @@ describe("isDegenerateVerdict", () => {
   it("does not flag real scores", () => {
     expect(isDegenerateVerdict({ ...zeroDraw, winner: "A", scoreA: 78, scoreB: 64 }, true)).toBe(false);
     expect(isDegenerateVerdict({ ...zeroDraw, scoreA: 50, scoreB: 51 }, true)).toBe(false);
+  });
+});
+
+describe("extractJsonObject", () => {
+  const json = '{"winner":"A","scoreA":78,"scoreB":64,"reasoning":"A won"}';
+
+  it("passes plain JSON through", () => {
+    expect(extractJsonObject(json)).toBe(json);
+    expect(extractJsonObject(`  ${json}\n`)).toBe(json);
+  });
+
+  it("unwraps a ```json fenced response", () => {
+    expect(extractJsonObject(`\`\`\`json\n${json}\n\`\`\``)).toBe(json);
+  });
+
+  it("unwraps a plain ``` fenced response", () => {
+    expect(extractJsonObject(`\`\`\`\n${json}\n\`\`\``)).toBe(json);
+  });
+
+  it("extracts the outermost object from surrounding prose", () => {
+    expect(extractJsonObject(`Here is my verdict:\n${json}\nHope that helps.`)).toBe(json);
+  });
+
+  it("leaves unparsable input without braces for the caller to reject", () => {
+    expect(extractJsonObject("not json at all")).toBe("not json at all");
+    expect(parseDebateVerdict("not json at all").success).toBe(false);
+  });
+});
+
+describe("parseDebateVerdict with markdown-wrapped output", () => {
+  it("parses a fenced verdict without inventing scores", () => {
+    const fenced = [
+      "```json",
+      JSON.stringify({
+        winner: "B",
+        scoreA: 70,
+        scoreB: 78,
+        criteria: {
+          argumentQualityA: 70,
+          argumentQualityB: 78,
+          rebuttalA: 69,
+          rebuttalB: 77,
+          consistencyA: 71,
+          consistencyB: 78,
+          relevanceA: 70,
+          relevanceB: 79,
+        },
+        reasoning: "B rebutted better",
+      }),
+      "```",
+    ].join("\n");
+    const result = parseDebateVerdict(fenced);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.winner).toBe("B");
+      expect(result.data.scoreA).toBe(70);
+      expect(result.data.scoreB).toBe(78);
+    }
   });
 });
