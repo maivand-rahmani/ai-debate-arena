@@ -1,4 +1,4 @@
-export const AGENT_MAX_OUTPUT_TOKENS = 1200;
+export const AGENT_MAX_OUTPUT_TOKENS = 2000;
 export const JUDGE_MAX_OUTPUT_TOKENS = 2000;
 
 export type TokenPolicyName = "Quick" | "Standard" | "Hardcore";

@@ -12,13 +12,13 @@ describe("token policy", () => {
     expect(ACTIVE_TOKEN_POLICY.name).toBe("Quick");
     expect(ACTIVE_TOKEN_POLICY.agentMaxOutputTokens).toBe(AGENT_MAX_OUTPUT_TOKENS);
     expect(ACTIVE_TOKEN_POLICY.judgeMaxOutputTokens).toBe(JUDGE_MAX_OUTPUT_TOKENS);
-    expect(AGENT_MAX_OUTPUT_TOKENS).toBe(1200);
+    expect(AGENT_MAX_OUTPUT_TOKENS).toBe(2000);
     expect(JUDGE_MAX_OUTPUT_TOKENS).toBe(2000);
   });
 
-  it("gives the Quick judge a 2000-token budget while keeping the agent budget at 1200", () => {
+  it("gives the Quick judge a 2000-token budget while keeping the agent budget at 2000", () => {
     expect(TOKEN_POLICIES.Quick.judgeMaxOutputTokens).toBe(2000);
-    expect(TOKEN_POLICIES.Quick.agentMaxOutputTokens).toBe(1200);
+    expect(TOKEN_POLICIES.Quick.agentMaxOutputTokens).toBe(2000);
     expect(getTokenPolicy("Quick").judgeMaxOutputTokens).toBe(2000);
   });
 
