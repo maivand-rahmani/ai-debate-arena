@@ -24,6 +24,7 @@ Definition of done for MVP: clone → install → `npm run provider:add` → `np
 - [x] [P0] OpenAI-compatible model factory (`shared/api/llm/model.ts`)
 - [x] [P0] `GET /api/providers` — redacted provider list for UI
 - [ ] [P1] Model factory: error wrapping (auth / unreachable / timeout) with safe messages
+- [x] [P1] Provider API type: OpenAI Responses API ({base}/responses) alongside chat completions
 - [ ] [P2] Provider management in UI (add/edit without CLI)
 
 ## PHASE 2 — Debate Engine

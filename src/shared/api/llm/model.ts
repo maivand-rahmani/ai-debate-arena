@@ -1,4 +1,5 @@
 import "server-only";
+import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { getProvider } from "../../config/provider-store";
@@ -11,6 +12,9 @@ export async function createConfiguredModel(providerId: string, modelId?: string
   try {
     const config = await getProvider(providerId);
     if (!config) throw new Error(`Provider not found: ${providerId}`);
+    if (config.api === "responses") {
+      return createOpenAI({ baseURL: config.baseUrl, name: config.name, apiKey: config.apiKey }).responses(modelId ?? config.model);
+    }
     return createOpenAICompatible({ baseURL: config.baseUrl, name: config.name, apiKey: config.apiKey }).languageModel(modelId ?? config.model);
   } catch (err) {
     throw new Error(toSafeErrorMessage(err));

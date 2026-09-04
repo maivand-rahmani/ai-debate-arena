@@ -13,7 +13,7 @@ Runs locally on Next.js; bring any OpenAI-compatible provider (OpenAI, OpenRoute
 
 ```bash
 npm install
-npm run provider:add   # id, display name, base URL, default model, API key
+npm run provider:add   # id, display name, base URL, API type, default model, API key
 npm run dev            # open http://localhost:3000
 ```
 

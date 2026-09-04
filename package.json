@@ -11,6 +11,7 @@
     "provider:add": "tsx scripts/provider-add.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.58",
     "@ai-sdk/openai-compatible": "latest",
     "ai": "latest",
     "next": "latest",

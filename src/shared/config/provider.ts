@@ -8,6 +8,7 @@ export const providerConfigSchema = z.object({
     return protocol === "https:" || protocol === "http:";
   }, "baseUrl must use http or https"),
   model: z.string().trim().min(1).max(200),
+  api: z.enum(["chat", "responses"]).default("chat"),
   apiKey: z.string().min(1).max(4096),
 });
 

@@ -8,7 +8,12 @@ Any OpenAI-compatible chat API. Schema (`shared/config/provider.ts`):
 | `name`     | Display name, 1–100 chars                         |
 | `baseUrl`  | http(s) URL of the compatible endpoint            |
 | `model`    | Default model id, 1–200 chars                     |
+| `api`      | `"chat"` (default) or `"responses"`; see below    |
 | `apiKey`   | 1–4096 chars; stored, never returned or printed   |
+
+Use `api: "responses"` when the endpoint only serves the OpenAI Responses API
+(`POST {baseUrl}/responses`) instead of Chat Completions; the model factory
+then uses `createOpenAI(...).responses(model)` from `@ai-sdk/openai`.
 
 ## Storage
 
@@ -28,12 +33,12 @@ echoing the key.
 ```bash
 npm run provider:add
 # Provider id · Display name · Base URL [https://api.openai.com/v1] ·
-# Default model [gpt-4o-mini] · API key
+# API type (chat/responses) [chat] · Default model [gpt-4o-mini] · API key
 ```
 
 ## Endpoints
 
-- `GET /api/providers` → `{ providers: [{ id, name, baseUrl, model, apiKeyHint }] }`.
+- `GET /api/providers` → `{ providers: [{ id, name, baseUrl, model, api, apiKeyHint }] }`.
 - `POST /api/debate` takes `providerId` + per-side `model` (may differ from the
   stored default); unknown ids fail as safe `error` events, not stack traces.
 
