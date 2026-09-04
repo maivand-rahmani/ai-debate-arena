@@ -8,11 +8,9 @@ import {
   rejudgeMatch,
   MatchesApiError,
 } from "@/shared/api/matches";
-import { SetupForm } from "@/features/create-debate/setup-form";
 import { useProviders } from "@/features/create-debate/use-providers";
 import type { MatchDraft } from "@/features/create-debate/draft";
 import { useDebateStream } from "@/features/run-debate/lib/use-debate-stream";
-import { StatusLine } from "@/features/run-debate/ui/match-header";
 import {
   isInMatch,
   statusLineFor,
@@ -23,10 +21,14 @@ import { exportJsonBlob } from "@/features/run-debate/ui/match-history/match-act
 import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
 import { BroadcastStage } from "@/widgets/broadcast-stage";
 
-const TOP_STRIP_LINKS = [
-  { label: "How it works", primary: false },
-];
-
+/**
+ * The arena is the first impression and main interface — there is no
+ * separate dashboard layout. The BroadcastStage owns the banner, backdrop,
+ * three-character set, teleprompter / verdict / idle-setup slot, and the
+ * curated reactions overlay. This screen only orchestrates the runtime
+ * lifecycle, provider lookup, history drawer, re-judge state, and the
+ * mute toggle.
+ */
 export default function ArenaScreen() {
   const { providers } = useProviders();
   const { state, start, reset, cancel, dispatch } = useDebateStream();
@@ -34,6 +36,7 @@ export default function ArenaScreen() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [rejudgeStatus, setRejudgeStatus] = useState<RejudgeStatus>("idle");
   const [rejudgeError, setRejudgeError] = useState<string | undefined>(undefined);
+  const [reactionsMuted, setReactionsMuted] = useState(false);
 
   const inMatch = isInMatch(state);
 
@@ -74,6 +77,7 @@ export default function ArenaScreen() {
 
   const handleOpenHistory = useCallback(() => setHistoryOpen(true), []);
   const handleCloseHistory = useCallback(() => setHistoryOpen(false), []);
+  const handleToggleMute = useCallback(() => setReactionsMuted((m) => !m), []);
 
   const handleExportJson = useCallback(async (matchId: string) => {
     try {
@@ -111,199 +115,23 @@ export default function ArenaScreen() {
   );
 
   const topic = matchDraft?.topic ?? state.topic ?? "";
-  const agentA = useMemo(() => providerById(providers, matchDraft?.sideA.providerId), [providers, matchDraft]);
-  const agentB = useMemo(() => providerById(providers, matchDraft?.sideB.providerId), [providers, matchDraft]);
-
-  return (
-    <main className="min-h-screen overflow-hidden bg-arena-900 text-arena-50">
-      <div className="ambient-glow" aria-hidden="true" />
-      <Nav
-        inMatch={inMatch}
-        onEndMatch={handleEndMatch}
-        onOpenHistory={handleOpenHistory}
-      />
-      <div className="relative z-10 mx-auto w-full max-w-[1240px] px-5 pb-20 pt-8 sm:px-8 lg:px-10">
-        {inMatch ? (
-          <LiveArena
-            topic={topic}
-            state={state}
-            agentA={agentA}
-            agentB={agentB}
-            draft={matchDraft}
-            onAbort={handleEndMatch}
-            onNewMatch={handleNewMatch}
-            onRunAgain={handleRunAgain}
-            onExportJson={handleExportJson}
-            onRejudge={handleRejudge}
-            rejudgeStatus={rejudgeStatus}
-            rejudgeError={rejudgeError}
-          />
-        ) : (
-          <SetupHero
-            onStart={handleStart}
-            errorMessage={state.errorMessage}
-            canRunAgain={Boolean(matchDraft)}
-            onRunAgain={handleRunAgain}
-          />
-        )}
-      </div>
-      <footer className="relative z-10 border-t border-white/[0.06] px-5 py-5 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-arena-400">
-        A calm place for strong opinions · Local demo mode
-      </footer>
-      <MatchHistoryDrawer open={historyOpen} onClose={handleCloseHistory} />
-    </main>
+  const agentA = useMemo(
+    () => providerById(providers, matchDraft?.sideA.providerId),
+    [providers, matchDraft],
   );
-}
-
-// --- Sub-screens ------------------------------------------------------------
-
-interface NavProps {
-  readonly inMatch: boolean;
-  readonly onEndMatch: () => void;
-  readonly onOpenHistory: () => void;
-}
-
-function Nav({ inMatch, onEndMatch, onOpenHistory }: NavProps) {
-  return (
-    <nav className="relative z-10 mx-auto flex w-full max-w-[1240px] items-center justify-between px-5 py-6 sm:px-8 lg:px-10">
-      <a href="#top" className="flex items-center gap-2.5" aria-label="Arena home">
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-arena-coral-300 text-arena-900">
-          <BrandSpark className="h-4 w-4" />
-        </span>
-        <span className="font-display text-sm font-bold tracking-tight text-arena-50">
-          DEBATE<span className="text-arena-coral-200">/</span>ARENA
-        </span>
-      </a>
-      <div className="hidden items-center gap-7 text-[10px] font-bold uppercase tracking-[0.2em] text-arena-300 sm:flex">
-        {TOP_STRIP_LINKS.map((link) => (
-          <span key={link.label} className={link.primary ? "text-arena-50" : ""}>
-            {link.label}
-          </span>
-        ))}
-        <span className="flex items-center gap-2">
-          <i className="h-1.5 w-1.5 rounded-full bg-arena-success" /> Systems online
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onOpenHistory}
-          className="rounded-full border border-white/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-arena-200 transition hover:border-white/25 hover:text-arena-50"
-        >
-          Matches
-        </button>
-        <button
-          type="button"
-          onClick={onEndMatch}
-          disabled={!inMatch}
-          className="rounded-full border border-white/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-arena-200 transition hover:border-white/25 hover:text-arena-50 disabled:cursor-default disabled:opacity-60"
-        >
-          {inMatch ? "End match" : "About"}
-        </button>
-      </div>
-    </nav>
+  const agentB = useMemo(
+    () => providerById(providers, matchDraft?.sideB.providerId),
+    [providers, matchDraft],
   );
-}
 
-interface SetupHeroProps {
-  readonly onStart: (draft: MatchDraft) => void;
-  readonly errorMessage?: string;
-  readonly canRunAgain: boolean;
-  readonly onRunAgain: () => void;
-}
+  // The judge provider/model is intentionally not in the runtime state — for
+  // the local Quick demo, the judge re-uses the first configured provider
+  // and its default model. This keeps the existing v0.2 contract (no new
+  // judge wiring required) and stays server-only.
+  const judgeProvider = providers[0];
+  const judgeModel = judgeProvider?.model;
 
-function SetupHero({ onStart, errorMessage, canRunAgain, onRunAgain }: SetupHeroProps) {
-  return (
-    <>
-      <header className="mb-12 max-w-3xl pt-6 sm:pt-12">
-        <div className="mb-5 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.25em] text-arena-coral-200">
-          <span className="h-px w-8 bg-arena-coral-300" /> Live simulation
-        </div>
-        <h1 className="font-display text-[clamp(2.6rem,6.4vw,5.6rem)] font-bold leading-[0.92] tracking-[-0.05em] text-arena-50">
-          Make a case.
-          <br />
-          <span className="text-arena-400">Watch it clash.</span>
-        </h1>
-        <p className="mt-7 max-w-md text-sm leading-6 text-arena-300">
-          Pit two AI minds against each other. Set the terms, press play, and let the strongest argument emerge.
-        </p>
-      </header>
-      {errorMessage ? (
-        <div
-          className="topic-panel mb-6 border-arena-coral-300/30 bg-arena-coral-300/[0.07]"
-          role="alert"
-        >
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-coral-200">
-                Match could not start
-              </p>
-              <p className="mt-2 text-sm text-arena-100">{errorMessage}</p>
-            </div>
-            {canRunAgain ? (
-              <button
-                type="button"
-                onClick={onRunAgain}
-                className="rounded-lg border border-arena-coral-300/40 bg-arena-coral-300/[0.08] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-arena-coral-100 transition hover:border-arena-coral-300/70 hover:text-arena-50"
-              >
-                Run again
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-      <SetupForm onStart={onStart} />
-    </>
-  );
-}
-
-interface LiveArenaProps {
-  readonly topic: string;
-  readonly state: DebateRuntimeState;
-  readonly agentA?: RedactedProvider;
-  readonly agentB?: RedactedProvider;
-  readonly draft: MatchDraft | null;
-  readonly onAbort: () => void;
-  readonly onNewMatch: () => void;
-  readonly onRunAgain: () => void;
-  readonly onExportJson: (matchId: string) => void | Promise<void>;
-  readonly onRejudge: (matchId: string) => void | Promise<{ readonly judgedAt: string; readonly winner: unknown }>;
-  readonly rejudgeStatus: RejudgeStatus;
-  readonly rejudgeError?: string;
-}
-
-function LiveArena({
-  topic,
-  state,
-  agentA,
-  agentB,
-  draft,
-  onAbort,
-  onNewMatch,
-  onRunAgain,
-  onExportJson,
-  onRejudge,
-  rejudgeStatus,
-  rejudgeError,
-}: LiveArenaProps) {
-  const showCancelled = state.status === "cancelled";
-  const showErrorMidMatch = state.status === "error";
-  const tone =
-    state.status === "error"
-      ? "error"
-      : state.status === "cancelled"
-        ? "cancelled"
-        : state.status === "judging" || state.status === "finished"
-          ? "judge"
-          : "neutral";
-
-  const action =
-    showCancelled
-      ? { label: "New match", handler: onNewMatch, emphasis: "primary" as const }
-      : showErrorMidMatch && draft
-        ? { label: "Run again", handler: onRunAgain, emphasis: "primary" as const }
-        : { label: "End match", handler: onAbort, emphasis: "ghost" as const };
-
+  const tone = statusToneFor(state);
   const footer = state.matchId
     ? {
         matchId: state.matchId,
@@ -311,52 +139,95 @@ function LiveArena({
         rejudgeStatus,
         rejudgeError,
         judgedAt: state.judgedAt,
-        onExportJson,
-        onRejudge,
+        onExportJson: handleExportJson,
+        onRejudge: handleRejudge,
       }
     : undefined;
 
-  return (
-    <div className="grid gap-8">
-      <BroadcastStage
-        topic={topic}
-        state={state}
-        agentA={agentA}
-        agentB={agentB}
-        draftSideAModel={draft?.sideA.model}
-        draftSideBModel={draft?.sideB.model}
-        draftSideAPosition={draft?.sideA.position}
-        draftSideBPosition={draft?.sideB.position}
-        footer={footer}
-        onNewMatch={onNewMatch}
-      />
+  const showStatusLine = inMatch;
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <StatusLine tone={tone}>{statusLineFor(state)}</StatusLine>
-        <ActionButton {...action} />
+  return (
+    <main className="min-h-screen overflow-x-hidden" style={{ background: "#0c0a07" }}>
+      <div className="ambient-glow" aria-hidden="true" />
+      <div className="relative z-10 mx-auto w-full max-w-[1280px] px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+        <BroadcastStage
+          topic={topic}
+          state={state}
+          agentA={agentA}
+          agentB={agentB}
+          judgeProvider={judgeProvider}
+          judgeModel={judgeModel}
+          draftSideAModel={matchDraft?.sideA.model}
+          draftSideBModel={matchDraft?.sideB.model}
+          draftSideAPosition={matchDraft?.sideA.position}
+          draftSideBPosition={matchDraft?.sideB.position}
+          footer={footer}
+          onNewMatch={handleNewMatch}
+          inMatch={inMatch}
+          onEndMatch={handleEndMatch}
+          onOpenHistory={handleOpenHistory}
+          onStart={handleStart}
+          busy={state.status === "starting"}
+          errorMessage={state.status === "error" && !inMatch ? state.errorMessage : undefined}
+          reactionsMuted={reactionsMuted}
+          onToggleMute={handleToggleMute}
+        />
+
+        {showStatusLine ? (
+          <div
+            className={`status-strip status-strip--${tone}`}
+            role="status"
+            aria-live="polite"
+            style={{ marginTop: "12px" }}
+          >
+            <span className="pulse-dot" aria-hidden="true" />
+            <span>{statusLineFor(state)}</span>
+          </div>
+        ) : null}
+
+        {inMatch ? (
+          <div className="flex flex-wrap items-center justify-between gap-3" style={{ marginTop: "12px" }}>
+            <ActionButton
+              label={
+                state.status === "cancelled" || state.status === "finished"
+                  ? "New match"
+                  : state.status === "error" && matchDraft
+                    ? "Run again"
+                    : "End match"
+              }
+              handler={
+                state.status === "cancelled" || state.status === "finished"
+                  ? handleNewMatch
+                  : state.status === "error" && matchDraft
+                    ? handleRunAgain
+                    : handleEndMatch
+              }
+              emphasis={state.status === "cancelled" || state.status === "finished" || (state.status === "error" && matchDraft) ? "primary" : "ghost"}
+            />
+          </div>
+        ) : null}
       </div>
-    </div>
+      <footer className="relative z-10 border-t px-5 py-5 text-center text-[10px] font-bold uppercase tracking-[0.18em]"
+              style={{ borderColor: "rgba(184,162,133,.18)", color: "#8a7a64" }}>
+        A calm place for strong opinions · Local demo mode
+      </footer>
+      <MatchHistoryDrawer open={historyOpen} onClose={handleCloseHistory} />
+    </main>
   );
 }
 
-interface ActionButtonProps {
-  readonly label: string;
-  readonly handler: () => void;
-  readonly emphasis: "primary" | "ghost";
-}
-
-function ActionButton({ label, handler, emphasis }: ActionButtonProps) {
-  const base =
-    "rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] transition";
-  const cls =
-    emphasis === "primary"
-      ? `${base} border border-arena-coral-300/40 bg-arena-coral-300/[0.08] text-arena-coral-100 hover:border-arena-coral-300/70 hover:text-arena-50`
-      : `${base} border border-white/10 text-arena-200 hover:border-white/25 hover:text-arena-50`;
-  return (
-    <button type="button" onClick={handler} className={cls}>
-      {label}
-    </button>
-  );
+function statusToneFor(state: DebateRuntimeState): "neutral" | "judge" | "error" | "cancelled" {
+  switch (state.status) {
+    case "error":
+      return "error";
+    case "cancelled":
+      return "cancelled";
+    case "judging":
+    case "finished":
+      return "judge";
+    default:
+      return "neutral";
+  }
 }
 
 // --- Helpers ----------------------------------------------------------------
@@ -389,13 +260,21 @@ function messageFromError(error: unknown): string {
   return typeof error === "string" ? error : "Something went wrong.";
 }
 
-function BrandSpark({ className = "" }: { className?: string }) {
+interface ActionButtonProps {
+  readonly label: string;
+  readonly handler: () => void;
+  readonly emphasis: "primary" | "ghost";
+}
+
+function ActionButton({ label, handler, emphasis }: ActionButtonProps) {
+  const base = "rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] transition";
+  const cls =
+    emphasis === "primary"
+      ? `${base} border border-arena-coral-300/40 bg-arena-coral-300/[0.08] text-arena-coral-100 hover:border-arena-coral-300/70 hover:text-arena-50`
+      : `${base} border border-white/10 text-arena-200 hover:border-white/25 hover:text-arena-50`;
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 2.5 13.8 10l7.7 2-7.7 2-1.8 7.5-1.8-7.5-7.7-2 7.7-2L12 2.5Z"
-        fill="currentColor"
-      />
-    </svg>
+    <button type="button" onClick={handler} className={cls}>
+      {label}
+    </button>
   );
 }

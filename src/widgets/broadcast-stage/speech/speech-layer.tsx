@@ -2,12 +2,11 @@
 
 import type { DebateSide } from "@/entities/debate";
 import type { RedactedProvider } from "@/shared/api/providers";
-import { AgentCorner } from "@/features/run-debate/ui/agent-corner";
-import type { DebateRuntimeState, SpeechPanel } from "@/features/run-debate/lib/reducer";
+import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
+import { Teleprompter } from "./teleprompter";
 
 interface SpeechLayerProps {
   readonly state: DebateRuntimeState;
-  readonly topic: string;
   readonly agentA?: RedactedProvider;
   readonly agentB?: RedactedProvider;
   readonly draftSideAModel?: string;
@@ -18,13 +17,13 @@ interface SpeechLayerProps {
 }
 
 /**
- * Stacked teleprompter / speech layer. Re-uses the existing `AgentCorner`
- * component unchanged so the live token text stays first-class and accessible.
- * The widget only adds the broadcast framing on top.
+ * Two side-by-side broadcast teleprompters. Renders one Teleprompter per
+ * contender; the live streaming panel shows the blinking caret, sealed
+ * turns roll in below. The widget only adds the broadcast framing — the
+ * Teleprompter component handles the streaming/HTML rendering.
  */
 export function SpeechLayer({
   state,
-  topic,
   agentA,
   agentB,
   draftSideAModel,
@@ -33,15 +32,15 @@ export function SpeechLayer({
   draftSideBPosition = "AGAINST",
   className = "",
 }: SpeechLayerProps) {
-  const panelsForSide = (side: DebateSide): readonly SpeechPanel[] =>
+  const panelsForSide = (side: DebateSide) =>
     state.panels.filter((panel) => panel.side === side);
 
   const modelA = draftSideAModel ?? state.panels.find((p) => p.side === "A")?.model;
   const modelB = draftSideBModel ?? state.panels.find((p) => p.side === "B")?.model;
 
   return (
-    <div className={`speech-layer ${className}`} aria-label="Debate speech">
-      <AgentCorner
+    <div className={`broadcast-stage__speech ${className}`} aria-label="Debate speech">
+      <Teleprompter
         side="A"
         tone="coral"
         identity="The Challenger"
@@ -51,7 +50,7 @@ export function SpeechLayer({
         panels={panelsForSide("A")}
         currentSide={state.currentSide}
       />
-      <AgentCorner
+      <Teleprompter
         side="B"
         tone="violet"
         identity="The Advocate"
@@ -61,9 +60,6 @@ export function SpeechLayer({
         panels={panelsForSide("B")}
         currentSide={state.currentSide}
       />
-      {/* `topic` is accepted so future iterations can reuse it without changing
-          this widget's prop surface; keep the lint quiet by referencing it. */}
-      <span hidden>{topic}</span>
     </div>
   );
 }

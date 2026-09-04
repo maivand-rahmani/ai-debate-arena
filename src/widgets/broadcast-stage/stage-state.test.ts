@@ -65,17 +65,17 @@ describe("deriveStageView — mode mapping", () => {
     expect(view.activeSide).toBe("B");
   });
 
-  it("encodes rebuttal A as camera=a + round=2", () => {
+  it("encodes rebuttal A as camera=rebuttal + round=2", () => {
     const view = deriveStageView(withPhase(baseState, "REBUTTAL_A", "A"));
     expect(view.mode).toBe("speaking");
-    expect(view.camera).toBe("a");
+    expect(view.camera).toBe("rebuttal");
     expect(view.round).toBe("2");
   });
 
-  it("encodes rebuttal B as camera=b + round=2", () => {
+  it("encodes rebuttal B as camera=rebuttal + round=2", () => {
     const view = deriveStageView(withPhase(baseState, "REBUTTAL_B", "B"));
     expect(view.mode).toBe("speaking");
-    expect(view.camera).toBe("b");
+    expect(view.camera).toBe("rebuttal");
     expect(view.round).toBe("2");
   });
 
@@ -142,13 +142,17 @@ describe("deriveStageView — mode mapping", () => {
 });
 
 describe("deriveStageView — root data attributes", () => {
-  it("emits the four CSS data attributes for a speaking A turn", () => {
+  it("emits the eight CSS data attributes for a speaking A turn", () => {
     const view = deriveStageView(withPhase(baseState, "OPENING_A", "A"));
     expect(view.rootDataAttributes).toEqual({
       "data-stage": "speaking",
       "data-camera": "a",
       "data-round": "1",
       "data-active-side": "a",
+      "data-mood-a": "speaking",
+      "data-mood-b": "listening",
+      "data-mood-judge": "standing-by",
+      "data-reaction": "none",
     });
   });
 
@@ -156,9 +160,13 @@ describe("deriveStageView — root data attributes", () => {
     const view = deriveStageView(withPhase(baseState, "REBUTTAL_B", "B"));
     expect(view.rootDataAttributes).toEqual({
       "data-stage": "speaking",
-      "data-camera": "b",
+      "data-camera": "rebuttal",
       "data-round": "2",
       "data-active-side": "b",
+      "data-mood-a": "listening",
+      "data-mood-b": "speaking",
+      "data-mood-judge": "standing-by",
+      "data-reaction": "objection",
     });
   });
 
@@ -175,6 +183,10 @@ describe("deriveStageView — root data attributes", () => {
       "data-camera": "judge",
       "data-round": "none",
       "data-active-side": "none",
+      "data-mood-a": "listening",
+      "data-mood-b": "listening",
+      "data-mood-judge": "evaluating",
+      "data-reaction": "none",
     });
   });
 
@@ -187,6 +199,9 @@ describe("deriveStageView — root data attributes", () => {
     expect(view.rootDataAttributes["data-stage"]).toBe("cancelled");
     expect(view.rootDataAttributes["data-camera"]).toBe("idle");
     expect(view.rootDataAttributes["data-active-side"]).toBe("none");
+    expect(view.rootDataAttributes["data-reaction"]).toBe("timeout");
+    expect(view.rootDataAttributes["data-mood-a"]).toBe("defeated");
+    expect(view.rootDataAttributes["data-mood-b"]).toBe("defeated");
   });
 });
 
@@ -254,5 +269,34 @@ describe("deriveStageView — invariants", () => {
     expect(a).not.toBe(b);
     expect(a.rootDataAttributes).not.toBe(b.rootDataAttributes);
     expect(a.rootDataAttributes).toEqual(b.rootDataAttributes);
+  });
+});
+
+describe("deriveStageView — mood + reaction projection", () => {
+  it("forwards the mood view onto the data attributes", () => {
+    const view = deriveStageView(withPhase(baseState, "OPENING_A", "A"));
+    expect(view.moods.a).toBe(view.rootDataAttributes["data-mood-a"]);
+    expect(view.moods.b).toBe(view.rootDataAttributes["data-mood-b"]);
+    expect(view.moods.judge).toBe(view.rootDataAttributes["data-mood-judge"]);
+  });
+
+  it("emits a reaction data attribute when one fits the state", () => {
+    const view = deriveStageView({
+      ...baseState,
+      status: "streaming",
+      currentPhase: "OPENING_A",
+      currentSide: "A",
+      panels: [
+        { id: "A:OPENING_A", side: "A", phase: "OPENING_A", content: "x".repeat(1800), sealed: false, model: "test" },
+      ],
+    });
+    expect(view.rootDataAttributes["data-reaction"]).toBe("panicking");
+    expect(view.reaction?.label).toBe("Agent is visibly panicking");
+  });
+
+  it("emits data-reaction=none when no reaction fits the state", () => {
+    const view = deriveStageView(baseState);
+    expect(view.rootDataAttributes["data-reaction"]).toBe("none");
+    expect(view.reaction).toBeNull();
   });
 });

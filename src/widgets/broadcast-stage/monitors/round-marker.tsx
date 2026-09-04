@@ -1,6 +1,6 @@
 "use client";
 
-import type { StageView } from "../stage-state";
+import type { StageCamera, StageMode, StageView } from "../stage-state";
 
 interface RoundMarkerProps {
   readonly view: StageView;
@@ -47,10 +47,13 @@ export function RoundMarker({ view, className = "" }: RoundMarkerProps) {
     pillTone = "neutral";
   }
 
+  const camera = view.camera as StageCamera;
+
   return (
     <div
       className={`round-marker round-marker--${pillTone} ${className}`}
       data-mode={mode}
+      data-camera={camera}
       aria-label={headline}
     >
       <span className="round-marker__line" aria-hidden="true" />
@@ -65,3 +68,5 @@ export function RoundMarker({ view, className = "" }: RoundMarkerProps) {
     </div>
   );
 }
+
+export type { StageMode };

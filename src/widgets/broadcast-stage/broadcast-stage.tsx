@@ -2,27 +2,21 @@
 
 import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
-import { JudgePanel } from "@/features/run-debate/ui/judge-panel";
-import { MatchHeader } from "@/features/run-debate/ui/match-header";
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
 import type { RedactedProvider } from "@/shared/api/providers";
+import { BroadcastBanner } from "./broadcast-banner";
+import { IdleSetup } from "./idle/idle-setup";
+import type { JudgePanelFooter } from "./verdict/verdict-reveal";
+import { VerdictReveal, VerdictEvaluating } from "./verdict/verdict-reveal";
 import { AgentDesk } from "./desks/agent-desk";
 import { JudgePlinth } from "./desks/judge-plinth";
 import { RoundMarker } from "./monitors/round-marker";
 import { SpeechLayer } from "./speech/speech-layer";
 import { StageBackdrop } from "./backdrop/stage-backdrop";
+import { ReactionOverlay } from "./reactions/reaction-overlay";
 import { deriveStageView } from "./stage-state";
-import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
 
-interface JudgePanelFooter {
-  readonly matchId?: string;
-  readonly canRejudge: boolean;
-  readonly rejudgeStatus: RejudgeStatus;
-  readonly rejudgeError?: string;
-  readonly judgedAt?: string;
-  readonly onExportJson: (matchId: string) => void | Promise<unknown>;
-  readonly onRejudge: (matchId: string) => void | Promise<unknown>;
-}
+export type { JudgePanelFooter } from "./verdict/verdict-reveal";
 
 export interface BroadcastStageProps {
   readonly topic: string;
@@ -35,23 +29,31 @@ export interface BroadcastStageProps {
   readonly draftSideBModel?: string;
   readonly draftSideAPosition?: "FOR" | "AGAINST";
   readonly draftSideBPosition?: "FOR" | "AGAINST";
-  /** Footer forwarded to the `JudgePanel` when the verdict is revealed. */
+  /** Footer forwarded to the verdict surface when the verdict is revealed. */
   readonly footer?: JudgePanelFooter;
   /** Optional handler for the "cancelled" terminal screen. */
   readonly onNewMatch?: () => void;
+  readonly inMatch: boolean;
+  readonly onEndMatch?: () => void;
+  readonly onOpenHistory?: () => void;
+  readonly onStart?: (draft: import("@/features/create-debate/draft").MatchDraft) => void;
+  readonly busy?: boolean;
+  readonly errorMessage?: string;
+  readonly reactionsMuted: boolean;
+  readonly onToggleMute?: () => void;
 }
 
 /**
- * The R1 v0.3 broadcast composition. A new reusable widget that replaces the
- * flat "VSPillar + AgentCorners" layout with a cinematic 3D-feeling CSS stage:
- * backdrop + floor with perspective, two contender desks with geometric
- * mascots and monitors, a central Judge plinth, and a round marker above —
- * followed by the existing speech layer and judge panel, untouched.
+ * The v0.3 broadcast composition. The Arena is the first impression and the
+ * main interface: broadcast banner + cyclorama backdrop, two contender
+ * desks, a central Judge plinth, the teleprompter speech layer, and either
+ * an idle setup surface or a dramatic verdict reveal. State comes only
+ * from {@link DebateRuntimeState}; the {@link deriveStageView} pure mapping
+ * projects that state into data-attributes that the CSS module uses to
+ * light up spotlights, shift the camera, animate mascots, and pop reactions.
  *
- * State comes only from {@link DebateRuntimeState}; the {@link deriveStageView}
- * pure mapping projects that state into data-attributes (and per-element
- * activity flags) that the CSS module uses to light up spotlights, shift the
- * camera, and animate the round indicator.
+ * The hook / reducer / stream lifecycle is untouched: this widget only
+ * changes presentation.
  */
 export function BroadcastStage({
   topic,
@@ -66,15 +68,28 @@ export function BroadcastStage({
   draftSideBPosition,
   footer,
   onNewMatch,
+  inMatch,
+  onEndMatch,
+  onOpenHistory,
+  onStart,
+  busy = false,
+  errorMessage,
+  reactionsMuted,
+  onToggleMute,
 }: BroadcastStageProps) {
   const view = deriveStageView(state);
 
+  const showCancelled = state.status === "cancelled";
   const showJudge = state.status === "judging" || state.status === "finished";
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
-  const showCancelled = state.status === "cancelled";
 
   const verdict = state.verdict as DebateStreamVerdict | undefined;
+
+  const monitorModelA = draftSideAModel ?? state.panels.find((p) => p.side === "A")?.model;
+  const monitorModelB = draftSideBModel ?? state.panels.find((p) => p.side === "B")?.model;
+
+  const showSetup = !inMatch && Boolean(onStart);
 
   return (
     <section
@@ -84,9 +99,18 @@ export function BroadcastStage({
     >
       <StageBackdrop view={view} />
 
+      <BroadcastBanner
+        topic={topic}
+        mode={state.mode}
+        inMatch={inMatch}
+        onEndMatch={onEndMatch}
+        onOpenHistory={onOpenHistory}
+        reactionsMuted={reactionsMuted}
+        onToggleMute={onToggleMute}
+      />
+
       <div className="broadcast-stage__composition">
         <div className="broadcast-stage__header">
-          <MatchHeader topic={topic || "Untitled motion"} currentPhase={state.currentPhase} mode={state.mode} />
           <RoundMarker view={view} />
         </div>
 
@@ -97,8 +121,9 @@ export function BroadcastStage({
             identity="The Challenger"
             position={draftSideAPosition ?? "FOR"}
             provider={agentA}
-            model={draftSideAModel ?? state.panels.find((p) => p.side === "A")?.model}
+            model={monitorModelA}
             activity={view.sideAActivity}
+            mood={view.moods.a}
             view={view}
             className="broadcast-stage__desk broadcast-stage__desk--a"
           />
@@ -108,6 +133,7 @@ export function BroadcastStage({
               judgeProvider={judgeProvider}
               judgeModel={judgeModel}
               activity={view.judgeActivity}
+              mood={view.moods.judge}
               view={view}
               className="broadcast-stage__plinth"
             />
@@ -119,18 +145,20 @@ export function BroadcastStage({
             identity="The Advocate"
             position={draftSideBPosition ?? "AGAINST"}
             provider={agentB}
-            model={draftSideBModel ?? state.panels.find((p) => p.side === "B")?.model}
+            model={monitorModelB}
             activity={view.sideBActivity}
+            mood={view.moods.b}
             view={view}
             className="broadcast-stage__desk broadcast-stage__desk--b"
           />
         </div>
+
+        <ReactionOverlay reaction={view.reaction} muted={reactionsMuted} position="top-right" />
       </div>
 
-      <div className="broadcast-stage__speech">
+      {inMatch ? (
         <SpeechLayer
           state={state}
-          topic={topic}
           agentA={agentA}
           agentB={agentB}
           draftSideAModel={draftSideAModel}
@@ -138,18 +166,18 @@ export function BroadcastStage({
           draftSideAPosition={draftSideAPosition}
           draftSideBPosition={draftSideBPosition}
         />
-      </div>
+      ) : null}
 
       {showCancelled ? (
         onNewMatch ? <CancelledPanel state={state} onNewMatch={onNewMatch} /> : null
       ) : showJudge ? (
-        <JudgePanel
-          state={(judgeState ?? "evaluating") as "evaluating" | "revealed"}
-          reasoning={verdict?.reasoning}
-          verdict={verdict}
-          errorMessage={state.errorMessage}
-          footer={footer}
-        />
+        judgeState === "revealed" && verdict ? (
+          <VerdictReveal verdict={verdict} reasoning={verdict.reasoning} footer={footer} />
+        ) : (
+          <VerdictEvaluating footer={footer} />
+        )
+      ) : showSetup && onStart ? (
+        <IdleSetup onStart={onStart} busy={busy} errorMessage={errorMessage} />
       ) : null}
     </section>
   );

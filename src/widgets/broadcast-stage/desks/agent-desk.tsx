@@ -2,6 +2,7 @@
 
 import type { DebateSide } from "@/entities/debate";
 import type { RedactedProvider } from "@/shared/api/providers";
+import type { ContenderMood } from "../mood";
 import type { StageSideActivity, StageView } from "../stage-state";
 import { BroadcastMonitor } from "../monitor/monitor";
 import { ContenderMascot } from "../mascots/contender-mascot";
@@ -14,6 +15,7 @@ interface AgentDeskProps {
   readonly provider?: RedactedProvider;
   readonly model?: string;
   readonly activity: StageSideActivity;
+  readonly mood: ContenderMood;
   readonly view: StageView;
   readonly className?: string;
 }
@@ -22,7 +24,8 @@ interface AgentDeskProps {
  * One contender's desk — a stylized podium with a monitor on top of it and
  * the inline-SVG contender mascot behind. The activity state drives a single
  * `data-active` attribute which CSS uses to light up the spotlight on the
- * active side only.
+ * active side only. The mascot renders its own mood layer from the
+ * deterministic `mood` projection.
  */
 export function AgentDesk({
   side,
@@ -32,6 +35,7 @@ export function AgentDesk({
   provider,
   model,
   activity,
+  mood,
   view,
   className = "",
 }: AgentDeskProps) {
@@ -60,6 +64,7 @@ export function AgentDesk({
       data-active={activity}
       data-stage={view.mode}
       data-camera={view.camera}
+      data-mood={mood}
       aria-label={`${identity} desk`}
     >
       <BroadcastMonitor
@@ -86,7 +91,7 @@ export function AgentDesk({
       </div>
 
       <div className="agent-desk__mascot">
-        <ContenderMascot side={side} className="agent-desk__mascot-svg" />
+        <ContenderMascot side={side} mood={mood} className="agent-desk__mascot-svg" />
       </div>
 
       <p className="agent-desk__identity">

@@ -1,6 +1,7 @@
 "use client";
 
 import type { RedactedProvider } from "@/shared/api/providers";
+import type { JudgeMood } from "../mood";
 import type { StageSideActivity, StageView } from "../stage-state";
 import { BroadcastMonitor } from "../monitor/monitor";
 import { JudgeMascot } from "../mascots/judge-mascot";
@@ -9,6 +10,7 @@ interface JudgePlinthProps {
   readonly judgeProvider?: RedactedProvider;
   readonly judgeModel?: string;
   readonly activity: StageSideActivity;
+  readonly mood: JudgeMood;
   readonly view: StageView;
   readonly className?: string;
 }
@@ -16,13 +18,15 @@ interface JudgePlinthProps {
 /**
  * Central judge plinth. Slightly larger than the contender desks, with a
  * raised base, a monitor showing the judge's provider/model, and the
- * judge mascot behind. Lit up by the stage's gold spotlight when the judge
- * is active.
+ * judge mascot behind. Lit up by the stage's honey spotlight when the judge
+ * is active. The mascot renders its own mood layer from the deterministic
+ * `mood` projection.
  */
 export function JudgePlinth({
   judgeProvider,
   judgeModel,
   activity,
+  mood,
   view,
   className = "",
 }: JudgePlinthProps) {
@@ -48,6 +52,7 @@ export function JudgePlinth({
       data-active={activity}
       data-stage={view.mode}
       data-camera={view.camera}
+      data-mood={mood}
       aria-label="Judge plinth"
     >
       <BroadcastMonitor
@@ -70,7 +75,7 @@ export function JudgePlinth({
       </div>
 
       <div className="judge-plinth__mascot">
-        <JudgeMascot className="judge-plinth__mascot-svg" />
+        <JudgeMascot mood={mood} className="judge-plinth__mascot-svg" />
       </div>
     </section>
   );

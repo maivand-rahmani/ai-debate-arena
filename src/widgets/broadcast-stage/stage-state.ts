@@ -9,15 +9,19 @@
  *
  * The mapping is intentionally narrow:
  * - `mode` is the broad UI mode (idle | speaking | judging | verdict | cancelled | error)
- * - `camera` is the discrete camera framing (idle | a | b | judge | verdict)
+ * - `camera` is the discrete camera framing (idle | a | b | rebuttal | judge | verdict)
  * - `round` is "1" for opening turns, "2" for rebuttal turns, "none" otherwise
  * - `activeSide` is whichever contender the server currently says is speaking
  * - per-element activity flags (`sideAActivity`, `sideBActivity`, `judgeActivity`)
  *   let each desk light up independently of the other
+ * - `moods` + `reaction` come from sibling pure projections and are forwarded
+ *   here as additional data-attributes for the CSS to consume.
  */
 
 import type { DebateSide } from "@/entities/debate";
 import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
+import { deriveMoods, type MoodView } from "./mood";
+import { deriveReaction, type ReactionView } from "./reaction";
 
 export type StageMode =
   | "idle"
@@ -27,7 +31,13 @@ export type StageMode =
   | "cancelled"
   | "error";
 
-export type StageCamera = "idle" | "a" | "b" | "judge" | "verdict";
+export type StageCamera =
+  | "idle"
+  | "a"
+  | "b"
+  | "rebuttal"
+  | "judge"
+  | "verdict";
 
 export type StageRound = "1" | "2" | "none";
 
@@ -43,6 +53,8 @@ export interface StageView {
   readonly sideAActivity: StageSideActivity;
   readonly sideBActivity: StageSideActivity;
   readonly judgeActivity: StageSideActivity;
+  readonly moods: MoodView;
+  readonly reaction: ReactionView | null;
 }
 
 export function deriveStageView(state: DebateRuntimeState): StageView {
@@ -51,6 +63,8 @@ export function deriveStageView(state: DebateRuntimeState): StageView {
   const round = computeRound(state);
   const activeSide = computeActiveSide(state, mode);
   const stageLabel = computeStageLabel(state, mode, round);
+  const moods = deriveMoods(state);
+  const reaction = deriveReaction(state);
 
   return {
     mode,
@@ -63,6 +77,10 @@ export function deriveStageView(state: DebateRuntimeState): StageView {
       "data-camera": camera,
       "data-round": round,
       "data-active-side": activeSide ? activeSide.toLowerCase() : "none",
+      "data-mood-a": moods.a,
+      "data-mood-b": moods.b,
+      "data-mood-judge": moods.judge,
+      "data-reaction": reaction?.id ?? "none",
     },
     sideAActivity: activeSide === "A" ? "active" : "idle",
     sideBActivity: activeSide === "B" ? "active" : "idle",
@@ -70,6 +88,8 @@ export function deriveStageView(state: DebateRuntimeState): StageView {
       mode === "judging" || mode === "verdict"
         ? "active"
         : "idle",
+    moods,
+    reaction,
   };
 }
 
@@ -96,6 +116,9 @@ function computeCamera(state: DebateRuntimeState, mode: StageMode): StageCamera 
   if (mode === "verdict") return "verdict";
   if (mode === "judging") return "judge";
   if (mode === "speaking") {
+    if (state.currentPhase === "REBUTTAL_A" || state.currentPhase === "REBUTTAL_B") {
+      return "rebuttal";
+    }
     if (state.currentSide === "A") return "a";
     if (state.currentSide === "B") return "b";
   }
