@@ -123,8 +123,21 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
       return { ...state, status: "error", errorMessage: event.message };
     case "done":
       if (state.status === "finished") return state;
-      // Server said done without a verdict — surface a graceful finish.
-      return { ...state, status: "finished", currentPhase: "FINISHED", currentSide: null };
+      // A judge/server failure must survive `done`: never overwrite an error
+      // with a graceful finish, otherwise the UI would render a fake verdict.
+      if (state.status === "error") return state;
+      if (state.verdict) {
+        return { ...state, status: "finished", currentPhase: "FINISHED", currentSide: null };
+      }
+      // Server said done but produced no verdict and no error — surface a safe
+      // error instead of a finish so callers cannot fabricate a draw.
+      return {
+        ...state,
+        status: "error",
+        errorMessage: state.errorMessage ?? "Match ended without a verdict",
+        judgeActive: false,
+        currentSide: null,
+      };
     default:
       return state;
   }

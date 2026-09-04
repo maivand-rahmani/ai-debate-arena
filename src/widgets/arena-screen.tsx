@@ -184,6 +184,7 @@ function LiveArena({ topic, state, agentA, agentB, draft, onAbort }: LiveArenaPr
           state={judgeState ?? "evaluating"}
           reasoning={state.verdict?.reasoning}
           verdict={state.verdict}
+          errorMessage={state.errorMessage}
         />
       ) : null}
 

@@ -7,9 +7,10 @@ interface JudgePanelProps {
   readonly state: "evaluating" | "revealing" | "revealed";
   readonly reasoning?: string;
   readonly verdict?: DebateStreamVerdict;
+  readonly errorMessage?: string;
 }
 
-export function JudgePanel({ state, reasoning, verdict }: JudgePanelProps) {
+export function JudgePanel({ state, reasoning, verdict, errorMessage }: JudgePanelProps) {
   if (state === "evaluating") {
     return (
       <section
@@ -51,18 +52,39 @@ export function JudgePanel({ state, reasoning, verdict }: JudgePanelProps) {
   }
 
   if (state === "revealing" || state === "revealed") {
+    if (!verdict) {
+      return (
+        <section
+          aria-live="polite"
+          role="alert"
+          className="verdict-panel animate-panel-enter border-arena-coral-300/30"
+        >
+          <div className="flex flex-col items-center gap-4 text-center">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-arena-coral-200">
+              No verdict reached
+            </p>
+            <h2 className="font-display text-2xl font-bold tracking-tight text-arena-50 sm:text-3xl">
+              The judge could not decide
+            </h2>
+            <p className="max-w-md text-sm text-arena-300">
+              {errorMessage ?? "The match ended without a verdict, so no winner or scores are shown."}
+            </p>
+          </div>
+        </section>
+      );
+    }
     return <VerdictReveal reasoning={reasoning} verdict={verdict} />;
   }
 
   return null;
 }
 
-function VerdictReveal({ reasoning, verdict }: { reasoning?: string; verdict?: DebateStreamVerdict }) {
-  const winner = verdict?.winner ?? "DRAW";
+function VerdictReveal({ reasoning, verdict }: { reasoning?: string; verdict: DebateStreamVerdict }) {
+  const winner = verdict.winner;
   const winnerLabel =
     winner === "DRAW" ? "Draw" : winner === "A" ? "The Challenger wins" : "The Advocate wins";
-  const scoreA = verdict?.scoreA ?? 0;
-  const scoreB = verdict?.scoreB ?? 0;
+  const scoreA = verdict.scoreA;
+  const scoreB = verdict.scoreB;
   const total = Math.max(1, scoreA + scoreB);
   const shareA = Math.round((scoreA / total) * 100);
   const shareB = 100 - shareA;
@@ -105,30 +127,28 @@ function VerdictReveal({ reasoning, verdict }: { reasoning?: string; verdict?: D
         />
       </div>
 
-      {verdict ? (
-        <div className="mt-10 grid gap-3 sm:grid-cols-2">
-          <CriteriaBlock
-            title="Argument quality"
-            left={verdict.criteria.argumentQualityA}
-            right={verdict.criteria.argumentQualityB}
-          />
-          <CriteriaBlock
-            title="Rebuttal"
-            left={verdict.criteria.rebuttalA}
-            right={verdict.criteria.rebuttalB}
-          />
-          <CriteriaBlock
-            title="Consistency"
-            left={verdict.criteria.consistencyA}
-            right={verdict.criteria.consistencyB}
-          />
-          <CriteriaBlock
-            title="Relevance"
-            left={verdict.criteria.relevanceA}
-            right={verdict.criteria.relevanceB}
-          />
-        </div>
-      ) : null}
+      <div className="mt-10 grid gap-3 sm:grid-cols-2">
+        <CriteriaBlock
+          title="Argument quality"
+          left={verdict.criteria.argumentQualityA}
+          right={verdict.criteria.argumentQualityB}
+        />
+        <CriteriaBlock
+          title="Rebuttal"
+          left={verdict.criteria.rebuttalA}
+          right={verdict.criteria.rebuttalB}
+        />
+        <CriteriaBlock
+          title="Consistency"
+          left={verdict.criteria.consistencyA}
+          right={verdict.criteria.consistencyB}
+        />
+        <CriteriaBlock
+          title="Relevance"
+          left={verdict.criteria.relevanceA}
+          right={verdict.criteria.relevanceB}
+        />
+      </div>
 
       {reasoning ? (
         <div className="mt-10 border-t border-white/10 pt-6">
