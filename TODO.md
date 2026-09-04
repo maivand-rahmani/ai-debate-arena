@@ -75,8 +75,8 @@ Definition of done for MVP: clone → install → `npm run provider:add` → `np
 
 ## PHASE 8 — MVP Release
 
-- [ ] [P0] README: real quick-start (provider add → first debate), dependency justifications
-- [ ] [P0] docs/: architecture, debate-engine (incl. stream protocol), providers (API endpoints), development
+- [x] [P0] README: real quick-start (provider add → first debate), dependency justifications
+- [x] [P0] docs/: architecture, debate-engine (incl. stream protocol), providers (API endpoints), development
 - [ ] [P1] git init + initial commit + `v0.1.0` tag
 - [ ] [P3] v0.2+: better prompts/judge, challenges · v0.3: sandbox/proof · v0.4: credits/betting (domain model stays extensible — no mechanics now) · v0.5: tournaments/replay
 
