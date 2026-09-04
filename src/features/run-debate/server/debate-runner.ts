@@ -78,6 +78,9 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
     import("ai"),
   ]);
   const model = await createConfiguredModel(args.providerId, args.modelId);
+  // Quick mode is cost-first: cap reasoning effort on providers that honor it
+  // (@ai-sdk/openai responses models). Unknown keys are ignored elsewhere.
+  const providerOptions = { openai: { reasoningEffort: "low" } };
   if (args.kind === "judge") {
     try {
       const structured = await ai.generateText({
@@ -85,6 +88,7 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
         system: args.system,
         prompt: args.prompt,
         maxOutputTokens: args.maxOutputTokens,
+        providerOptions,
         output: ai.Output.object({ schema: debateVerdictSchema }),
       });
       // Some providers (notably Responses API) can resolve without throwing
@@ -106,6 +110,7 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
           `concrete integer scores 0-100, no markdown fences, no prose.`,
         maxOutputTokens: args.maxOutputTokens,
         temperature: 0,
+        providerOptions,
       });
       return { text: fallback.text, chunks: [] };
     }
@@ -115,6 +120,7 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
     system: args.system,
     prompt: args.prompt,
     maxOutputTokens: args.maxOutputTokens,
+    providerOptions,
   });
   const chunks: string[] = [];
   for await (const chunk of result.textStream) chunks.push(chunk);
