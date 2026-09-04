@@ -156,6 +156,626 @@ textarea { resize: none; }
 }
 
 /* ---------------------------------------------------------------------------
+   Broadcast-stage (v0.3 R1) — CSS/SVG 3D-feeling composition
+   --------------------------------------------------------------------------
+   The widget renders:
+     .broadcast-stage              → root, carries data-stage / data-camera / data-round
+     .stage-backdrop               → CSS-perspective sky + floor
+     .broadcast-stage__set         → three-column desk + plinth row
+     .agent-desk / .judge-plinth   → individual desks with mascot + monitor
+     .round-marker                 → central floating round chip
+   All state is driven by data-attributes (data-stage, data-camera, data-round,
+   data-active-side, data-active). No JS animation, no rAF, no external libs.
+--------------------------------------------------------------------------- */
+
+.broadcast-stage {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: clamp(20px, 3.4vw, 36px);
+  padding: clamp(4px, 1vw, 14px) 0;
+}
+
+/* --- Backdrop + floor ------------------------------------------------------ */
+.stage-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 22px;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 110%, rgba(232,196,122,.10), transparent 70%),
+    radial-gradient(ellipse 70% 80% at 50% -10%, rgba(255,108,80,.10), transparent 65%),
+    linear-gradient(180deg, #11111a 0%, #0e0e12 60%, #0a0a0e 100%);
+}
+.stage-backdrop__sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 30% at 50% 0%, rgba(255,255,255,.04), transparent 70%);
+}
+.stage-backdrop__halo {
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0;
+  transition: opacity .55s ease, transform .55s ease;
+  will-change: opacity, transform;
+}
+.stage-backdrop__halo--a {
+  left: -120px;
+  top: 30%;
+  background: radial-gradient(circle, rgba(255,108,80,.55), transparent 65%);
+}
+.stage-backdrop__halo--b {
+  right: -120px;
+  top: 30%;
+  background: radial-gradient(circle, rgba(169,140,255,.55), transparent 65%);
+}
+.stage-backdrop__halo--judge {
+  left: 50%;
+  top: 18%;
+  width: 520px;
+  height: 520px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(232,196,122,.55), transparent 65%);
+}
+
+.stage-backdrop__floor {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: -2%;
+  height: 50%;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.04), transparent 80%),
+    radial-gradient(ellipse 60% 80% at 50% 100%, rgba(255,255,255,.06), transparent 70%);
+  border-top: 1px solid rgba(255,255,255,.05);
+  transform: perspective(900px) rotateX(58deg);
+  transform-origin: 50% 0%;
+  overflow: hidden;
+}
+.stage-backdrop__floor-lines {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(90deg, transparent 49.5%, rgba(255,255,255,.06) 49.5%, rgba(255,255,255,.06) 50.5%, transparent 50.5%),
+    linear-gradient(0deg, transparent 49.5%, rgba(255,255,255,.04) 49.5%, rgba(255,255,255,.04) 50.5%, transparent 50.5%);
+  background-size: 22% 22%, 22% 22%;
+  opacity: .55;
+}
+.stage-backdrop__floor-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 40% 20% at 50% 0%, rgba(232,196,122,.18), transparent 80%);
+}
+
+/* Spotlights driven by data-stage / data-camera on .stage-backdrop */
+.stage-backdrop[data-stage="speaking"][data-camera="a"] .stage-backdrop__halo--a {
+  opacity: 1;
+  transform: scale(1.05);
+}
+.stage-backdrop[data-stage="speaking"][data-camera="b"] .stage-backdrop__halo--b {
+  opacity: 1;
+  transform: scale(1.05);
+}
+.stage-backdrop[data-stage="judging"] .stage-backdrop__halo--judge,
+.stage-backdrop[data-stage="verdict"] .stage-backdrop__halo--judge {
+  opacity: 1;
+  transform: translateX(-50%) scale(1.1);
+}
+.stage-backdrop[data-stage="speaking"][data-round="2"] .stage-backdrop__floor-glow {
+  background:
+    radial-gradient(ellipse 40% 20% at 50% 0%, rgba(255,108,80,.16), transparent 80%),
+    radial-gradient(ellipse 30% 15% at 50% 0%, rgba(169,140,255,.14), transparent 80%);
+}
+.stage-backdrop[data-stage="cancelled"]::after,
+.stage-backdrop[data-stage="error"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255,108,80,.05);
+  pointer-events: none;
+}
+
+/* --- Composition root ------------------------------------------------------ */
+.broadcast-stage__composition {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: clamp(18px, 2.5vw, 28px);
+}
+.broadcast-stage__header {
+  display: grid;
+  gap: 14px;
+}
+@media (min-width: 900px) {
+  .broadcast-stage__header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+.broadcast-stage__set {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(20px, 3vw, 36px);
+  padding: clamp(20px, 3vw, 36px) clamp(8px, 2vw, 20px);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.06);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.005));
+  perspective: 1400px;
+  perspective-origin: 50% 30%;
+  transform-style: preserve-3d;
+}
+@media (min-width: 900px) {
+  .broadcast-stage__set {
+    grid-template-columns: 1fr 1.1fr 1fr;
+    align-items: end;
+    min-height: 320px;
+  }
+}
+.broadcast-stage__center {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+}
+.broadcast-stage__speech { position: relative; z-index: 1; }
+
+/* --- Round marker ---------------------------------------------------------- */
+.round-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(15,15,20,.6);
+  backdrop-filter: blur(6px);
+  font-family: 'Syne', ui-sans-serif, sans-serif;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #f4f1ed;
+  box-shadow: 0 12px 36px rgba(0,0,0,.35);
+  transition: border-color .35s ease, background .35s ease, color .35s ease;
+}
+.round-marker__line {
+  display: inline-block;
+  width: 24px;
+  height: 1px;
+  background: rgba(255,255,255,.2);
+}
+.round-marker__inner {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.round-marker__pill {
+  font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  letter-spacing: .22em;
+}
+.round-marker__pill--coral   { color: #ff987f; border-color: rgba(255,108,80,.55); background: rgba(255,108,80,.10); }
+.round-marker__pill--violet  { color: #c5b5ff; border-color: rgba(169,140,255,.55); background: rgba(169,140,255,.10); }
+.round-marker__pill--gold    { color: #e8c47a; border-color: rgba(232,196,122,.55); background: rgba(232,196,122,.10); }
+.round-marker__pill--neutral { color: #c5c5cd; border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.05); }
+
+.round-marker__round {
+  margin: 0;
+  font-size: 11px;
+  color: #f4f1ed;
+}
+.round-marker__stage {
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: .22em;
+  color: #9d9da5;
+}
+.round-marker--gold    { border-color: rgba(232,196,122,.45); }
+.round-marker--coral   { border-color: rgba(255,108,80,.45); }
+.round-marker--violet  { border-color: rgba(169,140,255,.45); }
+.round-marker[data-mode="cancelled"] { border-color: rgba(255,255,255,.18); }
+.round-marker[data-mode="error"] { border-color: rgba(255,108,80,.45); }
+
+/* --- Monitor (provider/model/status tile) ---------------------------------- */
+.broadcast-monitor {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  box-shadow: 0 12px 30px rgba(0,0,0,.35);
+  min-width: 180px;
+  max-width: 260px;
+  transition: transform .35s cubic-bezier(.2,.7,.2,1), border-color .35s ease, box-shadow .35s ease;
+}
+.broadcast-monitor--coral  { border-color: rgba(255,108,80,.45); }
+.broadcast-monitor--violet { border-color: rgba(169,140,255,.45); }
+.broadcast-monitor--gold   { border-color: rgba(232,196,122,.55); }
+.broadcast-monitor__bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.broadcast-monitor__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+.broadcast-monitor--coral  .broadcast-monitor__dot { color: #ff6c50; }
+.broadcast-monitor--violet .broadcast-monitor__dot { color: #a98cff; }
+.broadcast-monitor--gold   .broadcast-monitor__dot { color: #e8c47a; }
+.broadcast-monitor__label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #c5c5cd;
+}
+.broadcast-monitor__title {
+  margin: 0;
+  font-family: 'Syne', ui-sans-serif, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: #f4f1ed;
+  line-height: 1.1;
+}
+.broadcast-monitor__meta {
+  margin: 0;
+  font-size: 11px;
+  color: #9d9da5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.broadcast-monitor__status {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #c5c5cd;
+}
+.broadcast-monitor__status-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.broadcast-monitor__divider { color: #5b5b66; }
+.broadcast-monitor__pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: broadcast-pulse 1.4s ease-in-out infinite;
+}
+.broadcast-monitor--coral  .broadcast-monitor__pulse { color: #ff6c50; }
+.broadcast-monitor--violet .broadcast-monitor__pulse { color: #a98cff; }
+.broadcast-monitor__pulse--gold { color: #e8c47a; }
+@keyframes broadcast-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .55; transform: scale(.85); }
+}
+
+/* --- Agent desk / Judge plinth -------------------------------------------- */
+.agent-desk {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  transition: transform .5s cubic-bezier(.2,.7,.2,1), opacity .5s ease;
+  transform-style: preserve-3d;
+}
+.agent-desk--a {
+  transform: translateZ(0) rotateY(8deg);
+  transform-origin: 100% 50%;
+}
+.agent-desk--b {
+  transform: translateZ(0) rotateY(-8deg);
+  transform-origin: 0% 50%;
+}
+
+.agent-desk__platform {
+  position: relative;
+  width: 88%;
+  max-width: 320px;
+  height: 18px;
+}
+.agent-desk__desk {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02)),
+    #1a1a22;
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 18px 40px rgba(0,0,0,.5);
+}
+.agent-desk--coral .agent-desk__desk { border-top: 2px solid rgba(255,108,80,.55); }
+.agent-desk--violet .agent-desk__desk { border-top: 2px solid rgba(169,140,255,.55); }
+.agent-desk__desk-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,.35));
+  pointer-events: none;
+}
+.agent-desk__mic {
+  position: absolute;
+  left: 50%;
+  top: -16px;
+  width: 4px;
+  height: 16px;
+  background: #4a4a55;
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+.agent-desk__mic::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -6px;
+  width: 12px;
+  height: 8px;
+  border-radius: 3px;
+  background: #2a2a32;
+}
+.agent-desk__mascot {
+  position: relative;
+  width: clamp(140px, 18vw, 200px);
+  aspect-ratio: 1 / 1;
+  transform: translateZ(40px);
+  transition: transform .5s cubic-bezier(.2,.7,.2,1);
+}
+.agent-desk__mascot-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.agent-desk[data-active="active"] .agent-desk__mascot {
+  transform: translateZ(80px) scale(1.04);
+}
+.agent-desk[data-active="active"] {
+  opacity: 1;
+}
+.agent-desk[data-active="idle"] {
+  opacity: .72;
+}
+.agent-desk__identity {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(15,15,20,.55);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: #f4f1ed;
+}
+.agent-desk__identity-mark {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: 'Syne', ui-sans-serif, sans-serif;
+}
+.agent-desk--coral .agent-desk__identity-mark { background: rgba(255,108,80,.18); color: #ff987f; }
+.agent-desk--violet .agent-desk__identity-mark { background: rgba(169,140,255,.18); color: #c5b5ff; }
+
+/* Camera pulls: when camera=a/b, pull the matching desk forward in Z and
+   push the other one back. The .broadcast-stage element carries data-camera
+   so this works regardless of nesting inside the desk. */
+.broadcast-stage[data-camera="a"] .agent-desk--a .agent-desk__mascot {
+  transform: translateZ(110px) scale(1.06);
+}
+.broadcast-stage[data-camera="a"] .agent-desk--b .agent-desk__mascot {
+  transform: translateZ(-30px) scale(.96);
+  opacity: .6;
+}
+.broadcast-stage[data-camera="b"] .agent-desk--b .agent-desk__mascot {
+  transform: translateZ(110px) scale(1.06);
+}
+.broadcast-stage[data-camera="b"] .agent-desk--a .agent-desk__mascot {
+  transform: translateZ(-30px) scale(.96);
+  opacity: .6;
+}
+.broadcast-stage[data-camera="judge"] .agent-desk--a .agent-desk__mascot,
+.broadcast-stage[data-camera="judge"] .agent-desk--b .agent-desk__mascot,
+.broadcast-stage[data-camera="verdict"] .agent-desk--a .agent-desk__mascot,
+.broadcast-stage[data-camera="verdict"] .agent-desk--b .agent-desk__mascot {
+  transform: translateZ(0) scale(.96);
+  opacity: .8;
+}
+
+/* --- Judge plinth ---------------------------------------------------------- */
+.judge-plinth {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  transform-style: preserve-3d;
+  transform: translateZ(20px);
+  transition: transform .5s cubic-bezier(.2,.7,.2,1);
+}
+.judge-plinth__platform {
+  position: relative;
+  width: min(320px, 80%);
+  height: 22px;
+}
+.judge-plinth__base {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(232,196,122,.18), rgba(232,196,122,.04)),
+    #1a1a22;
+  border: 1px solid rgba(232,196,122,.35);
+  box-shadow: 0 22px 50px rgba(0,0,0,.55);
+}
+.judge-plinth__base-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,.4));
+  pointer-events: none;
+}
+.judge-plinth__rings {
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  width: 70%;
+  height: 8px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(232,196,122,.45) 0 6px,
+    transparent 6px 12px
+  );
+  transform: translateX(-50%);
+  opacity: .6;
+}
+.judge-plinth__mascot {
+  position: relative;
+  width: clamp(160px, 20vw, 220px);
+  aspect-ratio: 13 / 12;
+  transform: translateZ(60px);
+  transition: transform .55s cubic-bezier(.2,.7,.2,1);
+}
+.judge-plinth__mascot-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.broadcast-stage[data-camera="judge"] .judge-plinth,
+.broadcast-stage[data-camera="verdict"] .judge-plinth {
+  transform: translateZ(80px) scale(1.04);
+}
+.broadcast-stage[data-camera="judge"] .judge-plinth__mascot,
+.broadcast-stage[data-camera="verdict"] .judge-plinth__mascot {
+  transform: translateZ(110px);
+}
+.broadcast-stage[data-camera="a"] .judge-plinth,
+.broadcast-stage[data-camera="b"] .judge-plinth {
+  transform: translateZ(-20px) scale(.92);
+  opacity: .65;
+}
+.judge-plinth[data-active="idle"] {
+  opacity: .85;
+}
+
+/* --- Speech layer (teleprompter below the stage) -------------------------- */
+.broadcast-stage__speech {
+  display: grid;
+  gap: 14px;
+}
+@media (min-width: 900px) {
+  .broadcast-stage__speech {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.speech-layer {
+  display: contents;
+}
+
+/* --- Tablet/mobile fallback: keep the broadcast readable, drop perspective - */
+@media (max-width: 899px) {
+  .broadcast-stage__set {
+    perspective: none;
+    transform-style: flat;
+  }
+  .agent-desk--a,
+  .agent-desk--b,
+  .judge-plinth,
+  .agent-desk__mascot,
+  .judge-plinth__mascot,
+  .stage-backdrop__floor {
+    transform: none !important;
+  }
+  .broadcast-stage[data-camera="a"] .agent-desk--a .agent-desk__mascot,
+  .broadcast-stage[data-camera="a"] .agent-desk--b .agent-desk__mascot,
+  .broadcast-stage[data-camera="b"] .agent-desk--a .agent-desk__mascot,
+  .broadcast-stage[data-camera="b"] .agent-desk--b .agent-desk__mascot {
+    transform: none !important;
+  }
+  .broadcast-stage[data-camera="judge"] .judge-plinth,
+  .broadcast-stage[data-camera="verdict"] .judge-plinth {
+    transform: none !important;
+  }
+  .stage-backdrop__floor {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .broadcast-stage__set {
+    padding: 14px 8px;
+    min-height: 0;
+  }
+  .broadcast-monitor {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .agent-desk__mascot,
+  .judge-plinth__mascot {
+    width: clamp(120px, 38vw, 180px);
+  }
+}
+
+/* Reduced-motion override for the broadcast stage: flatten the camera pulls
+   and the perspective-driven transforms so the visual stays calm. The
+   existing global guard above already neutralizes animations and transition
+   durations; we only need to remove the discrete transforms here. */
+@media (prefers-reduced-motion: reduce) {
+  .broadcast-stage__set {
+    perspective: none;
+    transform-style: flat;
+  }
+  .agent-desk--a,
+  .agent-desk--b,
+  .judge-plinth,
+  .agent-desk__mascot,
+  .judge-plinth__mascot {
+    transform: none !important;
+    transition: none !important;
+  }
+  .broadcast-stage[data-camera="a"] .agent-desk--a .agent-desk__mascot,
+  .broadcast-stage[data-camera="a"] .agent-desk--b .agent-desk__mascot,
+  .broadcast-stage[data-camera="b"] .agent-desk--a .agent-desk__mascot,
+  .broadcast-stage[data-camera="b"] .agent-desk--b .agent-desk__mascot,
+  .broadcast-stage[data-camera="judge"] .judge-plinth,
+  .broadcast-stage[data-camera="verdict"] .judge-plinth {
+    transform: none !important;
+  }
+  .stage-backdrop__halo {
+    transition: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Match-history drawer (slide-over)
 --------------------------------------------------------------------------- */
 @keyframes drawer-slide-in {

@@ -12,19 +12,16 @@ import { SetupForm } from "@/features/create-debate/setup-form";
 import { useProviders } from "@/features/create-debate/use-providers";
 import type { MatchDraft } from "@/features/create-debate/draft";
 import { useDebateStream } from "@/features/run-debate/lib/use-debate-stream";
-import { AgentCorner } from "@/features/run-debate/ui/agent-corner";
-import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
-import { JudgePanel } from "@/features/run-debate/ui/judge-panel";
-import { MatchHeader, StatusLine } from "@/features/run-debate/ui/match-header";
+import { StatusLine } from "@/features/run-debate/ui/match-header";
 import {
   isInMatch,
-  panelsForSide,
   statusLineFor,
   type DebateRuntimeState,
 } from "@/features/run-debate/lib/reducer";
 import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match-history-drawer";
 import { exportJsonBlob } from "@/features/run-debate/ui/match-history/match-actions";
 import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
+import { BroadcastStage } from "@/widgets/broadcast-stage";
 
 const TOP_STRIP_LINKS = [
   { label: "How it works", primary: false },
@@ -289,9 +286,6 @@ function LiveArena({
   rejudgeStatus,
   rejudgeError,
 }: LiveArenaProps) {
-  const showJudge = state.status === "judging" || state.status === "finished";
-  const judgeState =
-    state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
   const showCancelled = state.status === "cancelled";
   const showErrorMidMatch = state.status === "error";
   const tone =
@@ -324,51 +318,18 @@ function LiveArena({
 
   return (
     <div className="grid gap-8">
-      <MatchHeader
-        topic={topic || "Untitled motion"}
-        currentPhase={state.currentPhase}
-        mode={state.mode}
+      <BroadcastStage
+        topic={topic}
+        state={state}
+        agentA={agentA}
+        agentB={agentB}
+        draftSideAModel={draft?.sideA.model}
+        draftSideBModel={draft?.sideB.model}
+        draftSideAPosition={draft?.sideA.position}
+        draftSideBPosition={draft?.sideB.position}
+        footer={footer}
+        onNewMatch={onNewMatch}
       />
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
-        <AgentCorner
-          side="A"
-          tone="coral"
-          identity="The Challenger"
-          provider={agentA}
-          model={draft?.sideA.model ?? state.panels.find((p) => p.side === "A")?.model}
-          position={draft?.sideA.position ?? "FOR"}
-          panels={panelsForSide(state, "A")}
-          currentSide={state.currentSide}
-        />
-        <VSPillar
-          currentPhase={state.currentPhase}
-          finished={state.status === "finished"}
-          cancelled={showCancelled}
-        />
-        <AgentCorner
-          side="B"
-          tone="violet"
-          identity="The Advocate"
-          provider={agentB}
-          model={draft?.sideB.model ?? state.panels.find((p) => p.side === "B")?.model}
-          position={draft?.sideB.position ?? "AGAINST"}
-          panels={panelsForSide(state, "B")}
-          currentSide={state.currentSide}
-        />
-      </div>
-
-      {showCancelled ? (
-        <CancelledPanel state={state} onNewMatch={onNewMatch} />
-      ) : showJudge ? (
-        <JudgePanel
-          state={judgeState ?? "evaluating"}
-          reasoning={state.verdict?.reasoning}
-          verdict={state.verdict}
-          errorMessage={state.errorMessage}
-          footer={footer}
-        />
-      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <StatusLine tone={tone}>{statusLineFor(state)}</StatusLine>
@@ -395,35 +356,6 @@ function ActionButton({ label, handler, emphasis }: ActionButtonProps) {
     <button type="button" onClick={handler} className={cls}>
       {label}
     </button>
-  );
-}
-
-function VSPillar({ currentPhase, finished, cancelled }: { currentPhase: string; finished: boolean; cancelled: boolean }) {
-  const stageLabel = cancelled
-    ? "Ended"
-    : finished
-      ? "Finished"
-      : currentPhase === "JUDGING"
-        ? "Judge"
-        : currentPhase === "CREATED"
-          ? "Ready"
-          : currentPhase === "FINISHED"
-            ? "Complete"
-            : "Round";
-  return (
-    <div className="hidden flex-col items-center justify-center self-stretch lg:flex">
-      <div className="flex flex-1 flex-col items-center justify-center gap-4">
-        <span
-          aria-hidden="true"
-          className={`font-display text-[clamp(3rem,5vw,4.5rem)] font-bold tracking-[-0.08em] ${
-            cancelled ? "text-gold-100" : finished ? "text-gold-100" : currentPhase === "JUDGING" ? "text-gold-100" : "text-arena-400"
-          }`}
-        >
-          VS
-        </span>
-        <span className="text-[10px] font-bold uppercase tracking-[0.28em] text-arena-300">{stageLabel}</span>
-      </div>
-    </div>
   );
 }
 
