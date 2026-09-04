@@ -13,7 +13,7 @@ Definition of done for MVP: clone → install → `npm run provider:add` → `np
 - [x] [P0] Tooling: `dev`, `build`, `lint`, `typecheck`, `test` commands
 - [x] [P0] Domain types: debate phases, agents, turns, config, state (`entities/debate/types.ts`)
 - [x] [P0] Phase state machine CREATED→…→FINISHED with transition tests (`entities/debate/state.ts`)
-- [x] [P0] Token policy module with central constants 1200/1000 (`shared/token-policy.ts`)
+- [x] [P0] Token policy module with central constants 1200/2000 (`shared/token-policy.ts`)
 - [x] [P0] `.gitignore`, local config dir, docs stubs
 
 ## PHASE 1 — Provider System

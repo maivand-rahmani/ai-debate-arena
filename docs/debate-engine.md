@@ -27,8 +27,8 @@ judge JSON emits `Judge returned invalid verdict` then `done`.
 
 | Policy   | agent out | judge out | rounds | maxContextChars | maxHistoryTurns |
 | -------- | --------- | --------- | ------ | --------------- | --------------- |
-| Quick    | 1200      | 1000      | 4      | 12000           | 6               |
-| Standard | 2000      | 1500      | 4      | 24000           | 10              |
+| Quick    | 1200      | 2000      | 4      | 12000           | 6               |
+| Standard | 2000      | 2000      | 4      | 24000           | 10              |
 | Hardcore | 3000      | 2000      | 4      | 48000           | 16              |
 
 v0.1 keeps the same 4 phases for all tiers; only budgets differ. UI gates

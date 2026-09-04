@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ACTIVE_TOKEN_POLICY, AGENT_MAX_OUTPUT_TOKENS, JUDGE_MAX_OUTPUT_TOKENS, TOKEN_POLICIES } from "./token-policy";
+import {
+  ACTIVE_TOKEN_POLICY,
+  AGENT_MAX_OUTPUT_TOKENS,
+  JUDGE_MAX_OUTPUT_TOKENS,
+  TOKEN_POLICIES,
+  getTokenPolicy,
+} from "./token-policy";
 
 describe("token policy", () => {
   it("keeps Quick active with the P0 limits", () => {
@@ -7,7 +13,13 @@ describe("token policy", () => {
     expect(ACTIVE_TOKEN_POLICY.agentMaxOutputTokens).toBe(AGENT_MAX_OUTPUT_TOKENS);
     expect(ACTIVE_TOKEN_POLICY.judgeMaxOutputTokens).toBe(JUDGE_MAX_OUTPUT_TOKENS);
     expect(AGENT_MAX_OUTPUT_TOKENS).toBe(1200);
-    expect(JUDGE_MAX_OUTPUT_TOKENS).toBe(1000);
+    expect(JUDGE_MAX_OUTPUT_TOKENS).toBe(2000);
+  });
+
+  it("gives the Quick judge a 2000-token budget while keeping the agent budget at 1200", () => {
+    expect(TOKEN_POLICIES.Quick.judgeMaxOutputTokens).toBe(2000);
+    expect(TOKEN_POLICIES.Quick.agentMaxOutputTokens).toBe(1200);
+    expect(getTokenPolicy("Quick").judgeMaxOutputTokens).toBe(2000);
   });
 
   it("defines rounds, context, and history budgets per policy", () => {

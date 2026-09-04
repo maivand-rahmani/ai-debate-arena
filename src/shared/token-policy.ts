@@ -1,5 +1,5 @@
 export const AGENT_MAX_OUTPUT_TOKENS = 1200;
-export const JUDGE_MAX_OUTPUT_TOKENS = 1000;
+export const JUDGE_MAX_OUTPUT_TOKENS = 2000;
 
 export type TokenPolicyName = "Quick" | "Standard" | "Hardcore";
 
@@ -24,7 +24,7 @@ export const TOKEN_POLICIES: Readonly<Record<TokenPolicyName, TokenPolicy>> = {
   Standard: {
     name: "Standard",
     agentMaxOutputTokens: 2000,
-    judgeMaxOutputTokens: 1500,
+    judgeMaxOutputTokens: 2000,
     rounds: 4,
     maxContextChars: 24000,
     maxHistoryTurns: 10,
