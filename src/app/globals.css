@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Base
+--------------------------------------------------------------------------- */
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: #0e0e12;
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button { font: inherit; }
+textarea { resize: none; }
+
+/* ---------------------------------------------------------------------------
+   Reusable building blocks (kept class-component style on purpose — Tailwind
+   can't easily express these layered backgrounds from utilities).
+--------------------------------------------------------------------------- */
+.font-display { font-family: 'Syne', ui-sans-serif, sans-serif; }
+
+.ambient-glow {
+  position: absolute;
+  pointer-events: none;
+  inset: 0 0 auto;
+  height: 720px;
+  opacity: .6;
+  background:
+    radial-gradient(ellipse at 16% 8%,  rgba(255,108,80,.16), transparent 38%),
+    radial-gradient(ellipse at 86% 14%, rgba(169,140,255,.12), transparent 36%),
+    radial-gradient(ellipse at 50% 60%, rgba(232,196,122,.05), transparent 60%);
+}
+
+.topic-panel {
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: linear-gradient(120deg, rgba(255,255,255,.07), rgba(255,255,255,.025));
+  padding: 22px 24px 20px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.18);
+}
+
+.agent-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  padding: 22px;
+  transition: border-color .25s ease, background .25s ease, box-shadow .25s ease;
+}
+.agent-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  opacity: .9;
+}
+.agent-coral::before { background: #ff6c50; }
+.agent-violet::before { background: #a98cff; }
+
+.agent-coral .agent-mark { background: rgba(255,108,80,.14); color: #ff987f; }
+.agent-violet .agent-mark { background: rgba(169,140,255,.14); color: #c5b5ff; }
+.agent-mark {
+  display: flex;
+  height: 34px;
+  width: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.start-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 48px;
+  border-radius: 9px;
+  background: #f0ede9;
+  padding: 0 18px 0 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #151519;
+  transition: transform .2s ease, background .2s ease;
+}
+.start-button:hover { transform: translateY(-2px); background: white; }
+.start-button:focus-visible {
+  outline: 2px solid #ff6c50;
+  outline-offset: 3px;
+}
+.start-button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+  transform: none;
+}
+
+.status-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 9px;
+  font-size: 12px;
+  transition: background .25s ease, color .25s ease;
+}
+.pulse-dot {
+  height: 7px;
+  width: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 5px rgba(255,108,80,.12);
+  animation: pulse 1.5s infinite;
+}
+
+.verdict-panel {
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(232,196,122,.07), rgba(255,255,255,.025)),
+    linear-gradient(135deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+  padding: clamp(24px, 5vw, 56px);
+  box-shadow: 0 36px 120px rgba(0,0,0,.32);
+}
+
+/* Shimmer used on the "Judge is evaluating" badge. */
+.animate-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    rgba(232,196,122,0) 30%,
+    rgba(232,196,122,.55) 50%,
+    rgba(232,196,122,0) 70%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+}
+
+/* ---------------------------------------------------------------------------
+   Reduced-motion guard
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
