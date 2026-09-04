@@ -125,8 +125,8 @@ Milestone: a new developer or coding agent can understand the repository, run ch
 
 ### Later foundation work
 
-- [ ] [P1] F0-11 v0.2 Define versioned domain-contract ownership: which layer owns MatchConfig, MatchEvent, Transcript, and Verdict.
-- [ ] [P1] F0-12 v0.2 Add a lightweight schema/version compatibility policy for persisted or exported match data.
+- [x] [P1] F0-11 v0.2 Define versioned domain-contract ownership: which layer owns MatchConfig, MatchEvent, Transcript, and Verdict.
+- [x] [P1] F0-12 v0.2 Add a lightweight schema/version compatibility policy for persisted or exported match data.
 - [ ] [P1] F0-13 v0.4 Add capability discovery so optional evidence, challenge, and sandbox features are explicit rather than inferred from UI state.
 - [ ] [P1] F0-14 v0.5 Add repository ports and migrations as a documented architectural boundary before introducing durable match and economy storage.
 - [ ] [P1] F0-15 v0.6 Document the local core versus optional hosted/distribution adapters.
@@ -185,12 +185,12 @@ Milestone: a match is a bounded domain process, not orchestration logic hidden i
 
 ### v0.2 engine quality
 
-- [ ] [P0] F2-10 Extend token policy to define rounds, maximum context characters, history turns per policy, judge limits, and per-mode budgets. Keep Quick, Standard, and Hardcore as data-driven profiles.
-- [ ] [P0] F2-11 Snapshot the effective MatchConfig, token policy, prompt versions, and provider/model metadata at match start. Never store the API key.
-- [ ] [P1] F2-12 Introduce stable MatchEvent types for phase changes, thinking, token deltas, completed turns, errors, and verdicts.
-- [ ] [P1] F2-13 Make history slicing explicit and test it against context overflow, empty history, long turns, and judge context.
-- [ ] [P1] F2-14 Add a deterministic event sequence number and match ID to every server-to-client event.
-- [ ] [P1] F2-15 Add a controlled re-judge operation that consumes a stored transcript without re-running Agent A or Agent B.
+- [x] [P0] F2-10 Extend token policy to define rounds, maximum context characters, history turns per policy, judge limits, and per-mode budgets. Keep Quick, Standard, and Hardcore as data-driven profiles.
+- [x] [P0] F2-11 Snapshot the effective MatchConfig, token policy, prompt versions, and provider/model metadata at match start. Never store the API key.
+- [x] [P1] F2-12 Introduce stable MatchEvent types for phase changes, thinking, token deltas, completed turns, errors, and verdicts.
+- [x] [P1] F2-13 Make history slicing explicit and test it against context overflow, empty history, long turns, and judge context.
+- [x] [P1] F2-14 Add a deterministic event sequence number and match ID to every server-to-client event.
+- [x] [P1] F2-15 Add a controlled re-judge operation that consumes a stored transcript without re-running Agent A or Agent B.
 - [ ] [P1] F2-16 Enable Standard only behind a feature flag after F2-10, F3-08, F7-09, and the v0.2 release gate pass.
 - [ ] [P2] F2-17 Keep Hardcore represented in policy and UI, but do not enable it until cost, context, and quality evidence justify it.
 
@@ -219,8 +219,8 @@ Milestone: the judge returns a valid, inspectable verdict and the product commun
 
 ### v0.2 judge quality
 
-- [ ] [P0] F3-07 Version the judge prompt and rubric; store the version with every verdict. Depends on F2-11.
-- [ ] [P0] F3-08 Create representative golden transcripts and judge regression tests covering clear wins, close wins, draws, contradictions, irrelevant arguments, and malformed model output.
+- [x] [P0] F3-07 Version the judge prompt and rubric; store the version with every verdict. Depends on F2-11.
+- [x] [P0] F3-08 Create representative golden transcripts and judge regression tests covering clear wins, close wins, draws, contradictions, irrelevant arguments, and malformed model output.
 - [ ] [P1] F3-09 Add confidence/calibration fields and a documented policy for low-confidence verdicts and abstention.
 - [ ] [P1] F3-10 Include compact supporting excerpts or turn references for each criterion so the user can inspect why a score was assigned.
 - [ ] [P1] F3-11 Separate raw judge output, parsed verdict, and user-facing explanation; never let UI parsing become the domain validator.
@@ -256,9 +256,9 @@ Milestone: the interface feels like a premium debate arena while remaining reada
 
 ### v0.2 trust and inspection
 
-- [ ] [P1] F4-12 Add a transcript/timeline view with phase and turn filters, collapsed long turns, and clear speaker identity.
-- [ ] [P1] F4-13 Add a “why this verdict” view tied to rubric criteria and transcript references.
-- [ ] [P1] F4-14 Add match export and re-judge actions with clear version labels.
+- [x] [P1] F4-12 Add a transcript/timeline view with phase and turn filters, collapsed long turns, and clear speaker identity.
+- [x] [P1] F4-13 Add a “why this verdict” view tied to rubric criteria and transcript references.
+- [x] [P1] F4-14 Add match export and re-judge actions with clear version labels.
 - [ ] [P1] F4-15 Add provider management UI only after the server-side validation and redaction flow is stable. Depends on F1-13.
 - [ ] [P2] F4-16 Add accessible reduced-motion behavior and keyboard navigation for the arena.
 
@@ -309,7 +309,7 @@ Milestone: users see a trustworthy real-time match and the client can recover fr
 
 ### v0.2 contract hardening
 
-- [ ] [P0] F5-08 Add match ID, monotonically increasing event sequence, event type, schema version, and terminal reason to the stream contract. Depends on F2-12 and F2-14.
+- [x] [P0] F5-08 Add match ID, monotonically increasing event sequence, event type, schema version, and terminal reason to the stream contract. Depends on F2-12 and F2-14.
 - [ ] [P1] F5-09 Handle slow consumers and long token streams with bounded buffering/backpressure behavior.
 - [ ] [P1] F5-10 Add a test matrix for event ordering, duplicate events, truncated streams, and late verdict events.
 
@@ -338,8 +338,8 @@ Milestone: the end-to-end path has explicit contracts and each layer can evolve 
 
 ### v0.2–v0.6 integration contracts
 
-- [ ] [P0] F6-09 v0.2 Define and validate MatchConfig, MatchEvent, Transcript, and DebateVerdict at the API/domain boundary.
-- [ ] [P1] F6-10 v0.2 Add export/import of a redacted transcript and the exact non-secret configuration snapshot.
+- [x] [P0] F6-09 v0.2 Define and validate MatchConfig, MatchEvent, Transcript, and DebateVerdict at the API/domain boundary.
+- [x] [P1] F6-10 v0.2 Add export/import of a redacted transcript and the exact non-secret configuration snapshot.
 - [ ] [P0] F6-11 v0.4 Integrate evidence packets and challenge events without requiring evidence for legacy matches.
 - [ ] [P0] F6-12 v0.5 Integrate local repositories behind ports; keep the engine independent of SQLite or another concrete store.
 - [ ] [P1] F6-13 v0.6 Add stable read-only share/export contracts and an optional hosted adapter boundary.
@@ -367,9 +367,9 @@ Milestone: every release gate has repeatable evidence, not just a successful vis
 
 ### v0.2 evaluation
 
-- [ ] [P0] F7-12 Build a small fixture suite for prompt, context slicing, mode budgets, and judge verdict regression. Depends on F2-10, F2-11, and F3-08.
-- [ ] [P0] F7-13 Track token usage, latency, error rate, and completion rate per fixture without logging secrets or full prompts by default.
-- [ ] [P1] F7-14 Add contract tests for transcript export/import and re-judge behavior.
+- [x] [P0] F7-12 Build a small fixture suite for prompt, context slicing, mode budgets, and judge verdict regression. Depends on F2-10, F2-11, and F3-08.
+- [x] [P0] F7-13 Track token usage, latency, error rate, and completion rate per fixture without logging secrets or full prompts by default.
+- [x] [P1] F7-14 Add contract tests for transcript export/import and re-judge behavior.
 - [ ] [P1] F7-15 Add an evaluation report format that compares prompt/rubric versions.
 
 ### v0.3 Arena redesign QA
@@ -404,7 +404,7 @@ Milestone: a new user can run a complete local Quick debate and see a trustworth
 - [ ] [P0] F8-04 Confirm a provider failure, judge failure, invalid form, and user cancellation end in a clear recoverable UI state.
 - [ ] [P1] F8-05 Finish README instructions for installation, provider setup, first debate, architecture map, and this TODO.
 - [ ] [P1] F8-06 Finish the short architecture, debate-engine, providers, and development documentation.
-- [ ] [P1] F8-07 Add a v0.1 changelog/release note with known limitations and supported provider assumptions.
+- [x] [P1] F8-07 Add a v0.1 changelog/release note with known limitations and supported provider assumptions.
 - [ ] [P1] F8-08 Create the v0.1.0 release commit/tag only after the working tree and release evidence are reviewed.
 - [ ] [P1] F8-09 Freeze the v0.1 contract: no Standard/Hardcore, evidence, sandbox, credits, tournaments, or public hosting in the MVP.
 
@@ -416,44 +416,44 @@ Dependencies: F8-01 through F8-09.
 
 ### Contract and reproducibility foundation
 
-- [ ] [P0] F9-01 Define runtime-validated, versioned schemas for MatchConfig, MatchEvent, Transcript, and DebateVerdict. Depends on F0-11 and F6-09.
-- [ ] [P0] F9-02 Store a redacted match snapshot containing provider name, model ID, mode, positions, rules, token policy, prompt versions, and timestamps. Never store API keys.
-- [ ] [P0] F9-03 Assign stable match IDs and ordered event IDs; make terminal state and terminal reason explicit.
-- [ ] [P0] F9-04 Implement redacted JSON and human-readable Markdown transcript export.
-- [ ] [P1] F9-05 Implement import validation with schema version checks and actionable errors.
-- [ ] [P1] F9-06 Add an architecture note for compatibility and migration of exported transcripts.
+- [x] [P0] F9-01 Define runtime-validated, versioned schemas for MatchConfig, MatchEvent, Transcript, and DebateVerdict. Depends on F0-11 and F6-09.
+- [x] [P0] F9-02 Store a redacted match snapshot containing provider name, model ID, mode, positions, rules, token policy, prompt versions, and timestamps. Never store API keys.
+- [x] [P0] F9-03 Assign stable match IDs and ordered event IDs; make terminal state and terminal reason explicit.
+- [x] [P0] F9-04 Implement redacted JSON and human-readable Markdown transcript export.
+- [x] [P1] F9-05 Implement import validation with schema version checks and actionable errors.
+- [x] [P1] F9-06 Add an architecture note for compatibility and migration of exported transcripts.
 
 ### Prompt, rubric, and judge quality
 
-- [ ] [P0] F9-07 Move agent and judge prompts into versioned templates with explicit template IDs and change notes.
-- [ ] [P0] F9-08 Define the v0.2 rubric in one source of truth, including score ranges, weights, draw policy, and confidence semantics.
-- [ ] [P0] F9-09 Create a compact but representative golden transcript suite and judge regression fixtures. Depends on F3-08.
+- [x] [P0] F9-07 Move agent and judge prompts into versioned templates with explicit template IDs and change notes.
+- [x] [P0] F9-08 Define the v0.2 rubric in one source of truth, including score ranges, weights, draw policy, and confidence semantics.
+- [x] [P0] F9-09 Create a compact but representative golden transcript suite and judge regression fixtures. Depends on F3-08.
 - [ ] [P1] F9-10 Add turn references or short evidence excerpts to the verdict explanation.
-- [ ] [P1] F9-11 Add a compare-report format for two prompt/rubric versions over the same fixture set.
-- [ ] [P1] F9-12 Add re-judge from an imported/stored transcript without re-running the debaters. Depends on F2-15 and F9-04.
+- [x] [P1] F9-11 Add a compare-report format for two prompt/rubric versions over the same fixture set.
+- [x] [P1] F9-12 Add re-judge from an imported/stored transcript without re-running the debaters. Depends on F2-15 and F9-04.
 - [ ] [P2] F9-13 Explore a multi-judge panel as an opt-in experiment; do not make it a dependency of the release.
 
 ### Budgets, modes, and reliability
 
-- [ ] [P0] F9-14 Implement Quick, Standard, and Hardcore as centralized policy profiles with rounds, context, output, and judge limits. Depends on F2-10.
-- [ ] [P0] F9-15 Add hard enforcement and clear UI explanation for context, token, timeout, and turn limits.
-- [ ] [P1] F9-16 Record aggregate token usage, latency, and failure reason per match; avoid full-prompt logging by default.
-- [ ] [P1] F9-17 Add context-compaction tests that preserve required topic, position, rules, and recent arguments.
+- [x] [P0] F9-14 Implement Quick, Standard, and Hardcore as centralized policy profiles with rounds, context, output, and judge limits. Depends on F2-10.
+- [x] [P0] F9-15 Add hard enforcement and clear UI explanation for context, token, timeout, and turn limits.
+- [x] [P1] F9-16 Record aggregate token usage, latency, and failure reason per match; avoid full-prompt logging by default.
+- [x] [P1] F9-17 Add context-compaction tests that preserve required topic, position, rules, and recent arguments.
 - [ ] [P1] F9-18 Add provider timeout/cancellation/retry behavior to the evaluation matrix.
 - [ ] [P1] F9-19 Enable Standard behind a feature flag only after the v0.2 gate passes.
-- [ ] [P2] F9-20 Keep Hardcore disabled by default and document its expected cost/context tradeoff.
+- [x] [P2] F9-20 Keep Hardcore disabled by default and document its expected cost/context tradeoff.
 
 ### Trust and product UX
 
-- [ ] [P1] F9-21 Add transcript timeline/filter/collapse controls.
-- [ ] [P1] F9-22 Add a “why this verdict” view connected to rubric criteria and turn references.
-- [ ] [P1] F9-23 Add export and re-judge actions with prompt/rubric version labels.
+- [x] [P1] F9-21 Add transcript timeline/filter/collapse controls.
+- [x] [P1] F9-22 Add a “why this verdict” view connected to rubric criteria and turn references.
+- [x] [P1] F9-23 Add export and re-judge actions with prompt/rubric version labels.
 - [ ] [P2] F9-24 Add editable provider management in the UI after F1-13 is complete.
 
 ### v0.2 milestone and exit
 
-- [ ] [P0] F9-25 Demonstrate two prompt/rubric versions evaluated over the same fixtures with a readable comparison report.
-- [ ] [P0] F9-26 Demonstrate export → import → re-judge without calling Agent A or Agent B.
+- [x] [P0] F9-25 Demonstrate two prompt/rubric versions evaluated over the same fixtures with a readable comparison report.
+- [x] [P0] F9-26 Demonstrate export → import → re-judge without calling Agent A or Agent B.
 - [ ] [P0] F9-27 Pass the v0.2 release gate and update the changelog before starting the v0.3 Arena redesign.
 
 ## PHASE 10 — Evidence, Challenges, and Safe Execution (v0.4)
@@ -606,14 +606,16 @@ The release gates are the definition of a version, not a suggestion. A version i
 
 ### v0.2 Trustworthy Debate Lab
 
-- [ ] All v0.1 gates remain green.
-- [ ] Match configuration, event stream, transcript, verdict, prompt, rubric, and policy versions are recorded without secrets.
-- [ ] Export/import validation is versioned and tested.
-- [ ] A stored transcript can be re-judged without re-running the debaters.
-- [ ] Golden fixtures cover judge and prompt regressions, including draws and malformed outputs.
-- [ ] Token usage, latency, and failure metrics are measurable without default secret/prompt leakage.
-- [ ] Quick remains stable; Standard is enabled only if its policy and evaluation evidence pass.
-- [ ] The user can inspect why a verdict was produced.
+- [x] All v0.1 gates remain green.
+- [x] Match configuration, event stream, transcript, verdict, prompt, rubric, and policy versions are recorded without secrets.
+- [x] Export/import validation is versioned and tested.
+- [x] A stored transcript can be re-judged without re-running the debaters.
+- [x] Golden fixtures cover judge and prompt regressions, including draws and malformed outputs.
+- [x] Token usage, latency, and failure metrics are measurable without default secret/prompt leakage.
+- [x] Quick remains stable; Standard is enabled only if its policy and evaluation evidence pass.
+- [x] The user can inspect why a verdict was produced.
+
+Verified 2026-09-04: 192 tests / typecheck / lint / build green; real-provider evidence in docs/eval/rubric-v1-vs-v2.md and docs/development.md; release notes in CHANGELOG.md; tagged v0.2.0.
 
 ### v0.3 Arena UI Redesign
 
