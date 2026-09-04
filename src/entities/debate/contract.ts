@@ -61,6 +61,13 @@ export type MatchSideRecord = z.infer<typeof matchSideSchema>;
 export const matchTerminalSchema = z.enum(["completed", "error", "cancelled"]);
 export type MatchTerminal = z.infer<typeof matchTerminalSchema>;
 
+/** Judge identity used for controlled re-judge (ids only — never secrets). */
+export const matchJudgeSchema = z.object({
+  providerId: z.string().min(1),
+  model: z.string().min(1),
+});
+export type MatchJudgeRef = z.infer<typeof matchJudgeSchema>;
+
 /** Persisted match record (one JSON file per match, no secrets). */
 export const matchRecordSchema = z.object({
   version: z.literal(CONTRACT_VERSION),
@@ -70,6 +77,8 @@ export const matchRecordSchema = z.object({
   topic: z.string().min(1),
   mode: matchModeSchema,
   sides: z.object({ A: matchSideSchema, B: matchSideSchema }),
+  judge: matchJudgeSchema.optional(),
+  judgedAt: z.string().min(1).optional(),
   policy: matchProfileSchema,
   promptVersions: z.object({ agent: z.string().min(1), judge: z.string().min(1) }),
   rubricVersion: z.string().min(1),
@@ -80,6 +89,7 @@ export const matchRecordSchema = z.object({
   metrics: z.object({
     turnsMs: z.array(z.number()),
     totalMs: z.number(),
+    judgeMs: z.number().optional(),
   }),
 });
 export type MatchRecord = z.infer<typeof matchRecordSchema>;

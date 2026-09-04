@@ -161,6 +161,81 @@ async function defaultSaveMatch(record: MatchRecord): Promise<void> {
   await saveMatchRecord(record);
 }
 
+export interface RunJudgeInput {
+  readonly topic: string;
+  readonly turns: readonly DebateTurn[];
+  readonly providerId: string;
+  readonly model: string;
+  readonly maxOutputTokens?: number;
+}
+
+export interface RunJudgeDeps {
+  readonly callModel?: (args: ModelCallArgs) => Promise<{ readonly text: string; readonly chunks: readonly string[] }>;
+  readonly abortSignal?: AbortSignal;
+}
+
+export interface RunJudgeResult {
+  readonly verdict: DebateVerdict;
+  readonly judgeMs: number;
+}
+
+/**
+ * Runs only the judge pipeline for a finished transcript: builds the judge
+ * prompt, calls the model, and applies the parse/normalize/single-retry
+ * pipeline shared with {@link runDebate}. Throws an `Error` whose message is
+ * the final user-facing failure (safe provider message or the fixed
+ * invalid-verdict message).
+ */
+export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): Promise<RunJudgeResult> {
+  const callModel = deps.callModel ?? defaultCallModel;
+  const maxOutputTokens = input.maxOutputTokens ?? MATCH_PROFILES.quick.judgeMaxOutputTokens;
+  const startMs = Date.now();
+  const judgePrompt = buildJudgePrompt(input.topic, input.turns);
+  const hasTurns = input.turns.length > 0;
+  const callJudge = (prompt: string) =>
+    callModel({
+      kind: "judge",
+      providerId: input.providerId,
+      modelId: input.model,
+      system: JUDGE_SYSTEM_PROMPT,
+      prompt,
+      maxOutputTokens,
+      abortSignal: deps.abortSignal,
+    });
+
+  let judgeText: string;
+  try {
+    judgeText = (await callJudge(judgePrompt)).text;
+  } catch (error) {
+    throw new Error(toSafeErrorMessage(error));
+  }
+
+  const parsed = parseDebateVerdict(judgeText);
+  let verdict = parsed.success ? normalizeVerdictWinner(parsed.data) : null;
+  if (parsed.success && verdict !== null && !isDegenerateVerdict(verdict, hasTurns)) {
+    return { verdict, judgeMs: Date.now() - startMs };
+  }
+  // Single retry: previous output was unparsable or degenerate zeros.
+  const retryPrompt =
+    `${judgePrompt}\n\nPrevious output was invalid (unparsable, or a degenerate DRAW with scores of 0 ` +
+    `despite a non-empty transcript). Respond with ONLY the corrected JSON object matching the required schema.`;
+  let retryText: string;
+  try {
+    retryText = (await callJudge(retryPrompt)).text;
+  } catch (error) {
+    throw new Error(toSafeErrorMessage(error));
+  }
+  const retryParsed = parseDebateVerdict(retryText);
+  if (!retryParsed.success) {
+    throw new Error("Judge returned invalid verdict");
+  }
+  verdict = normalizeVerdictWinner(retryParsed.data);
+  if (verdict === null || isDegenerateVerdict(verdict, hasTurns)) {
+    throw new Error("Judge returned invalid verdict");
+  }
+  return { verdict, judgeMs: Date.now() - startMs };
+}
+
 function toStreamTurn(turn: DebateTurn): DebateStreamTurn {
   return {
     id: turn.id,
@@ -210,6 +285,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
         A: { providerName: input.agentA.providerId, modelId: input.agentA.model, position: input.agentA.position },
         B: { providerName: input.agentB.providerId, modelId: input.agentB.model, position: input.agentB.position },
       },
+      judge: input.judge ?? { providerId: input.agentA.providerId, model: input.agentA.model },
       policy: { ...profile },
       promptVersions: { agent: AGENT_PROMPT_VERSION, judge: JUDGE_PROMPT_VERSION },
       rubricVersion: RUBRIC_VERSION,
@@ -296,55 +372,22 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     yield envelope({ type: "judge-start" });
 
     const judge = input.judge ?? { providerId: input.agentA.providerId, model: input.agentA.model };
-    const judgePrompt = buildJudgePrompt(input.topic, state.turns);
-    const hasTurns = state.turns.length > 0;
 
-    let judgeText: string;
+    let parsedVerdict: DebateVerdict | null;
     try {
-      const result = await callModel({
-        kind: "judge",
-        providerId: judge.providerId,
-        modelId: judge.model,
-        system: JUDGE_SYSTEM_PROMPT,
-        prompt: judgePrompt,
-        maxOutputTokens: profile.judgeMaxOutputTokens,
-        abortSignal: deps.abortSignal,
-      });
-      judgeText = result.text;
-    } catch (error) {
-      return yield* failWith(toSafeErrorMessage(error));
-    }
-
-    let parsed = parseDebateVerdict(judgeText);
-    let parsedVerdict = parsed.success ? normalizeVerdictWinner(parsed.data) : null;
-    if (!parsed.success || parsedVerdict === null || isDegenerateVerdict(parsedVerdict, hasTurns)) {
-      // Single retry: previous output was unparsable or degenerate zeros.
-      const retryPrompt =
-        `${judgePrompt}\n\nPrevious output was invalid (unparsable, or a degenerate DRAW with scores of 0 ` +
-        `despite a non-empty transcript). Respond with ONLY the corrected JSON object matching the required schema.`;
-      let retryText: string;
-      try {
-        const retry = await callModel({
-          kind: "judge",
+      const judged = await runJudge(
+        {
+          topic: input.topic,
+          turns: state.turns,
           providerId: judge.providerId,
-          modelId: judge.model,
-          system: JUDGE_SYSTEM_PROMPT,
-          prompt: retryPrompt,
+          model: judge.model,
           maxOutputTokens: profile.judgeMaxOutputTokens,
-          abortSignal: deps.abortSignal,
-        });
-        retryText = retry.text;
-      } catch (error) {
-        return yield* failWith(toSafeErrorMessage(error));
-      }
-      parsed = parseDebateVerdict(retryText);
-      if (!parsed.success) {
-        return yield* failWith("Judge returned invalid verdict");
-      }
-      parsedVerdict = normalizeVerdictWinner(parsed.data);
-      if (isDegenerateVerdict(parsedVerdict, hasTurns)) {
-        return yield* failWith("Judge returned invalid verdict");
-      }
+        },
+        { callModel, abortSignal: deps.abortSignal },
+      );
+      parsedVerdict = judged.verdict;
+    } catch (error) {
+      return yield* failWith(error instanceof Error ? error.message : toSafeErrorMessage(error));
     }
     if (parsedVerdict === null) {
       return yield* failWith("Judge returned invalid verdict");
