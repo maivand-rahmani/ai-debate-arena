@@ -74,7 +74,13 @@ export function applyProviderChange(
 ): MatchDraft {
   const target = side === "A" ? draft.sideA : draft.sideB;
   const provider = providerFor(providers, providerId);
-  const nextModel = provider?.model ?? target.model;
+  const previous = providerFor(providers, target.providerId);
+  // Only overwrite the model when it is empty or merely the previous
+  // provider's auto-filled default. A user-typed model must survive
+  // provider dropdown changes.
+  const isCustomModel =
+    target.model.trim().length > 0 && (previous === undefined || target.model !== previous.model);
+  const nextModel = isCustomModel ? target.model : provider?.model ?? target.model;
   if (side === "A") {
     return { ...draft, sideA: { ...target, providerId, model: nextModel } };
   }
