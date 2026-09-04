@@ -119,8 +119,8 @@ Milestone: a new developer or coding agent can understand the repository, run ch
 
 ### v0.1 closure
 
-- [ ] [P0] F0-08 Verify a clean install from a fresh checkout using the documented commands.
-- [ ] [P0] F0-09 Document the server-only/client-safe boundary and the import rules that prevent secrets from entering the client bundle. Depends on F0-02 and F1-02.
+- [x] [P0] F0-08 Verify a clean install from a fresh checkout using the documented commands. (2026-09-04: Windows clean clone passed install/typecheck/tests/build; `npm ci` hits npm/cli#4828 for rolldown native bindings - documented workaround is `npm install`.)
+- [x] [P0] F0-09 Document the server-only/client-safe boundary and the import rules that prevent secrets from entering the client bundle. Depends on F0-02 and F1-02.
 - [ ] [P1] F0-10 Record the first architecture decision note for local-first storage, provider abstraction, and the decision not to add a database in v0.1.
 
 ### Later foundation work
@@ -146,9 +146,9 @@ Milestone: the server can call a configured OpenAI-compatible model without expo
 
 ### v0.1 closure
 
-- [ ] [P0] F1-07 Wrap model-factory failures into safe, typed errors for authentication, invalid configuration, unreachable endpoint, timeout, unsupported model, and provider response errors. Never expose API keys or raw secret-bearing request data. Depends on F1-04.
-- [ ] [P0] F1-08 Add request cancellation and a bounded timeout path that reaches the model call from the match-run lifecycle. Depends on F1-07 and F2-06.
-- [ ] [P1] F1-09 Add a mock OpenAI-compatible provider for contract and happy-path tests without a real credential. Depends on F1-04.
+- [x] [P0] F1-07 Wrap model-factory failures into safe, typed errors for authentication, invalid configuration, unreachable endpoint, timeout, unsupported model, and provider response errors. Never expose API keys or raw secret-bearing request data. Depends on F1-04.
+- [x] [P0] F1-08 Add request cancellation and a bounded timeout path that reaches the model call from the match-run lifecycle. Depends on F1-07 and F2-06.
+- [x] [P1] F1-09 Add a mock OpenAI-compatible provider for contract and happy-path tests without a real credential. Depends on F1-04.
 
 ### v0.2 provider hardening
 
@@ -178,10 +178,10 @@ Milestone: a match is a bounded domain process, not orchestration logic hidden i
 
 ### v0.1 closure
 
-- [ ] [P0] F2-06 Propagate client disconnect and explicit cancel into the runner, abort the active provider request, and release match resources. Depends on F1-08.
-- [ ] [P0] F2-07 Guarantee terminal cleanup for success, provider failure, parse failure, cancellation, and unexpected exception.
-- [ ] [P0] F2-08 Reject illegal transitions with typed errors and ensure a failed match cannot continue as if it were healthy.
-- [ ] [P1] F2-09 Add a small match-run integration test that proves the complete Quick sequence and terminal cleanup using the mock provider. Depends on F1-09 and F2-06.
+- [x] [P0] F2-06 Propagate client disconnect and explicit cancel into the runner, abort the active provider request, and release match resources. Depends on F1-08.
+- [x] [P0] F2-07 Guarantee terminal cleanup for success, provider failure, parse failure, cancellation, and unexpected exception.
+- [x] [P0] F2-08 Reject illegal transitions with typed errors and ensure a failed match cannot continue as if it were healthy.
+- [x] [P1] F2-09 Add a small match-run integration test that proves the complete Quick sequence and terminal cleanup using the mock provider. Depends on F1-09 and F2-06.
 
 ### v0.2 engine quality
 
@@ -214,8 +214,8 @@ Milestone: the judge returns a valid, inspectable verdict and the product commun
 
 ### v0.1 closure and validation
 
-- [ ] [P0] F3-05 Validate score ranges, winner/score consistency, required fields, and draw behavior after parsing. Depends on F3-01 and F3-04.
-- [ ] [P1] F3-06 Show a safe fallback state when the judge fails; never invent a winner in the UI.
+- [x] [P0] F3-05 Validate score ranges, winner/score consistency, required fields, and draw behavior after parsing. Depends on F3-01 and F3-04.
+- [x] [P1] F3-06 Show a safe fallback state when the judge fails; never invent a winner in the UI.
 
 ### v0.2 judge quality
 
@@ -250,8 +250,8 @@ Milestone: the interface feels like a premium debate arena while remaining reada
 
 ### v0.1 closure
 
-- [ ] [P0] F4-09 Add usable loading, validation, provider-error, judge-error, cancellation, retry, and empty states.
-- [ ] [P1] F4-10 Verify that no API key, raw provider error, or secret-bearing configuration is rendered in the browser.
+- [x] [P0] F4-09 Add usable loading, validation, provider-error, judge-error, cancellation, retry, and empty states.
+- [x] [P1] F4-10 Verify that no API key, raw provider error, or secret-bearing configuration is rendered in the browser.
 - [ ] [P1] F4-11 Run a manual responsive smoke pass for match creation, active streaming, judge reveal, and failure states. Depends on F4-09.
 
 ### v0.2 trust and inspection
@@ -303,9 +303,9 @@ Milestone: users see a trustworthy real-time match and the client can recover fr
 
 ### v0.1 closure
 
-- [ ] [P0] F5-05 Verify cancel/disconnect propagation from browser to API route to provider request. Depends on F2-06 and F1-08.
-- [ ] [P0] F5-06 Ensure the stream closes exactly once for success, failure, cancel, and disconnect.
-- [ ] [P1] F5-07 Add a client reconnect/closed-stream state that does not duplicate turns or fabricate completion.
+- [x] [P0] F5-05 Verify cancel/disconnect propagation from browser to API route to provider request. Depends on F2-06 and F1-08.
+- [x] [P0] F5-06 Ensure the stream closes exactly once for success, failure, cancel, and disconnect.
+- [x] [P1] F5-07 Add a client reconnect/closed-stream state that does not duplicate turns or fabricate completion.
 
 ### v0.2 contract hardening
 
@@ -332,9 +332,9 @@ Milestone: the end-to-end path has explicit contracts and each layer can evolve 
 
 ### v0.1 closure
 
-- [ ] [P0] F6-06 Run a provider-backed happy path using either a real configured provider or the faithful mock provider, from create form through winner. Depends on F1-09, F2-09, and F5-06.
-- [ ] [P0] F6-07 Add API contract tests for invalid configuration, missing provider, invalid mode, empty topic, cancellation, provider failure, malformed judge output, and successful completion.
-- [ ] [P1] F6-08 Confirm that refreshing or navigating away cannot leave a live runner or secret-bearing process behind.
+- [x] [P0] F6-06 Run a provider-backed happy path using either a real configured provider or the faithful mock provider, from create form through winner. Depends on F1-09, F2-09, and F5-06.
+- [x] [P0] F6-07 Add API contract tests for invalid configuration, missing provider, invalid mode, empty topic, cancellation, provider failure, malformed judge output, and successful completion.
+- [x] [P1] F6-08 Confirm that refreshing or navigating away cannot leave a live runner or secret-bearing process behind.
 
 ### v0.2–v0.6 integration contracts
 
@@ -359,11 +359,11 @@ Milestone: every release gate has repeatable evidence, not just a successful vis
 
 ### v0.1 closure
 
-- [ ] [P0] F7-07 Add a mock-provider end-to-end happy-path test from match creation through terminal verdict. Depends on F1-09 and F6-06.
-- [ ] [P0] F7-08 Add a minimal browser smoke test for create → stream → judge → finished and the primary error state.
-- [ ] [P0] F7-09 Add cancellation/disconnect tests and verify no active run remains afterward. Depends on F2-06 and F5-05.
-- [ ] [P1] F7-10 Run a secret-safety check over server responses, browser state, logs, and build output.
-- [ ] [P1] F7-11 Record a clean-install verification and the supported runtime/package-manager assumptions.
+- [x] [P0] F7-07 Add a mock-provider end-to-end happy-path test from match creation through terminal verdict. Depends on F1-09 and F6-06.
+- [ ] [P0] F7-08 Add a minimal browser smoke test for create → stream → judge → finished and the primary error state. NOTE 2026-09-04: deferred by decision - would require a browser-test dependency (Playwright). Covered for now by the scripted mock-provider e2e (F7-07), real-provider live runs, and the manual acceptance path F8-02.
+- [x] [P0] F7-09 Add cancellation/disconnect tests and verify no active run remains afterward. Depends on F2-06 and F5-05.
+- [x] [P1] F7-10 Run a secret-safety check over server responses, browser state, logs, and build output.
+- [x] [P1] F7-11 Record a clean-install verification and the supported runtime/package-manager assumptions.
 
 ### v0.2 evaluation
 
@@ -398,7 +398,7 @@ Milestone: a new user can run a complete local Quick debate and see a trustworth
 
 ### Release work
 
-- [ ] [P0] F8-01 Close all v0.1 P0 tasks: F0-08, F1-07, F1-08, F2-06, F2-07, F2-08, F3-05, F4-09, F5-05, F5-06, F6-06, F6-07, F7-07, F7-08, and F7-09.
+- [ ] [P0] F8-01 Close all v0.1 P0 tasks: F0-08, F1-07, F1-08, F2-06, F2-07, F2-08, F3-05, F4-09, F5-05, F5-06, F6-06, F6-07, F7-07, F7-08, and F7-09. (14 of 15 closed 2026-09-04; only F7-08 browser smoke deferred by decision above.)
 - [ ] [P0] F8-02 Complete the manual acceptance path: fresh install → provider:add → dev server → create topic → select two models → Quick → Start → watch all turns → judge evaluation → winner.
 - [ ] [P0] F8-03 Confirm no API key is exposed in UI, network payloads intended for the client, logs, or committed files.
 - [ ] [P0] F8-04 Confirm a provider failure, judge failure, invalid form, and user cancellation end in a clear recoverable UI state.
