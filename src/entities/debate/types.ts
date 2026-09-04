@@ -55,6 +55,7 @@ export interface DebateConfig {
   readonly agents: { readonly A: Agent; readonly B: Agent };
   readonly tokenPolicy?: TokenPolicyName;
   readonly maxHistoryTurns?: number;
+  readonly maxContextCharsPerSide?: number;
 }
 
 export interface DebateState {

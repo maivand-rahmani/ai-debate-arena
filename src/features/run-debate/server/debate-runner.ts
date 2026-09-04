@@ -16,7 +16,7 @@ import {
   JUDGE_PROMPT_VERSION,
   JUDGE_SYSTEM_PROMPT,
 } from "../../../entities/debate/prompts";
-import { RUBRIC_VERSION } from "../../../entities/debate/rubric";
+import { RUBRIC_VERSION, type RubricVersion } from "../../../entities/debate/rubric";
 import {
   debateVerdictSchema,
   isDegenerateVerdict,
@@ -82,8 +82,53 @@ export interface ModelCallArgs {
   readonly abortSignal?: AbortSignal;
 }
 
+/** Token usage for one model call, normalized to plain counters. */
+export interface ModelUsage {
+  readonly promptTokens: number;
+  readonly completionTokens: number;
+}
+
+export interface ModelCallResult {
+  readonly text: string;
+  readonly chunks: readonly string[];
+  readonly usage?: ModelUsage;
+}
+
+const ZERO_USAGE: ModelUsage = { promptTokens: 0, completionTokens: 0 };
+
+function toNonNegativeInt(value: unknown): number {
+  const nested = typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>).total
+    : value;
+  return typeof nested === "number" && Number.isFinite(nested) && nested > 0 ? Math.floor(nested) : 0;
+}
+
+/**
+ * Normalize provider/SDK usage shapes (`{promptTokens,…}`, `{inputTokens,…}`,
+ * possibly nested under `total`). Missing or malformed usage counts as 0 and
+ * never throws.
+ */
+export function toModelUsage(raw: unknown): ModelUsage {
+  try {
+    if (typeof raw !== "object" || raw === null) return ZERO_USAGE;
+    const record = raw as Record<string, unknown>;
+    return {
+      promptTokens: toNonNegativeInt(record.promptTokens ?? record.inputTokens),
+      completionTokens: toNonNegativeInt(record.completionTokens ?? record.outputTokens),
+    };
+  } catch {
+    return ZERO_USAGE;
+  }
+}
+
+function addUsage(into: { promptTokens: number; completionTokens: number }, usage: ModelUsage | undefined): void {
+  if (!usage) return;
+  into.promptTokens += usage.promptTokens;
+  into.completionTokens += usage.completionTokens;
+}
+
 export interface RunDebateDeps {
-  readonly callModel?: (args: ModelCallArgs) => Promise<{ readonly text: string; readonly chunks: readonly string[] }>;
+  readonly callModel?: (args: ModelCallArgs) => Promise<ModelCallResult>;
   readonly abortSignal?: AbortSignal;
   readonly matchId?: string;
   readonly profile?: MatchProfile;
@@ -98,7 +143,7 @@ const AGENT_PHASES: ReadonlyArray<{ readonly phase: DebateTurn["phase"]; readonl
   { phase: DebatePhase.REBUTTAL_B, side: "B" },
 ];
 
-async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; chunks: string[] }> {
+async function defaultCallModel(args: ModelCallArgs): Promise<ModelCallResult> {
   const [{ createConfiguredModel }, ai] = await Promise.all([
     import("../../../shared/api/llm/model"),
     import("ai"),
@@ -108,6 +153,7 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
   // (@ai-sdk/openai responses models). Unknown keys are ignored elsewhere.
   const providerOptions = { openai: { reasoningEffort: "low" } };
   if (args.kind === "judge") {
+    const total: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
     try {
       const structured = await ai.generateText({
         model,
@@ -118,6 +164,7 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
         providerOptions,
         output: ai.Output.object({ schema: debateVerdictSchema }),
       });
+      addUsage(total, toModelUsage(structured.usage));
       // Some providers (notably Responses API) can resolve without throwing
       // yet leave `output` undefined/null. Never serialize that into
       // "undefined"/"null" text — fall through to the plain-text fallback.
@@ -125,7 +172,7 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
       if (!structuredOutput || typeof structuredOutput !== "object" || Array.isArray(structuredOutput)) {
         throw new Error("Judge structured output was empty");
       }
-      return { text: JSON.stringify(structuredOutput), chunks: [] };
+      return { text: JSON.stringify(structuredOutput), chunks: [], usage: { ...total } };
     } catch {
       // Provider/model rejected structured output or returned nothing usable;
       // fall back to deterministic plain JSON so the existing parser applies.
@@ -140,7 +187,8 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
         temperature: 0,
         providerOptions,
       });
-      return { text: fallback.text, chunks: [] };
+      addUsage(total, toModelUsage(fallback.usage));
+      return { text: fallback.text, chunks: [], usage: { ...total } };
     }
   }
   const result = ai.streamText({
@@ -153,7 +201,14 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
   });
   const chunks: string[] = [];
   for await (const chunk of result.textStream) chunks.push(chunk);
-  return { text: await result.text, chunks };
+  const text = await result.text;
+  let usage: ModelUsage = ZERO_USAGE;
+  try {
+    usage = toModelUsage(await result.usage);
+  } catch {
+    usage = ZERO_USAGE;
+  }
+  return { text, chunks, usage };
 }
 
 async function defaultSaveMatch(record: MatchRecord): Promise<void> {
@@ -167,16 +222,19 @@ export interface RunJudgeInput {
   readonly providerId: string;
   readonly model: string;
   readonly maxOutputTokens?: number;
+  /** Rubric generation for the judge prompt. Defaults to `"1"` (legacy prompt). */
+  readonly rubricVersion?: RubricVersion;
 }
 
 export interface RunJudgeDeps {
-  readonly callModel?: (args: ModelCallArgs) => Promise<{ readonly text: string; readonly chunks: readonly string[] }>;
+  readonly callModel?: (args: ModelCallArgs) => Promise<ModelCallResult>;
   readonly abortSignal?: AbortSignal;
 }
 
 export interface RunJudgeResult {
   readonly verdict: DebateVerdict;
   readonly judgeMs: number;
+  readonly usage: ModelUsage;
 }
 
 /**
@@ -190,10 +248,11 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
   const callModel = deps.callModel ?? defaultCallModel;
   const maxOutputTokens = input.maxOutputTokens ?? MATCH_PROFILES.quick.judgeMaxOutputTokens;
   const startMs = Date.now();
-  const judgePrompt = buildJudgePrompt(input.topic, input.turns);
+  const judgePrompt = buildJudgePrompt(input.topic, input.turns, { rubricVersion: input.rubricVersion });
   const hasTurns = input.turns.length > 0;
-  const callJudge = (prompt: string) =>
-    callModel({
+  const total: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
+  const callJudge = async (prompt: string): Promise<string> => {
+    const result = await callModel({
       kind: "judge",
       providerId: input.providerId,
       modelId: input.model,
@@ -202,10 +261,13 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
       maxOutputTokens,
       abortSignal: deps.abortSignal,
     });
+    addUsage(total, result.usage);
+    return result.text;
+  };
 
   let judgeText: string;
   try {
-    judgeText = (await callJudge(judgePrompt)).text;
+    judgeText = await callJudge(judgePrompt);
   } catch (error) {
     throw new Error(toSafeErrorMessage(error));
   }
@@ -213,7 +275,7 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
   const parsed = parseDebateVerdict(judgeText);
   let verdict = parsed.success ? normalizeVerdictWinner(parsed.data) : null;
   if (parsed.success && verdict !== null && !isDegenerateVerdict(verdict, hasTurns)) {
-    return { verdict, judgeMs: Date.now() - startMs };
+    return { verdict, judgeMs: Date.now() - startMs, usage: { ...total } };
   }
   // Single retry: previous output was unparsable or degenerate zeros.
   const retryPrompt =
@@ -221,7 +283,7 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
     `despite a non-empty transcript). Respond with ONLY the corrected JSON object matching the required schema.`;
   let retryText: string;
   try {
-    retryText = (await callJudge(retryPrompt)).text;
+    retryText = await callJudge(retryPrompt);
   } catch (error) {
     throw new Error(toSafeErrorMessage(error));
   }
@@ -233,7 +295,7 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
   if (verdict === null || isDegenerateVerdict(verdict, hasTurns)) {
     throw new Error("Judge returned invalid verdict");
   }
-  return { verdict, judgeMs: Date.now() - startMs };
+  return { verdict, judgeMs: Date.now() - startMs, usage: { ...total } };
 }
 
 function toStreamTurn(turn: DebateTurn): DebateStreamTurn {
@@ -256,6 +318,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
   const startMs = Date.now();
   const turnsMs: number[] = [];
   const transcript: DebateTurn[] = [];
+  const usageTotal: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
   let verdict: DebateVerdict | null = null;
   let terminal: MatchTerminal = "completed";
   let terminalReason: string | null = null;
@@ -293,7 +356,11 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       verdict,
       terminal,
       terminalReason,
-      metrics: { turnsMs: [...turnsMs], totalMs: Date.now() - startMs },
+      metrics: {
+        turnsMs: [...turnsMs],
+        totalMs: Date.now() - startMs,
+        usage: { ...usageTotal },
+      },
     };
     try {
       await saveMatch(record);
@@ -318,6 +385,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       B: { id: "B", name: "Agent B" },
     },
     maxHistoryTurns: policy.maxHistoryTurns,
+    maxContextCharsPerSide: profile.maxContextCharsPerSide,
   };
 
   let state: DebateState = createDebateState();
@@ -332,7 +400,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       const context = buildPromptContext(config, state, side);
       const prompt = buildDebatePrompt(context);
 
-      let result: { readonly text: string; readonly chunks: readonly string[] };
+      let result: ModelCallResult;
       const turnStartMs = Date.now();
       try {
         result = await callModel({
@@ -349,6 +417,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
         return yield* failWith(toSafeErrorMessage(error));
       }
       turnsMs.push(Date.now() - turnStartMs);
+      addUsage(usageTotal, result.usage);
 
       for (const text of result.chunks) {
         if (text) yield envelope({ type: "token", side, text });
@@ -386,6 +455,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
         { callModel, abortSignal: deps.abortSignal },
       );
       parsedVerdict = judged.verdict;
+      addUsage(usageTotal, judged.usage);
     } catch (error) {
       return yield* failWith(error instanceof Error ? error.message : toSafeErrorMessage(error));
     }

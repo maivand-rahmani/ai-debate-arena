@@ -13,11 +13,13 @@ import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, afterAll, describe, expect, it, vi } from "vitest";
 import type { MatchRecord } from "../../../entities/debate/contract";
 import { runDebate } from "../../../features/run-debate/server/debate-runner";
+import { exportMatchJson } from "../../../features/run-debate/server/export";
 import { getProvider } from "../../../shared/config/provider-store";
 import { loadMatchRecord, saveMatchRecord } from "../../../shared/config/match-store";
 import { GET as listMatches } from "./route";
 import { GET as getMatch } from "./[id]/route";
 import { POST as rejudgeMatch } from "./[id]/rejudge/route";
+import { POST as importMatch, findCredentialLikeFields } from "./import/route";
 import {
   startMockOpenAIProvider,
   type MockOpenAIProvider,
@@ -271,5 +273,106 @@ describe("POST /api/matches/[id]/rejudge", () => {
     expect(stored?.verdict?.winner).toBe("A");
     expect(stored?.judgedAt).toBeUndefined();
     expect(stored?.metrics.judgeMs).toBeUndefined();
+  });
+});
+
+function postImport(body: unknown): Promise<Response> {
+  return importMatch(
+    new Request("http://localhost/api/matches/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    }),
+  );
+}
+
+describe("POST /api/matches/import", () => {
+  it("round-trips export → import → load with an identical verdict", async () => {
+    const seeded = await seedCompletedMatch("m-1");
+    const exported = JSON.parse(exportMatchJson(seeded)) as Record<string, unknown>;
+
+    const res = await postImport(exported);
+    expect(res.status).toBe(200);
+    const summary = (await res.json()) as { id: string; winner: string };
+    expect(summary.id).toBe("m-1");
+    expect(summary.winner).toBe("A");
+
+    const loaded = await loadMatchRecord("m-1");
+    expect(loaded?.verdict).toEqual(seeded.verdict);
+    expect(loaded?.transcript).toHaveLength(4);
+  });
+
+  it("imports under a foreign id, serves it via GET, and rejudge answers 409 without a provider", async () => {
+    const seeded = await seedCompletedMatch("m-1");
+    const exported = JSON.parse(exportMatchJson(seeded)) as Record<string, unknown>;
+    const res = await postImport({ ...exported, matchId: "foreign-1" });
+    expect(res.status).toBe(200);
+
+    const fetched = await getMatch(new Request("http://localhost/api/matches/foreign-1"), params("foreign-1"));
+    expect(fetched.status).toBe(200);
+    expect(((await fetched.json()) as MatchRecord).matchId).toBe("foreign-1");
+
+    const stored = await loadMatchRecord("foreign-1");
+    await saveMatchRecord({ ...stored!, judge: { providerId: "missing-provider", model: "mock-model" } });
+    const rejudged = await rejudgeMatch(
+      new Request("http://localhost/api/matches/foreign-1/rejudge", { method: "POST" }),
+      params("foreign-1"),
+    );
+    expect(rejudged.status).toBe(409);
+    expect(mock.requestCount).toBe(0);
+  });
+
+  it("rejects a tampered contract version with 400", async () => {
+    const seeded = await seedCompletedMatch("m-1");
+    const exported = JSON.parse(exportMatchJson(seeded)) as Record<string, unknown>;
+    const res = await postImport({ ...exported, version: 2 });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: unknown };
+    expect(typeof body.error).toBe("string");
+    expect(body.error as string).toMatch(/version/i);
+  });
+
+  it("rejects injected key material with 400 naming the fields", async () => {
+    const seeded = await seedCompletedMatch("m-1");
+    const exported = JSON.parse(exportMatchJson(seeded)) as Record<string, unknown>;
+    const tampered = {
+      ...exported,
+      sides: { ...(exported.sides as Record<string, unknown>), providerApiKey: "sk-live-123" },
+    };
+    const res = await postImport(tampered);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: unknown };
+    expect(body.error).toBe("record contains credential-like fields: providerApiKey");
+    expect(JSON.stringify(await loadMatchRecord("m-1"))).not.toContain("sk-live-123");
+  });
+
+  it("rejects an invalid shape with 400", async () => {
+    const res = await postImport({ version: 1, matchId: "x" });
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses to overwrite a non-completed record with 409", async () => {
+    await seedErrorMatch("m-2");
+    const completed = await seedCompletedMatch("m-1");
+    const exported = JSON.parse(exportMatchJson(completed)) as Record<string, unknown>;
+    const res = await postImport({ ...exported, matchId: "m-2" });
+    expect(res.status).toBe(409);
+    expect((await loadMatchRecord("m-2"))?.terminal).toBe("error");
+  });
+
+  it("allows overwriting a completed record", async () => {
+    await seedCompletedMatch("m-1");
+    const other = await seedCompletedMatch("m-9");
+    const exported = JSON.parse(exportMatchJson(other)) as Record<string, unknown>;
+    const res = await postImport({ ...exported, matchId: "m-1" });
+    expect(res.status).toBe(200);
+    expect((await loadMatchRecord("m-1"))?.transcript).toHaveLength(4);
+  });
+
+  it("scans nested structures for credential-like string fields", () => {
+    expect(findCredentialLikeFields({ a: [{ apiToken: "x" }, { ok: 1 }] })).toEqual(["apiToken"]);
+    expect(findCredentialLikeFields({ usage: { promptTokens: 5, completionTokens: 6 } })).toEqual([]);
+    expect(findCredentialLikeFields({ secret: "", token: 0 })).toEqual([]);
+    expect(findCredentialLikeFields("plain")).toEqual([]);
   });
 });

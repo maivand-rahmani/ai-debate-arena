@@ -68,6 +68,12 @@ export const matchJudgeSchema = z.object({
 });
 export type MatchJudgeRef = z.infer<typeof matchJudgeSchema>;
 
+export const tokenUsageSchema = z.object({
+  promptTokens: z.number(),
+  completionTokens: z.number(),
+});
+export type TokenUsage = z.infer<typeof tokenUsageSchema>;
+
 /** Persisted match record (one JSON file per match, no secrets). */
 export const matchRecordSchema = z.object({
   version: z.literal(CONTRACT_VERSION),
@@ -90,6 +96,7 @@ export const matchRecordSchema = z.object({
     turnsMs: z.array(z.number()),
     totalMs: z.number(),
     judgeMs: z.number().optional(),
+    usage: tokenUsageSchema.optional(),
   }),
 });
 export type MatchRecord = z.infer<typeof matchRecordSchema>;

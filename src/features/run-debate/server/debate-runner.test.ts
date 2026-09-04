@@ -544,3 +544,79 @@ describe("runDebate stream contract v1 + persistence", () => {
     expect(saved[0]!.policy.agentMaxOutputTokens).toBe(123);
   });
 });
+
+describe("runDebate token metrics (F7-13)", () => {
+  it("sums per-call usage into metrics.usage", async () => {
+    const saved: MatchRecord[] = [];
+    const types: string[] = [];
+    for await (const event of runDebate(quickInput(), {
+      callModel: async (args) => {
+        if (args.kind === "judge") {
+          return { text: verdictJson, chunks: [], usage: { promptTokens: 5, completionTokens: 7 } };
+        }
+        return { text: "agent text", chunks: [], usage: { promptTokens: 10, completionTokens: 20 } };
+      },
+      saveMatch: async (record) => {
+        saved.push(record);
+      },
+    })) {
+      types.push(event.type);
+    }
+
+    expect(types[types.length - 1]).toBe("done");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.metrics.usage).toEqual({ promptTokens: 45, completionTokens: 87 });
+  });
+
+  it("records zeros when the provider reports no usage", async () => {
+    const saved: MatchRecord[] = [];
+    const types: string[] = [];
+    for await (const event of runDebate(quickInput(), {
+      callModel: agentSuccess,
+      saveMatch: async (record) => {
+        saved.push(record);
+      },
+    })) {
+      types.push(event.type);
+    }
+
+    expect(types[types.length - 1]).toBe("done");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.metrics.usage).toEqual({ promptTokens: 0, completionTokens: 0 });
+  });
+
+  it("sums judge usage across retry attempts in runJudge", async () => {
+    const { runJudge } = await import("./debate-runner");
+    let calls = 0;
+    const result = await runJudge(
+      {
+        topic: "Topic",
+        turns: [],
+        providerId: "p",
+        model: "m",
+      },
+      {
+        callModel: async () => {
+          calls += 1;
+          if (calls === 1) return { text: "garbage", chunks: [], usage: { promptTokens: 3, completionTokens: 4 } };
+          return { text: verdictJson, chunks: [], usage: { promptTokens: 5, completionTokens: 6 } };
+        },
+      },
+    );
+    expect(calls).toBe(2);
+    expect(result.verdict.winner).toBe("A");
+    expect(result.usage).toEqual({ promptTokens: 8, completionTokens: 10 });
+  });
+
+  it("treats malformed usage as zeros without throwing", async () => {
+    const { runJudge, toModelUsage } = await import("./debate-runner");
+    expect(toModelUsage(undefined)).toEqual({ promptTokens: 0, completionTokens: 0 });
+    expect(toModelUsage({ inputTokens: -5, outputTokens: Number.NaN })).toEqual({ promptTokens: 0, completionTokens: 0 });
+    expect(toModelUsage({ inputTokens: { total: 9 }, outputTokens: 2 })).toEqual({ promptTokens: 9, completionTokens: 2 });
+    const result = await runJudge(
+      { topic: "Topic", turns: [], providerId: "p", model: "m" },
+      { callModel: async () => ({ text: verdictJson, chunks: [] }) },
+    );
+    expect(result.usage).toEqual({ promptTokens: 0, completionTokens: 0 });
+  });
+});

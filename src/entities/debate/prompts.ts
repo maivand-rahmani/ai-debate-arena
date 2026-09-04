@@ -1,5 +1,5 @@
 import { DebatePhase, type DebatePosition, type DebateSide, type DebateTurn } from "./types";
-import { buildCriteriaFieldList, buildRubricPhrase } from "./rubric";
+import { buildCriteriaFieldList, buildRubricPhrase, RUBRIC_VERSIONS, type RubricVersion } from "./rubric";
 
 /** Bump on any judge wording change. */
 export const JUDGE_PROMPT_VERSION = "1";
@@ -31,7 +31,17 @@ export function buildAgentPrompt(
   };
 }
 
-export function buildJudgePrompt(topic: string, turns: readonly DebateTurn[]): string {
+export interface BuildJudgePromptOptions {
+  /** Rubric generation to render. Defaults to `"1"` (legacy prompt, byte-identical). */
+  readonly rubricVersion?: RubricVersion;
+}
+
+export function buildJudgePrompt(
+  topic: string,
+  turns: readonly DebateTurn[],
+  options?: BuildJudgePromptOptions,
+): string {
+  const rubric = RUBRIC_VERSIONS[options?.rubricVersion ?? "1"] ?? RUBRIC_VERSIONS["1"];
   const transcript =
     turns.length > 0
       ? turns.map((turn) => `[${turn.side} / ${turn.phase}]: ${turn.content}`).join("\n\n")
@@ -42,6 +52,7 @@ export function buildJudgePrompt(topic: string, turns: readonly DebateTurn[]): s
     transcript,
     "Compare both sides and score each side as an integer 0-100 for scoreA and scoreB using this rubric: " +
       `${buildRubricPhrase()}.`,
+    ...rubric.extraGuidance,
     `Also provide criteria as integers 0-100 each: ${buildCriteriaFieldList()}.`,
     "Set winner from the scores: the higher score wins (A if scoreA is higher, B if scoreB is higher). Use DRAW only when the scores are within 2 points of each other.",
     "Never return 0 for any score unless the transcript is empty; a debated round must have non-zero scores that reflect the comparison.",

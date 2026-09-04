@@ -27,6 +27,24 @@ npm run build      # next build
 The runner test stubs `deps.callModel`, so no network or `server-only`
 imports execute under vitest.
 
+## Judge eval (rubric v1 vs v2, F9-25)
+
+```bash
+npx tsx scripts/judge-eval.mjs                        # full run: 6 fixtures x v1/v2 = 12 judge calls
+npx tsx scripts/judge-eval.mjs --dry-run              # plan only: no network, no file writes
+npx tsx scripts/judge-eval.mjs "--only=clear-A,1"     # retry one fixture,version cell (quote the flag in PowerShell)
+```
+
+Each case runs the golden transcript through the production `runJudge`
+pipeline against the configured provider (default: first entry in the
+provider store; override with `--provider=` / `--model=` or
+`AI_DEBATE_EVAL_PROVIDER` / `AI_DEBATE_EVAL_MODEL`). Results append to
+`docs/eval/rubric-v1-vs-v2.md` as one section per run (`ERROR` cells on
+per-case failure, run continues). `npm run eval:judge` is the same entry
+point; on some npm versions `--args` are not forwarded, so prefer `npx tsx`
+when passing flags. `AI_DEBATE_EVAL_DEBUG=1` prints raw judge output on
+failing cases.
+
 ## Adding a phase end-to-end
 
 1. `entities/debate/types.ts` — extend `DebatePhase` (and turn-phase union).

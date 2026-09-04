@@ -3,7 +3,7 @@ import { AGENT_PROMPT_VERSION, JUDGE_PROMPT_VERSION } from "@/entities/debate/pr
 import { RUBRIC_VERSION } from "@/entities/debate/rubric";
 import type { MatchRecord } from "@/entities/debate/contract";
 import { matchSummary } from "@/features/run-debate/server/export";
-import { runJudge } from "@/features/run-debate/server/debate-runner";
+import { runJudge, type ModelUsage } from "@/features/run-debate/server/debate-runner";
 import { toSafeErrorMessage } from "@/shared/api/llm/errors";
 import { getProvider } from "@/shared/config/provider-store";
 import { loadMatchRecord, matchRecordPath, saveMatchRecord } from "@/shared/config/match-store";
@@ -45,7 +45,7 @@ export async function POST(request: Request, context: RejudgeRouteContext): Prom
   }
 
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(MATCH_TIMEOUT_MS)]);
-  let judged: { readonly verdict: MatchRecord["verdict"]; readonly judgeMs: number };
+  let judged: { readonly verdict: MatchRecord["verdict"]; readonly judgeMs: number; readonly usage: ModelUsage };
   try {
     judged = await runJudge(
       {
@@ -65,13 +65,21 @@ export async function POST(request: Request, context: RejudgeRouteContext): Prom
   }
 
   const judgedAt = new Date().toISOString();
+  const priorUsage = record.metrics.usage ?? { promptTokens: 0, completionTokens: 0 };
   const updated: MatchRecord = {
     ...record,
     verdict: judged.verdict,
     judgedAt,
     promptVersions: { agent: AGENT_PROMPT_VERSION, judge: JUDGE_PROMPT_VERSION },
     rubricVersion: RUBRIC_VERSION,
-    metrics: { ...record.metrics, judgeMs: judged.judgeMs },
+    metrics: {
+      ...record.metrics,
+      judgeMs: judged.judgeMs,
+      usage: {
+        promptTokens: priorUsage.promptTokens + judged.usage.promptTokens,
+        completionTokens: priorUsage.completionTokens + judged.usage.completionTokens,
+      },
+    },
   };
   await saveMatchRecord(updated);
   return Response.json({ ...matchSummary(updated), judgedAt });
