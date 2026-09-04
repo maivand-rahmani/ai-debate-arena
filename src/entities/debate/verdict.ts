@@ -79,3 +79,25 @@ export function parseDebateVerdict(input: unknown): VerdictParseResult {
 }
 
 export const parseVerdict = parseDebateVerdict;
+
+/** Score gap at or below which a DRAW winner is preserved. */
+export const DRAW_MAX_SCORE_GAP = 2;
+
+/**
+ * Derive the consistent winner from score difference.
+ * DRAW is preserved only when scores are within 2 points.
+ */
+export function normalizeVerdictWinner(verdict: DebateVerdict): DebateVerdict {
+  const diff = verdict.scoreA - verdict.scoreB;
+  const winner = Math.abs(diff) <= DRAW_MAX_SCORE_GAP ? "DRAW" : diff > 0 ? "A" : "B";
+  return winner === verdict.winner ? verdict : { ...verdict, winner };
+}
+
+/**
+ * Degenerate output: both scores are 0 despite a non-empty transcript.
+ * The model emitted placeholder zeros instead of judging; callers should
+ * retry rather than emit this.
+ */
+export function isDegenerateVerdict(verdict: DebateVerdict, hasTurns: boolean): boolean {
+  return hasTurns && verdict.scoreA === 0 && verdict.scoreB === 0;
+}

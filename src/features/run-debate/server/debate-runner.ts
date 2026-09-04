@@ -11,7 +11,12 @@ import {
 import { appendTurn, attachVerdict, createDebateState } from "../../../entities/debate/state";
 import { buildDebatePrompt, buildPromptContext } from "../../../entities/debate/prompt";
 import { buildAgentSystemPrompt, buildJudgePrompt, JUDGE_SYSTEM_PROMPT } from "../../../entities/debate/prompts";
-import { parseDebateVerdict } from "../../../entities/debate/verdict";
+import {
+  debateVerdictSchema,
+  isDegenerateVerdict,
+  normalizeVerdictWinner,
+  parseDebateVerdict,
+} from "../../../entities/debate/verdict";
 import { getTokenPolicy } from "../../../shared/token-policy";
 import { toSafeErrorMessage } from "../../../shared/api/llm/errors";
 
@@ -74,13 +79,26 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
   ]);
   const model = await createConfiguredModel(args.providerId, args.modelId);
   if (args.kind === "judge") {
-    const result = await ai.generateText({
-      model,
-      system: args.system,
-      prompt: args.prompt,
-      maxOutputTokens: args.maxOutputTokens,
-    });
-    return { text: result.text, chunks: [] };
+    try {
+      const structured = await ai.generateText({
+        model,
+        system: args.system,
+        prompt: args.prompt,
+        maxOutputTokens: args.maxOutputTokens,
+        output: ai.Output.object({ schema: debateVerdictSchema }),
+      });
+      return { text: JSON.stringify(structured.output), chunks: [] };
+    } catch {
+      // Provider/model rejected structured output; fall back to plain text
+      // with a repair-oriented nudge so the existing JSON parser still applies.
+      const fallback = await ai.generateText({
+        model,
+        system: args.system,
+        prompt: `${args.prompt}\n\nIf structured output is unavailable, respond with ONLY the JSON object matching the required schema.`,
+        maxOutputTokens: args.maxOutputTokens,
+      });
+      return { text: fallback.text, chunks: [] };
+    }
   }
   const result = ai.streamText({
     model,
@@ -166,6 +184,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
 
     const judge = input.judge ?? { providerId: input.agentA.providerId, model: input.agentA.model };
     const judgePrompt = buildJudgePrompt(input.topic, state.turns);
+    const hasTurns = state.turns.length > 0;
 
     let judgeText: string;
     try {
@@ -184,15 +203,50 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       return;
     }
 
-    const parsed = parseDebateVerdict(judgeText);
-    if (!parsed.success) {
+    let parsed = parseDebateVerdict(judgeText);
+    let verdict = parsed.success ? normalizeVerdictWinner(parsed.data) : null;
+    if (!parsed.success || verdict === null || isDegenerateVerdict(verdict, hasTurns)) {
+      // Single retry: previous output was unparsable or degenerate zeros.
+      const retryPrompt =
+        `${judgePrompt}\n\nPrevious output was invalid (unparsable, or a degenerate DRAW with scores of 0 ` +
+        `despite a non-empty transcript). Respond with ONLY the corrected JSON object matching the required schema.`;
+      let retryText: string;
+      try {
+        const retry = await callModel({
+          kind: "judge",
+          providerId: judge.providerId,
+          modelId: judge.model,
+          system: JUDGE_SYSTEM_PROMPT,
+          prompt: retryPrompt,
+          maxOutputTokens: policy.judgeMaxOutputTokens,
+        });
+        retryText = retry.text;
+      } catch (error) {
+        yield { type: "error", message: toSafeErrorMessage(error) };
+        yield { type: "done" };
+        return;
+      }
+      parsed = parseDebateVerdict(retryText);
+      if (!parsed.success) {
+        yield { type: "error", message: "Judge returned invalid verdict" };
+        yield { type: "done" };
+        return;
+      }
+      verdict = normalizeVerdictWinner(parsed.data);
+      if (isDegenerateVerdict(verdict, hasTurns)) {
+        yield { type: "error", message: "Judge returned invalid verdict" };
+        yield { type: "done" };
+        return;
+      }
+    }
+    if (verdict === null) {
       yield { type: "error", message: "Judge returned invalid verdict" };
       yield { type: "done" };
       return;
     }
-    state = attachVerdict(state, parsed.data);
+    state = attachVerdict(state, verdict);
     void state;
-    yield { type: "verdict", verdict: parsed.data };
+    yield { type: "verdict", verdict };
     yield { type: "done" };
   } catch (error) {
     yield { type: "error", message: toSafeErrorMessage(error) };

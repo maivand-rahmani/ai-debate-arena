@@ -101,4 +101,115 @@ describe("runDebate", () => {
     expect(events[events.length - 2].type).toBe("error");
     expect(events[events.length - 1].type).toBe("done");
   });
+
+  it("retries once when the judge returns degenerate zero DRAW, then emits the corrected verdict", async () => {
+    const degenerate = JSON.stringify({
+      winner: "DRAW",
+      scoreA: 0,
+      scoreB: 0,
+      reasoning: "placeholder zeros",
+    });
+    const judgeCalls: string[] = [];
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(
+      {
+        topic: "Should AI be regulated?",
+        mode: "quick",
+        agentA: { providerId: "p1", model: "m1", position: "FOR" },
+        agentB: { providerId: "p2", model: "m2", position: "AGAINST" },
+      },
+      {
+        callModel: async (args) => {
+          if (args.kind === "judge") {
+            judgeCalls.push(args.prompt);
+            return { text: judgeCalls.length === 1 ? degenerate : verdictJson, chunks: [] };
+          }
+          return { text: "agent text", chunks: [] };
+        },
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(judgeCalls).toHaveLength(2);
+    expect(judgeCalls[1]).toMatch(/previous output was invalid/i);
+    const types = events.map((event) => event.type);
+    expect(types).toContain("judge-start");
+    expect(types).toContain("verdict");
+    expect(types[types.length - 1]).toBe("done");
+    const verdictEvent = events.find((event) => event.type === "verdict");
+    if (verdictEvent?.type === "verdict") {
+      expect(verdictEvent.verdict.winner).toBe("A");
+      expect(verdictEvent.verdict.scoreA).toBe(82);
+    } else {
+      expect.unreachable("expected a verdict event");
+    }
+  });
+
+  it("repairs a winner that conflicts with the scores without retrying", async () => {
+    const conflicted = JSON.stringify({
+      winner: "B",
+      scoreA: 82,
+      scoreB: 74,
+      reasoning: "scores favor A",
+    });
+    let judgeCalls = 0;
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(
+      {
+        topic: "Should AI be regulated?",
+        mode: "quick",
+        agentA: { providerId: "p1", model: "m1", position: "FOR" },
+        agentB: { providerId: "p2", model: "m2", position: "AGAINST" },
+      },
+      {
+        callModel: async (args) => {
+          if (args.kind === "judge") {
+            judgeCalls += 1;
+            return { text: conflicted, chunks: [] };
+          }
+          return { text: "agent text", chunks: [] };
+        },
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(judgeCalls).toBe(1);
+    const verdictEvent = events.find((event) => event.type === "verdict");
+    expect(verdictEvent?.type).toBe("verdict");
+    if (verdictEvent?.type === "verdict") {
+      expect(verdictEvent.verdict.winner).toBe("A");
+    }
+  });
+
+  it("emits error when the retry is still degenerate", async () => {
+    const degenerate = JSON.stringify({
+      winner: "DRAW",
+      scoreA: 0,
+      scoreB: 0,
+      reasoning: "placeholder zeros",
+    });
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(
+      {
+        topic: "Should AI be regulated?",
+        mode: "quick",
+        agentA: { providerId: "p1", model: "m1", position: "FOR" },
+        agentB: { providerId: "p2", model: "m2", position: "AGAINST" },
+      },
+      {
+        callModel: async (args) => {
+          if (args.kind === "judge") return { text: degenerate, chunks: [] };
+          return { text: "agent text", chunks: [] };
+        },
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(events[events.length - 2].type).toBe("error");
+    expect(events[events.length - 1].type).toBe("done");
+    expect(events.some((event) => event.type === "verdict")).toBe(false);
+  });
 });

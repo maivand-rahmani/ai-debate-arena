@@ -36,10 +36,12 @@ export function buildJudgePrompt(topic: string, turns: readonly DebateTurn[]): s
     `You are the judge of a formal debate on the topic: "${topic}".`,
     "Full transcript:",
     transcript,
-    "Score each side 0-100 for scoreA and scoreB using this rubric: argument quality, rebuttal quality, consistency, relevance.",
-    "Also provide criteria (0-100 each): argumentQualityA, argumentQualityB, rebuttalA, rebuttalB, consistencyA, consistencyB, relevanceA, relevanceB.",
-    "Respond with STRICT JSON only, no markdown, no extra text, matching this shape:",
-    '{"winner":"A"|"B"|"DRAW","scoreA":0-100,"scoreB":0-100,"criteria":{"argumentQualityA":0-100,"argumentQualityB":0-100,"rebuttalA":0-100,"rebuttalB":0-100,"consistencyA":0-100,"consistencyB":0-100,"relevanceA":0-100,"relevanceB":0-100},"reasoning":"..."}',
+    "Compare both sides and score each side as an integer 0-100 for scoreA and scoreB using this rubric: argument quality, rebuttal quality, consistency, relevance.",
+    "Also provide criteria as integers 0-100 each: argumentQualityA, argumentQualityB, rebuttalA, rebuttalB, consistencyA, consistencyB, relevanceA, relevanceB.",
+    "Set winner from the scores: the higher score wins (A if scoreA is higher, B if scoreB is higher). Use DRAW only when the scores are within 2 points of each other.",
+    "Never return 0 for any score unless the transcript is empty; a debated round must have non-zero scores that reflect the comparison.",
+    "Respond with STRICT JSON only, no markdown, no extra text, matching this shape with concrete numbers, for example:",
+    '{"winner":"A","scoreA":78,"scoreB":64,"criteria":{"argumentQualityA":80,"argumentQualityB":66,"rebuttalA":76,"rebuttalB":62,"consistencyA":79,"consistencyB":65,"relevanceA":78,"relevanceB":63},"reasoning":"..."}',
   ].join("\n\n");
 }
 
