@@ -3,6 +3,55 @@ export const JUDGE_MAX_OUTPUT_TOKENS = 2000;
 
 export type TokenPolicyName = "Quick" | "Standard" | "Hardcore";
 
+/** Lowercase match modes used by v0.2 contracts, records, and profiles. */
+export type MatchMode = "quick" | "standard" | "hardcore";
+
+export interface MatchProfile {
+  readonly mode: MatchMode;
+  /** Only `quick` is enabled in the UI; other tiers stay server-rejected. */
+  readonly enabled: boolean;
+  /** Total agent turns per match (2 per side in quick). */
+  readonly rounds: number;
+  readonly agentMaxOutputTokens: number;
+  readonly judgeMaxOutputTokens: number;
+  readonly historyTurns: number;
+  readonly maxContextCharsPerSide: number;
+}
+
+export const MATCH_PROFILES: Readonly<Record<MatchMode, MatchProfile>> = {
+  quick: {
+    mode: "quick",
+    enabled: true,
+    rounds: 4,
+    agentMaxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
+    judgeMaxOutputTokens: JUDGE_MAX_OUTPUT_TOKENS,
+    historyTurns: 6,
+    maxContextCharsPerSide: 12000,
+  },
+  standard: {
+    mode: "standard",
+    enabled: false,
+    rounds: 4,
+    agentMaxOutputTokens: 2000,
+    judgeMaxOutputTokens: 2000,
+    historyTurns: 10,
+    maxContextCharsPerSide: 24000,
+  },
+  hardcore: {
+    mode: "hardcore",
+    enabled: false,
+    rounds: 4,
+    agentMaxOutputTokens: 3000,
+    judgeMaxOutputTokens: 2000,
+    historyTurns: 16,
+    maxContextCharsPerSide: 48000,
+  },
+};
+
+export function getMatchProfile(mode: MatchMode): MatchProfile {
+  return MATCH_PROFILES[mode];
+}
+
 export interface TokenPolicy {
   readonly name: TokenPolicyName;
   readonly agentMaxOutputTokens: number;
@@ -12,31 +61,28 @@ export interface TokenPolicy {
   readonly maxHistoryTurns: number;
 }
 
+const PROFILE_NAMES: Readonly<Record<MatchMode, TokenPolicyName>> = {
+  quick: "Quick",
+  standard: "Standard",
+  hardcore: "Hardcore",
+};
+
+function toTokenPolicy(mode: MatchMode): TokenPolicy {
+  const profile = MATCH_PROFILES[mode];
+  return {
+    name: PROFILE_NAMES[mode],
+    agentMaxOutputTokens: profile.agentMaxOutputTokens,
+    judgeMaxOutputTokens: profile.judgeMaxOutputTokens,
+    rounds: profile.rounds,
+    maxContextChars: profile.maxContextCharsPerSide,
+    maxHistoryTurns: profile.historyTurns,
+  };
+}
+
 export const TOKEN_POLICIES: Readonly<Record<TokenPolicyName, TokenPolicy>> = {
-  Quick: {
-    name: "Quick",
-    agentMaxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
-    judgeMaxOutputTokens: JUDGE_MAX_OUTPUT_TOKENS,
-    rounds: 4,
-    maxContextChars: 12000,
-    maxHistoryTurns: 6,
-  },
-  Standard: {
-    name: "Standard",
-    agentMaxOutputTokens: 2000,
-    judgeMaxOutputTokens: 2000,
-    rounds: 4,
-    maxContextChars: 24000,
-    maxHistoryTurns: 10,
-  },
-  Hardcore: {
-    name: "Hardcore",
-    agentMaxOutputTokens: 3000,
-    judgeMaxOutputTokens: 2000,
-    rounds: 4,
-    maxContextChars: 48000,
-    maxHistoryTurns: 16,
-  },
+  Quick: toTokenPolicy("quick"),
+  Standard: toTokenPolicy("standard"),
+  Hardcore: toTokenPolicy("hardcore"),
 };
 
 /** The only policy enabled by the initial product slice. */

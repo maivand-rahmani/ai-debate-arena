@@ -3,8 +3,10 @@ import {
   ACTIVE_TOKEN_POLICY,
   AGENT_MAX_OUTPUT_TOKENS,
   JUDGE_MAX_OUTPUT_TOKENS,
+  MATCH_PROFILES,
   MATCH_TIMEOUT_MS,
   TOKEN_POLICIES,
+  getMatchProfile,
   getTokenPolicy,
 } from "./token-policy";
 
@@ -39,5 +41,27 @@ describe("token policy", () => {
 
   it("bounds streamed matches with a lifecycle timeout", () => {
     expect(MATCH_TIMEOUT_MS).toBe(180_000);
+  });
+});
+
+describe("match profiles", () => {
+  it("keeps quick byte-identical to the v0.1 Quick policy with 2 turns per side", () => {
+    expect(MATCH_PROFILES.quick).toEqual({
+      mode: "quick",
+      enabled: true,
+      rounds: 4,
+      agentMaxOutputTokens: 2000,
+      judgeMaxOutputTokens: 2000,
+      historyTurns: 6,
+      maxContextCharsPerSide: 12000,
+    });
+    expect(getMatchProfile("quick")).toBe(MATCH_PROFILES.quick);
+  });
+
+  it("keeps standard/hardcore disabled with sensible budgets", () => {
+    expect(MATCH_PROFILES.standard.enabled).toBe(false);
+    expect(MATCH_PROFILES.hardcore.enabled).toBe(false);
+    expect(MATCH_PROFILES.standard).toMatchObject({ rounds: 4, historyTurns: 10 });
+    expect(MATCH_PROFILES.hardcore).toMatchObject({ rounds: 4, agentMaxOutputTokens: 3000 });
   });
 });

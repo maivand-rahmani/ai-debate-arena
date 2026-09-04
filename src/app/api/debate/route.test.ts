@@ -13,17 +13,20 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { DebateStreamEvent } from "../../../shared/api/debate-stream";
 import { POST } from "./route";
 import { getProvider } from "../../../shared/config/provider-store";
+import { saveMatchRecord } from "../../../shared/config/match-store";
 import {
   startMockOpenAIProvider,
   type MockOpenAIProvider,
 } from "../../../test/mock-openai-provider";
 
 vi.mock("../../../shared/config/provider-store", () => ({ getProvider: vi.fn() }));
+vi.mock("../../../shared/config/match-store", () => ({ saveMatchRecord: vi.fn() }));
 // `server-only` is a deployment-time boundary marker with no runtime module
 // installed here; stub it so the real model factory can load under vitest.
 vi.mock("server-only", () => ({}));
 
 const getProviderMock = vi.mocked(getProvider);
+const saveMatchMock = vi.mocked(saveMatchRecord);
 
 const VALID_VERDICT_JSON = JSON.stringify({
   winner: "A",
@@ -72,6 +75,8 @@ beforeEach(() => {
     api: "chat",
     apiKey: "sk-test",
   }));
+  saveMatchMock.mockReset();
+  saveMatchMock.mockImplementation(async () => {});
 });
 
 function validBody() {
@@ -162,6 +167,27 @@ describe("POST /api/debate", () => {
     expect(mock.requestCount).toBeGreaterThanOrEqual(5);
     expect(mock.requests.every((request) => request.url.endsWith("/chat/completions"))).toBe(true);
     expect(mock.requests.slice(0, 4).every((request) => request.stream === true)).toBe(true);
+
+    // Stream contract v1: every event carries v/matchId/seq, seq from 1.
+    expect(events.every((event) => event.v === 1)).toBe(true);
+    expect(events.every((event) => typeof event.matchId === "string" && event.matchId.length > 0)).toBe(true);
+    expect(new Set(events.map((event) => event.matchId)).size).toBe(1);
+    expect(events.map((event) => event.seq)).toEqual(events.map((_, index) => index + 1));
+    const streamMatchId = events[0]?.matchId;
+    const doneEvent = events[events.length - 1];
+    expect(doneEvent?.type).toBe("done");
+    if (doneEvent?.type === "done") expect(doneEvent.terminal).toBe("completed");
+
+    // The match record was persisted once, secret-free, for the same match.
+    expect(saveMatchMock).toHaveBeenCalledTimes(1);
+    const record = saveMatchMock.mock.calls[0]?.[0];
+    expect(record?.matchId).toBe(streamMatchId);
+    expect(record?.terminal).toBe("completed");
+    expect(record?.verdict?.winner).toBe("A");
+    expect(record?.transcript).toHaveLength(4);
+    expect(record?.sides.A.providerName).toBe("Mock Provider");
+    expect(record?.sides.B.providerName).toBe("Mock Provider");
+    expect(JSON.stringify(record)).not.toMatch(/apiKey|baseUrl|sk-test/i);
   });
 
   it("rejects an empty topic with a 400 {error} shape (F6-07)", async () => {
@@ -179,6 +205,15 @@ describe("POST /api/debate", () => {
     expect(body.status).toBe(400);
     expect(typeof body.error).toBe("string");
     expect(mock.requestCount).toBe(0);
+  });
+
+  it("rejects a contract-valid but disabled standard mode with a 400 {error} shape", async () => {
+    const res = await postDebate({ ...validBody(), mode: "standard" });
+    const body = await readErrorBody(res);
+    expect(body.status).toBe(400);
+    expect(typeof body.error).toBe("string");
+    expect(mock.requestCount).toBe(0);
+    expect(saveMatchMock).not.toHaveBeenCalled();
   });
 
   it("rejects a body missing agentB with a 400 {error} shape (F6-07)", async () => {
@@ -248,6 +283,15 @@ describe("POST /api/debate", () => {
       expect(errorEvent.message.length).toBeGreaterThan(0);
       expect(errorEvent.message).not.toContain("sk-test");
     }
+
+    const done500 = events[events.length - 1];
+    if (done500?.type === "done") expect(done500.terminal).toBe("error");
+    expect(saveMatchMock).toHaveBeenCalledTimes(1);
+    const record500 = saveMatchMock.mock.calls[0]?.[0];
+    expect(record500?.terminal).toBe("error");
+    expect(record500?.verdict).toBeNull();
+    expect(record500?.transcript).toHaveLength(1);
+    expect(JSON.stringify(record500)).not.toMatch(/apiKey|baseUrl|sk-test/i);
   }, 30_000);
 
   it("emits error then done (no verdict) when the judge keeps returning malformed JSON", async () => {
@@ -272,6 +316,10 @@ describe("POST /api/debate", () => {
     }
     // Retry traffic actually happened (4 agents + at least 2 judge attempts).
     expect(mock.requestCount).toBeGreaterThanOrEqual(6);
+    const doneJudge = events[events.length - 1];
+    if (doneJudge?.type === "done") expect(doneJudge.terminal).toBe("error");
+    expect(saveMatchMock).toHaveBeenCalledTimes(1);
+    expect(saveMatchMock.mock.calls[0]?.[0]?.terminal).toBe("error");
   });
 
   it("recovers with a verdict when the judge retry returns valid JSON", async () => {
@@ -295,6 +343,8 @@ describe("POST /api/debate", () => {
     expect(count(events, "done")).toBe(1);
     expect(events[events.length - 1]?.type).toBe("done");
     expect(mock.requestCount).toBeGreaterThanOrEqual(6);
+    const doneRecovered = events[events.length - 1];
+    if (doneRecovered?.type === "done") expect(doneRecovered.terminal).toBe("completed");
   });
 
   it("client disconnect mid-run terminates the stream with no duplicate terminals and stops further model calls (F7-09, F6-08)", async () => {
@@ -372,5 +422,12 @@ describe("POST /api/debate", () => {
     expect(mock.requestCount).toBe(countAfterAbort);
     expect(mock.abortedCount).toBeGreaterThanOrEqual(1);
     expect(countAfterAbort).toBeLessThan(6);
+
+    // The abandoned run was persisted exactly once as cancelled.
+    expect(saveMatchMock).toHaveBeenCalledTimes(1);
+    const recordCancelled = saveMatchMock.mock.calls[0]?.[0];
+    expect(recordCancelled?.terminal).toBe("cancelled");
+    expect(recordCancelled?.verdict).toBeNull();
+    expect(JSON.stringify(recordCancelled)).not.toMatch(/apiKey|baseUrl|sk-test/i);
   }, 20_000);
 });

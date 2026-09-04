@@ -1,5 +1,10 @@
 import type { DebateConfig, DebateState, DebateTurn, DebatePhase } from "./types";
 
+export { JUDGE_PROMPT_VERSION } from "./prompts";
+
+/** Bump on any agent wording change. */
+export const AGENT_PROMPT_VERSION = "1";
+
 export interface DebatePromptContext {
   readonly topic: string;
   readonly phase: DebatePhase;

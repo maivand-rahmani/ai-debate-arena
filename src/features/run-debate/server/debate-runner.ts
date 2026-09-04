@@ -9,15 +9,22 @@ import {
   type DebateVerdict,
 } from "../../../entities/debate/types";
 import { appendTurn, attachVerdict, createDebateState } from "../../../entities/debate/state";
-import { buildDebatePrompt, buildPromptContext } from "../../../entities/debate/prompt";
-import { buildAgentSystemPrompt, buildJudgePrompt, JUDGE_SYSTEM_PROMPT } from "../../../entities/debate/prompts";
+import { AGENT_PROMPT_VERSION, buildDebatePrompt, buildPromptContext } from "../../../entities/debate/prompt";
+import {
+  buildAgentSystemPrompt,
+  buildJudgePrompt,
+  JUDGE_PROMPT_VERSION,
+  JUDGE_SYSTEM_PROMPT,
+} from "../../../entities/debate/prompts";
+import { RUBRIC_VERSION } from "../../../entities/debate/rubric";
 import {
   debateVerdictSchema,
   isDegenerateVerdict,
   normalizeVerdictWinner,
   parseDebateVerdict,
 } from "../../../entities/debate/verdict";
-import { getTokenPolicy } from "../../../shared/token-policy";
+import { CONTRACT_VERSION, type MatchRecord, type MatchTerminal } from "../../../entities/debate/contract";
+import { MATCH_PROFILES, type MatchMode, type MatchProfile } from "../../../shared/token-policy";
 import { toSafeErrorMessage } from "../../../shared/api/llm/errors";
 
 export interface RunnerAgentInput {
@@ -28,20 +35,33 @@ export interface RunnerAgentInput {
 
 export interface RunDebateInput {
   readonly topic: string;
-  readonly mode: "quick";
+  readonly mode: MatchMode;
   readonly agentA: RunnerAgentInput;
   readonly agentB: RunnerAgentInput;
   readonly judge?: { readonly providerId: string; readonly model: string };
 }
 
-export type DebateStreamEvent =
+export interface RunnerSideInput {
+  readonly providerName: string;
+  readonly modelId: string;
+  readonly position: DebatePosition;
+}
+
+type DebateEventBody =
   | { readonly type: "phase"; readonly phase: DebatePhase; readonly side: DebateSide | null }
   | { readonly type: "token"; readonly side: DebateSide; readonly text: string }
   | { readonly type: "turn"; readonly turn: DebateStreamTurn }
   | { readonly type: "judge-start" }
   | { readonly type: "verdict"; readonly verdict: DebateVerdict }
   | { readonly type: "error"; readonly message: string }
-  | { readonly type: "done" };
+  | { readonly type: "done"; readonly terminal: MatchTerminal };
+
+/** Stream contract v1: every event carries `{ v: 1, matchId, seq }`. */
+export type DebateStreamEvent = DebateEventBody & {
+  readonly v: 1;
+  readonly matchId: string;
+  readonly seq: number;
+};
 
 export interface DebateStreamTurn {
   readonly id: string;
@@ -65,6 +85,10 @@ export interface ModelCallArgs {
 export interface RunDebateDeps {
   readonly callModel?: (args: ModelCallArgs) => Promise<{ readonly text: string; readonly chunks: readonly string[] }>;
   readonly abortSignal?: AbortSignal;
+  readonly matchId?: string;
+  readonly profile?: MatchProfile;
+  readonly sides?: { readonly A: RunnerSideInput; readonly B: RunnerSideInput };
+  readonly saveMatch?: (record: MatchRecord) => Promise<void> | void;
 }
 
 const AGENT_PHASES: ReadonlyArray<{ readonly phase: DebateTurn["phase"]; readonly side: DebateSide }> = [
@@ -132,6 +156,11 @@ async function defaultCallModel(args: ModelCallArgs): Promise<{ text: string; ch
   return { text: await result.text, chunks };
 }
 
+async function defaultSaveMatch(record: MatchRecord): Promise<void> {
+  const { saveMatchRecord } = await import("../../../shared/config/match-store");
+  await saveMatchRecord(record);
+}
+
 function toStreamTurn(turn: DebateTurn): DebateStreamTurn {
   return {
     id: turn.id,
@@ -145,7 +174,67 @@ function toStreamTurn(turn: DebateTurn): DebateStreamTurn {
 
 export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}): AsyncGenerator<DebateStreamEvent> {
   const callModel = deps.callModel ?? defaultCallModel;
-  const policy = getTokenPolicy("Quick");
+  const matchId = deps.matchId ?? randomUUID();
+  const profile = deps.profile ?? MATCH_PROFILES[input.mode];
+  const saveMatch = deps.saveMatch ?? defaultSaveMatch;
+  const startedAt = new Date().toISOString();
+  const startMs = Date.now();
+  const turnsMs: number[] = [];
+  const transcript: DebateTurn[] = [];
+  let verdict: DebateVerdict | null = null;
+  let terminal: MatchTerminal = "completed";
+  let terminalReason: string | null = null;
+  let saved = false;
+  let seq = 0;
+
+  const envelope = <T extends DebateEventBody>(event: T): DebateStreamEvent => ({
+    ...event,
+    v: 1 as const,
+    matchId,
+    seq: (seq += 1),
+  });
+
+  const isCancelled = (): boolean => deps.abortSignal?.aborted ?? false;
+
+  async function persist(): Promise<void> {
+    if (saved) return;
+    saved = true;
+    const record: MatchRecord = {
+      version: CONTRACT_VERSION,
+      matchId,
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      topic: input.topic,
+      mode: input.mode,
+      sides: deps.sides ?? {
+        A: { providerName: input.agentA.providerId, modelId: input.agentA.model, position: input.agentA.position },
+        B: { providerName: input.agentB.providerId, modelId: input.agentB.model, position: input.agentB.position },
+      },
+      policy: { ...profile },
+      promptVersions: { agent: AGENT_PROMPT_VERSION, judge: JUDGE_PROMPT_VERSION },
+      rubricVersion: RUBRIC_VERSION,
+      transcript: transcript.map((turn) => ({ ...turn })),
+      verdict,
+      terminal,
+      terminalReason,
+      metrics: { turnsMs: [...turnsMs], totalMs: Date.now() - startMs },
+    };
+    try {
+      await saveMatch(record);
+    } catch (error) {
+      console.error(`Failed to save match record ${matchId}:`, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function* failWith(message: string): AsyncGenerator<DebateStreamEvent> {
+    terminal = isCancelled() ? "cancelled" : "error";
+    terminalReason = message;
+    yield envelope({ type: "error", message });
+    await persist();
+    yield envelope({ type: "done", terminal });
+  }
+
+  const policy = { maxHistoryTurns: profile.historyTurns };
   const config: DebateConfig = {
     topic: input.topic,
     agents: {
@@ -160,7 +249,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
   try {
     for (const { phase, side } of AGENT_PHASES) {
       state = { ...state, phase };
-      yield { type: "phase", phase, side };
+      yield envelope({ type: "phase", phase, side });
 
       const agent = side === "A" ? input.agentA : input.agentB;
       const system = buildAgentSystemPrompt(side, agent.position, input.topic);
@@ -168,6 +257,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       const prompt = buildDebatePrompt(context);
 
       let result: { readonly text: string; readonly chunks: readonly string[] };
+      const turnStartMs = Date.now();
       try {
         result = await callModel({
           kind: "agent",
@@ -175,17 +265,17 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           modelId: agent.model,
           system,
           prompt,
-          maxOutputTokens: policy.agentMaxOutputTokens,
+          maxOutputTokens: profile.agentMaxOutputTokens,
           abortSignal: deps.abortSignal,
         });
       } catch (error) {
-        yield { type: "error", message: toSafeErrorMessage(error) };
-        yield { type: "done" };
-        return;
+        turnsMs.push(Date.now() - turnStartMs);
+        return yield* failWith(toSafeErrorMessage(error));
       }
+      turnsMs.push(Date.now() - turnStartMs);
 
       for (const text of result.chunks) {
-        if (text) yield { type: "token", side, text };
+        if (text) yield envelope({ type: "token", side, text });
       }
 
       const turn: DebateTurn = {
@@ -198,11 +288,12 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
         createdAt: new Date().toISOString(),
       };
       state = appendTurn(state, turn);
-      yield { type: "turn", turn: toStreamTurn(turn) };
+      transcript.push(turn);
+      yield envelope({ type: "turn", turn: toStreamTurn(turn) });
     }
 
     state = { ...state, phase: DebatePhase.JUDGING };
-    yield { type: "judge-start" };
+    yield envelope({ type: "judge-start" });
 
     const judge = input.judge ?? { providerId: input.agentA.providerId, model: input.agentA.model };
     const judgePrompt = buildJudgePrompt(input.topic, state.turns);
@@ -216,19 +307,17 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
         modelId: judge.model,
         system: JUDGE_SYSTEM_PROMPT,
         prompt: judgePrompt,
-        maxOutputTokens: policy.judgeMaxOutputTokens,
+        maxOutputTokens: profile.judgeMaxOutputTokens,
         abortSignal: deps.abortSignal,
       });
       judgeText = result.text;
     } catch (error) {
-      yield { type: "error", message: toSafeErrorMessage(error) };
-      yield { type: "done" };
-      return;
+      return yield* failWith(toSafeErrorMessage(error));
     }
 
     let parsed = parseDebateVerdict(judgeText);
-    let verdict = parsed.success ? normalizeVerdictWinner(parsed.data) : null;
-    if (!parsed.success || verdict === null || isDegenerateVerdict(verdict, hasTurns)) {
+    let parsedVerdict = parsed.success ? normalizeVerdictWinner(parsed.data) : null;
+    if (!parsed.success || parsedVerdict === null || isDegenerateVerdict(parsedVerdict, hasTurns)) {
       // Single retry: previous output was unparsable or degenerate zeros.
       const retryPrompt =
         `${judgePrompt}\n\nPrevious output was invalid (unparsable, or a degenerate DRAW with scores of 0 ` +
@@ -241,39 +330,42 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           modelId: judge.model,
           system: JUDGE_SYSTEM_PROMPT,
           prompt: retryPrompt,
-          maxOutputTokens: policy.judgeMaxOutputTokens,
+          maxOutputTokens: profile.judgeMaxOutputTokens,
           abortSignal: deps.abortSignal,
         });
         retryText = retry.text;
       } catch (error) {
-        yield { type: "error", message: toSafeErrorMessage(error) };
-        yield { type: "done" };
-        return;
+        return yield* failWith(toSafeErrorMessage(error));
       }
       parsed = parseDebateVerdict(retryText);
       if (!parsed.success) {
-        yield { type: "error", message: "Judge returned invalid verdict" };
-        yield { type: "done" };
-        return;
+        return yield* failWith("Judge returned invalid verdict");
       }
-      verdict = normalizeVerdictWinner(parsed.data);
-      if (isDegenerateVerdict(verdict, hasTurns)) {
-        yield { type: "error", message: "Judge returned invalid verdict" };
-        yield { type: "done" };
-        return;
+      parsedVerdict = normalizeVerdictWinner(parsed.data);
+      if (isDegenerateVerdict(parsedVerdict, hasTurns)) {
+        return yield* failWith("Judge returned invalid verdict");
       }
     }
-    if (verdict === null) {
-      yield { type: "error", message: "Judge returned invalid verdict" };
-      yield { type: "done" };
-      return;
+    if (parsedVerdict === null) {
+      return yield* failWith("Judge returned invalid verdict");
     }
+    verdict = parsedVerdict;
+    terminal = "completed";
+    terminalReason = null;
     state = attachVerdict(state, verdict);
     void state;
-    yield { type: "verdict", verdict };
-    yield { type: "done" };
+    yield envelope({ type: "verdict", verdict });
+    await persist();
+    yield envelope({ type: "done", terminal });
   } catch (error) {
-    yield { type: "error", message: toSafeErrorMessage(error) };
-    yield { type: "done" };
+    return yield* failWith(toSafeErrorMessage(error));
+  } finally {
+    // Consumer went away before any terminal path (e.g. client disconnect):
+    // persist the partial match as cancelled exactly once.
+    if (!saved) {
+      terminal = "cancelled";
+      terminalReason = terminalReason ?? "Match cancelled";
+      await persist();
+    }
   }
 }

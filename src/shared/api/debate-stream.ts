@@ -26,6 +26,18 @@ export interface DebateStreamRequest {
   readonly agentB: DebateStreamAgentInput;
 }
 
+/**
+ * Stream contract v1 envelope. The server attaches it to every event;
+ * clients accept events with or without it (unknown extras are ignored).
+ */
+export interface DebateStreamEnvelope {
+  readonly v: 1;
+  readonly matchId: string;
+  readonly seq: number;
+}
+
+export type DebateStreamTerminal = "completed" | "error" | "cancelled";
+
 /** Mirrors the server-side phase union (kept as strings to stay decoupled). */
 export type DebateStreamPhase =
   | "CREATED"
@@ -64,14 +76,17 @@ export interface DebateStreamVerdict {
   readonly reasoning: string;
 }
 
-export type DebateStreamEvent =
+export type DebateStreamEventBody =
   | { readonly type: "phase"; readonly phase: DebateStreamPhase; readonly side: DebateSide | null }
   | { readonly type: "token"; readonly side: DebateSide; readonly text: string }
   | { readonly type: "turn"; readonly turn: DebateStreamTurn }
   | { readonly type: "judge-start" }
   | { readonly type: "verdict"; readonly verdict: DebateStreamVerdict }
   | { readonly type: "error"; readonly message: string }
-  | { readonly type: "done" };
+  | { readonly type: "done"; readonly terminal?: DebateStreamTerminal };
+
+/** Client-side event: payload plus the optional v1 envelope extras. */
+export type DebateStreamEvent = DebateStreamEventBody & Partial<DebateStreamEnvelope>;
 
 export class DebateStreamError extends Error {
   public readonly status?: number;
@@ -226,6 +241,7 @@ function parseLine(line: string): DebateStreamEvent | null {
 
 function normalizeEvent(input: Record<string, unknown>): DebateStreamEvent | null {
   const type = input.type;
+  const envelope = readEnvelope(input);
   switch (type) {
     case "phase": {
       const phase = typeof input.phase === "string" && STREAM_PHASES.has(input.phase as DebateStreamPhase)
@@ -233,34 +249,54 @@ function normalizeEvent(input: Record<string, unknown>): DebateStreamEvent | nul
         : "CREATED";
       const rawSide = input.side;
       const side: DebateSide | null = rawSide === "A" || rawSide === "B" ? rawSide : null;
-      return { type: "phase", phase, side };
+      return { type: "phase", phase, side, ...envelope };
     }
     case "token":
       return {
         type: "token",
         side: input.side === "B" ? "B" : "A",
         text: typeof input.text === "string" ? input.text : "",
+        ...envelope,
       };
     case "turn": {
       if (!input.turn || typeof input.turn !== "object") return null;
-      return { type: "turn", turn: input.turn as DebateStreamTurn };
+      return { type: "turn", turn: input.turn as DebateStreamTurn, ...envelope };
     }
     case "judge-start":
-      return { type: "judge-start" };
+      return { type: "judge-start", ...envelope };
     case "verdict": {
       if (!input.verdict || typeof input.verdict !== "object") return null;
-      return { type: "verdict", verdict: input.verdict as DebateStreamVerdict };
+      return { type: "verdict", verdict: input.verdict as DebateStreamVerdict, ...envelope };
     }
     case "error":
       return {
         type: "error",
         message: typeof input.message === "string" ? input.message : "Unknown server error",
+        ...envelope,
       };
     case "done":
-      return { type: "done" };
+      return { type: "done", ...readTerminal(input), ...envelope };
     default:
       return null;
   }
+}
+
+const STREAM_TERMINALS: ReadonlySet<DebateStreamTerminal> = new Set(["completed", "error", "cancelled"]);
+
+function readTerminal(input: Record<string, unknown>): { readonly terminal?: DebateStreamTerminal } {
+  const terminal = input.terminal;
+  return typeof terminal === "string" && STREAM_TERMINALS.has(terminal as DebateStreamTerminal)
+    ? { terminal: terminal as DebateStreamTerminal }
+    : {};
+}
+
+/** Preserve the v1 envelope when present; ignore malformed extras. */
+function readEnvelope(input: Record<string, unknown>): Partial<DebateStreamEnvelope> {
+  const envelope: { v?: 1; matchId?: string; seq?: number } = {};
+  if (input.v === 1) envelope.v = 1;
+  if (typeof input.matchId === "string" && input.matchId.length > 0) envelope.matchId = input.matchId;
+  if (typeof input.seq === "number" && Number.isInteger(input.seq) && input.seq >= 1) envelope.seq = input.seq;
+  return envelope;
 }
 
 function toMessage(error: unknown): string {

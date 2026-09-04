@@ -4,7 +4,7 @@ import {
   reduceDebateRuntime,
   type DebateRuntimeState,
 } from "./reducer";
-import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
+import type { DebateStreamEvent, DebateStreamVerdict } from "@/shared/api/debate-stream";
 
 const verdict: DebateStreamVerdict = {
   winner: "A",
@@ -207,5 +207,51 @@ describe("reduceDebateRuntime cancel handling", () => {
       currentPhase: "OPENING_A",
     };
     expect(reduceDebateRuntime(cancelled, { type: "reset" })).toBe(initialRuntimeState);
+  });
+});
+
+describe("reduceDebateRuntime stream contract v1", () => {
+  const envelope = { v: 1 as const, matchId: "match-1", seq: 1 };
+
+  it("accepts enveloped events exactly like bare ones", () => {
+    let state = reduceDebateRuntime(
+      { ...initialRuntimeState, topic: "topic" },
+      { type: "stream-event", event: { ...envelope, type: "phase", phase: "OPENING_A", side: "A" } },
+    );
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { ...envelope, seq: 2, type: "token", side: "A", text: "Hello" },
+    });
+    expect(state.status).toBe("streaming");
+    expect(state.panels).toHaveLength(1);
+    expect(state.panels[0]?.content).toBe("Hello");
+  });
+
+  it("treats an enveloped error/done pair like the bare failure sequence", () => {
+    let state = judgingState();
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { ...envelope, type: "error", message: "boom" } satisfies DebateStreamEvent,
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { ...envelope, seq: 3, type: "done", terminal: "error" } satisfies DebateStreamEvent,
+    });
+    expect(state.status).toBe("error");
+    expect(state.verdict).toBeUndefined();
+  });
+
+  it("finishes on an enveloped verdict plus completed done", () => {
+    let state = judgingState();
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { ...envelope, type: "verdict", verdict } satisfies DebateStreamEvent,
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { ...envelope, seq: 5, type: "done", terminal: "completed" } satisfies DebateStreamEvent,
+    });
+    expect(state.status).toBe("finished");
+    expect(state.verdict).toEqual(verdict);
   });
 });
