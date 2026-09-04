@@ -56,6 +56,18 @@ export interface DebateRuntimeState {
   readonly verdict?: DebateStreamVerdict;
   readonly errorMessage?: string;
   /**
+   * Server-assigned id for the live match (v1 stream envelope). Captured
+   * lazily from the first enveloped event so the judge-panel footer can
+   * issue per-match actions (Export / Re-judge) without re-fetching.
+   */
+  readonly matchId?: string;
+  /**
+   * ISO timestamp from the most recent successful re-judge for the live
+   * match, or `undefined` for the original verdict. Drives the
+   * "re-judged" indicator on the current judge panel.
+   */
+  readonly judgedAt?: string;
+  /**
    * Set when the user ended the match via the UI before a verdict arrived.
    * Preserves the in-flight panels/topic so the cancelled screen can show
    * what had been streamed so far.
@@ -71,6 +83,8 @@ export const initialRuntimeState: DebateRuntimeState = {
   judgeActive: false,
   judgeReasoning: "",
   panels: [],
+  matchId: undefined,
+  judgedAt: undefined,
   cancelled: false,
 };
 
@@ -84,6 +98,8 @@ export type DebateRuntimeAction =
   | { readonly type: "abort" }
   /** User-initiated stop — drives the calm cancelled presentation. */
   | { readonly type: "cancel" }
+  /** Re-judge for the live match completed successfully; replace verdict. */
+  | { readonly type: "rejudge-success"; readonly verdict: DebateStreamVerdict; readonly judgedAt: string }
   | { readonly type: "reset" };
 
 // --- Reducer ----------------------------------------------------------------
@@ -108,6 +124,8 @@ export function reduceDebateRuntime(
     case "abort":
       // Silent cleanup (e.g. on unmount); never surfaces cancelled to the UI.
       return { ...state, status: "idle", cancelled: false, errorMessage: undefined };
+    case "rejudge-success":
+      return applyRejudgeSuccess(state, action);
     case "reset":
       return initialRuntimeState;
     default:
@@ -134,21 +152,25 @@ function applyCancel(state: DebateRuntimeState): DebateRuntimeState {
 }
 
 function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): DebateRuntimeState {
+  // Lazily capture the v1-envelope matchId so the judge-panel footer can
+  // reach back into the saved record without an extra round-trip. We only
+  // capture the first id we see; later events carry the same id.
+  const withMatchId = captureMatchId(state, event);
   switch (event.type) {
     case "phase":
       return {
-        ...state,
-        status: isAgentPhase(event.phase) ? "streaming" : event.phase === "JUDGING" ? "judging" : state.status,
+        ...withMatchId,
+        status: isAgentPhase(event.phase) ? "streaming" : event.phase === "JUDGING" ? "judging" : withMatchId.status,
         currentPhase: event.phase,
         currentSide: event.side,
       };
     case "token":
-      return appendToken(state, event.side, event.text, deriveSpeechPhase(state.currentPhase));
+      return appendToken(withMatchId, event.side, event.text, deriveSpeechPhase(withMatchId.currentPhase));
     case "turn":
-      return sealTurn(state, event.turn);
+      return sealTurn(withMatchId, event.turn);
     case "judge-start":
       return {
-        ...state,
+        ...withMatchId,
         status: "judging",
         judgeActive: true,
         judgeReasoning: "",
@@ -158,7 +180,7 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
       };
     case "verdict":
       return {
-        ...state,
+        ...withMatchId,
         status: "finished",
         verdict: event.verdict,
         judgeActive: false,
@@ -167,31 +189,62 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
         currentSide: null,
       };
     case "error":
-      return { ...state, status: "error", cancelled: false, errorMessage: event.message };
+      return { ...withMatchId, status: "error", cancelled: false, errorMessage: event.message };
     case "done":
-      if (state.status === "finished") return state;
+      if (withMatchId.status === "finished") return withMatchId;
       // A judge/server failure must survive `done`: never overwrite an error
       // with a graceful finish, otherwise the UI would render a fake verdict.
-      if (state.status === "error") return state;
+      if (withMatchId.status === "error") return withMatchId;
       // Cancellation must also survive `done`: if the user stopped the match
       // we should not flip back to a (potentially fabricated) finished state.
-      if (state.cancelled || state.status === "cancelled") return state;
-      if (state.verdict) {
-        return { ...state, status: "finished", currentPhase: "FINISHED", currentSide: null };
+      if (withMatchId.cancelled || withMatchId.status === "cancelled") return withMatchId;
+      if (withMatchId.verdict) {
+        return { ...withMatchId, status: "finished", currentPhase: "FINISHED", currentSide: null };
       }
       // Server said done but produced no verdict and no error — surface a safe
       // error instead of a finish so callers cannot fabricate a draw.
       return {
-        ...state,
+        ...withMatchId,
         status: "error",
         cancelled: false,
-        errorMessage: state.errorMessage ?? "Match ended without a verdict",
+        errorMessage: withMatchId.errorMessage ?? "Match ended without a verdict",
         judgeActive: false,
         currentSide: null,
       };
     default:
-      return state;
+      return withMatchId;
   }
+}
+
+function captureMatchId(state: DebateRuntimeState, event: DebateStreamEvent): DebateRuntimeState {
+  if (state.matchId) return state;
+  const id = event.matchId;
+  if (typeof id === "string" && id.length > 0) {
+    return { ...state, matchId: id };
+  }
+  return state;
+}
+
+function applyRejudgeSuccess(
+  state: DebateRuntimeState,
+  action: Extract<DebateRuntimeAction, { type: "rejudge-success" }>,
+): DebateRuntimeState {
+  // The live panel always carries the latest verdict once the user has asked
+  // for a re-judge. Cancellation/error precedence is preserved: a real error
+  // already on screen wins over a stale verdict; an existing verdict still
+  // wins over a later cancelled status (which shouldn't happen mid-rejudge).
+  if (state.status === "error") return state;
+  return {
+    ...state,
+    status: "finished",
+    verdict: action.verdict,
+    judgedAt: action.judgedAt,
+    judgeActive: false,
+    cancelled: false,
+    currentPhase: "FINISHED",
+    currentSide: null,
+    errorMessage: undefined,
+  };
 }
 
 function appendToken(

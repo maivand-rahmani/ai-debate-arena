@@ -1,6 +1,7 @@
 "use client";
 
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
+import { MatchActions, type RejudgeStatus } from "./match-history/match-actions";
 import { CountUp } from "./atoms";
 
 interface JudgePanelProps {
@@ -8,9 +9,23 @@ interface JudgePanelProps {
   readonly reasoning?: string;
   readonly verdict?: DebateStreamVerdict;
   readonly errorMessage?: string;
+  readonly footer?: JudgePanelFooter;
 }
 
-export function JudgePanel({ state, reasoning, verdict, errorMessage }: JudgePanelProps) {
+export interface JudgePanelFooter {
+  /** Server-assigned match id from the v1 stream envelope (may be undefined for very early states). */
+  readonly matchId?: string;
+  /** True once the match has a full saved transcript on disk (terminal=completed, transcript.length=4). */
+  readonly canRejudge: boolean;
+  readonly rejudgeStatus: RejudgeStatus;
+  readonly rejudgeError?: string;
+  /** Optional ISO timestamp of the most recent re-judge for the "re-judged" indicator. */
+  readonly judgedAt?: string;
+  readonly onExportJson: (matchId: string) => void | Promise<unknown>;
+  readonly onRejudge: (matchId: string) => void | Promise<unknown>;
+}
+
+export function JudgePanel({ state, reasoning, verdict, errorMessage, footer }: JudgePanelProps) {
   if (state === "evaluating") {
     return (
       <section
@@ -47,6 +62,7 @@ export function JudgePanel({ state, reasoning, verdict, errorMessage }: JudgePan
             <span className="h-1.5 w-12 rounded-full bg-arena-gold-100/15 animate-pulse" />
           </div>
         </div>
+        {footer && footer.matchId ? <FooterBar footer={footer} /> : null}
       </section>
     );
   }
@@ -70,16 +86,53 @@ export function JudgePanel({ state, reasoning, verdict, errorMessage }: JudgePan
               {errorMessage ?? "The match ended without a verdict, so no winner or scores are shown."}
             </p>
           </div>
+          {footer && footer.matchId ? <FooterBar footer={footer} /> : null}
         </section>
       );
     }
-    return <VerdictReveal reasoning={reasoning} verdict={verdict} />;
+    return <VerdictReveal reasoning={reasoning} verdict={verdict} footer={footer} />;
   }
 
   return null;
 }
 
-function VerdictReveal({ reasoning, verdict }: { reasoning?: string; verdict: DebateStreamVerdict }) {
+function FooterBar({ footer }: { footer: JudgePanelFooter }) {
+  if (!footer.matchId) return null;
+  return (
+    <div className="mt-10 border-t border-white/10 pt-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-coral-200">
+            Save & inspect
+          </p>
+          {footer.judgedAt ? (
+            <p className="text-[11px] uppercase tracking-[0.18em] text-arena-gold-100">
+              Re-judged
+            </p>
+          ) : null}
+        </div>
+        <MatchActions
+          matchId={footer.matchId}
+          rejudgeStatus={footer.rejudgeStatus}
+          rejudgeError={footer.rejudgeError}
+          canRejudge={footer.canRejudge}
+          onExportJson={footer.onExportJson}
+          onRejudge={footer.onRejudge}
+        />
+      </div>
+    </div>
+  );
+}
+
+function VerdictReveal({
+  reasoning,
+  verdict,
+  footer,
+}: {
+  reasoning?: string;
+  verdict: DebateStreamVerdict;
+  footer?: JudgePanelFooter;
+}) {
   const winner = verdict.winner;
   const winnerLabel =
     winner === "DRAW" ? "Draw" : winner === "A" ? "The Challenger wins" : "The Advocate wins";
@@ -160,6 +213,7 @@ function VerdictReveal({ reasoning, verdict }: { reasoning?: string; verdict: De
           </p>
         </div>
       ) : null}
+      {footer && footer.matchId ? <FooterBar footer={footer} /> : null}
     </section>
   );
 }

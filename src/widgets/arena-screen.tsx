@@ -3,6 +3,11 @@
 import { useCallback, useMemo, useState } from "react";
 import type { RedactedProvider } from "@/shared/api/providers";
 import type { DebateStreamRequest } from "@/shared/api/debate-stream";
+import {
+  fetchMatch,
+  rejudgeMatch,
+  MatchesApiError,
+} from "@/shared/api/matches";
 import { SetupForm } from "@/features/create-debate/setup-form";
 import { useProviders } from "@/features/create-debate/use-providers";
 import type { MatchDraft } from "@/features/create-debate/draft";
@@ -11,7 +16,15 @@ import { AgentCorner } from "@/features/run-debate/ui/agent-corner";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
 import { JudgePanel } from "@/features/run-debate/ui/judge-panel";
 import { MatchHeader, StatusLine } from "@/features/run-debate/ui/match-header";
-import { isInMatch, panelsForSide, statusLineFor } from "@/features/run-debate/lib/reducer";
+import {
+  isInMatch,
+  panelsForSide,
+  statusLineFor,
+  type DebateRuntimeState,
+} from "@/features/run-debate/lib/reducer";
+import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match-history-drawer";
+import { exportJsonBlob } from "@/features/run-debate/ui/match-history/match-actions";
+import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
 
 const TOP_STRIP_LINKS = [
   { label: "How it works", primary: false },
@@ -19,36 +32,37 @@ const TOP_STRIP_LINKS = [
 
 export default function ArenaScreen() {
   const { providers } = useProviders();
-  const { state, start, reset, cancel } = useDebateStream();
+  const { state, start, reset, cancel, dispatch } = useDebateStream();
   const [matchDraft, setMatchDraft] = useState<MatchDraft | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [rejudgeStatus, setRejudgeStatus] = useState<RejudgeStatus>("idle");
+  const [rejudgeError, setRejudgeError] = useState<string | undefined>(undefined);
 
-  // Cancelled is a terminal *presentation* — the live arena keeps rendering
-  // so the user can see what was streamed — but it is no longer "in match"
-  // from a control-flow perspective. We still want the End-match button to
-  // work (it just bounces through `cancel` again, which is a no-op).
   const inMatch = isInMatch(state);
 
   const handleStart = useCallback(
     (draft: MatchDraft) => {
       setMatchDraft(draft);
-      const request = toRequest(draft);
-      start(request);
+      setRejudgeStatus("idle");
+      setRejudgeError(undefined);
+      start(toRequest(draft));
     },
     [start],
   );
 
   const handleNewMatch = useCallback(() => {
-    // From any terminal state we drop the saved draft so the next setup
-    // form is freshly derived from the providers list.
     reset();
     setMatchDraft(null);
+    setRejudgeStatus("idle");
+    setRejudgeError(undefined);
   }, [reset]);
 
   const handleEndMatch = useCallback(() => {
     if (state.status === "cancelled" || state.status === "finished") {
-      // Already terminal — nothing to abort; just clear.
       reset();
       setMatchDraft(null);
+      setRejudgeStatus("idle");
+      setRejudgeError(undefined);
       return;
     }
     cancel();
@@ -56,8 +70,48 @@ export default function ArenaScreen() {
 
   const handleRunAgain = useCallback(() => {
     if (!matchDraft) return;
+    setRejudgeStatus("idle");
+    setRejudgeError(undefined);
     start(toRequest(matchDraft));
   }, [matchDraft, start]);
+
+  const handleOpenHistory = useCallback(() => setHistoryOpen(true), []);
+  const handleCloseHistory = useCallback(() => setHistoryOpen(false), []);
+
+  const handleExportJson = useCallback(async (matchId: string) => {
+    try {
+      const record = await fetchMatch(matchId);
+      exportJsonBlob(record, matchId);
+    } catch (error) {
+      setRejudgeStatus("error");
+      setRejudgeError(messageFromError(error));
+    }
+  }, []);
+
+  const handleRejudge = useCallback(
+    async (matchId: string) => {
+      setRejudgeStatus("flying");
+      setRejudgeError(undefined);
+      try {
+        const result = await rejudgeMatch(matchId);
+        const record = await fetchMatch(matchId);
+        if (record.verdict) {
+          dispatch({
+            type: "rejudge-success",
+            verdict: record.verdict,
+            judgedAt: result.judgedAt,
+          });
+        }
+        setRejudgeStatus("idle");
+        return { judgedAt: result.judgedAt, winner: result.summary.winner };
+      } catch (error) {
+        setRejudgeStatus("error");
+        setRejudgeError(messageFromError(error));
+        throw error;
+      }
+    },
+    [dispatch],
+  );
 
   const topic = matchDraft?.topic ?? state.topic ?? "";
   const agentA = useMemo(() => providerById(providers, matchDraft?.sideA.providerId), [providers, matchDraft]);
@@ -66,7 +120,11 @@ export default function ArenaScreen() {
   return (
     <main className="min-h-screen overflow-hidden bg-arena-900 text-arena-50">
       <div className="ambient-glow" aria-hidden="true" />
-      <Nav inMatch={inMatch} onEndMatch={handleEndMatch} />
+      <Nav
+        inMatch={inMatch}
+        onEndMatch={handleEndMatch}
+        onOpenHistory={handleOpenHistory}
+      />
       <div className="relative z-10 mx-auto w-full max-w-[1240px] px-5 pb-20 pt-8 sm:px-8 lg:px-10">
         {inMatch ? (
           <LiveArena
@@ -78,6 +136,10 @@ export default function ArenaScreen() {
             onAbort={handleEndMatch}
             onNewMatch={handleNewMatch}
             onRunAgain={handleRunAgain}
+            onExportJson={handleExportJson}
+            onRejudge={handleRejudge}
+            rejudgeStatus={rejudgeStatus}
+            rejudgeError={rejudgeError}
           />
         ) : (
           <SetupHero
@@ -91,13 +153,20 @@ export default function ArenaScreen() {
       <footer className="relative z-10 border-t border-white/[0.06] px-5 py-5 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-arena-400">
         A calm place for strong opinions · Local demo mode
       </footer>
+      <MatchHistoryDrawer open={historyOpen} onClose={handleCloseHistory} />
     </main>
   );
 }
 
 // --- Sub-screens ------------------------------------------------------------
 
-function Nav({ inMatch, onEndMatch }: { inMatch: boolean; onEndMatch: () => void }) {
+interface NavProps {
+  readonly inMatch: boolean;
+  readonly onEndMatch: () => void;
+  readonly onOpenHistory: () => void;
+}
+
+function Nav({ inMatch, onEndMatch, onOpenHistory }: NavProps) {
   return (
     <nav className="relative z-10 mx-auto flex w-full max-w-[1240px] items-center justify-between px-5 py-6 sm:px-8 lg:px-10">
       <a href="#top" className="flex items-center gap-2.5" aria-label="Arena home">
@@ -118,14 +187,23 @@ function Nav({ inMatch, onEndMatch }: { inMatch: boolean; onEndMatch: () => void
           <i className="h-1.5 w-1.5 rounded-full bg-arena-success" /> Systems online
         </span>
       </div>
-      <button
-        type="button"
-        onClick={onEndMatch}
-        disabled={!inMatch}
-        className="rounded-full border border-white/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-arena-200 transition hover:border-white/25 hover:text-arena-50 disabled:cursor-default disabled:opacity-60"
-      >
-        {inMatch ? "End match" : "About"}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onOpenHistory}
+          className="rounded-full border border-white/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-arena-200 transition hover:border-white/25 hover:text-arena-50"
+        >
+          Matches
+        </button>
+        <button
+          type="button"
+          onClick={onEndMatch}
+          disabled={!inMatch}
+          className="rounded-full border border-white/10 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-arena-200 transition hover:border-white/25 hover:text-arena-50 disabled:cursor-default disabled:opacity-60"
+        >
+          {inMatch ? "End match" : "About"}
+        </button>
+      </div>
     </nav>
   );
 }
@@ -184,16 +262,33 @@ function SetupHero({ onStart, errorMessage, canRunAgain, onRunAgain }: SetupHero
 
 interface LiveArenaProps {
   readonly topic: string;
-  readonly state: ReturnType<typeof useDebateStream>["state"];
+  readonly state: DebateRuntimeState;
   readonly agentA?: RedactedProvider;
   readonly agentB?: RedactedProvider;
   readonly draft: MatchDraft | null;
   readonly onAbort: () => void;
   readonly onNewMatch: () => void;
   readonly onRunAgain: () => void;
+  readonly onExportJson: (matchId: string) => void | Promise<void>;
+  readonly onRejudge: (matchId: string) => void | Promise<{ readonly judgedAt: string; readonly winner: unknown }>;
+  readonly rejudgeStatus: RejudgeStatus;
+  readonly rejudgeError?: string;
 }
 
-function LiveArena({ topic, state, agentA, agentB, draft, onAbort, onNewMatch, onRunAgain }: LiveArenaProps) {
+function LiveArena({
+  topic,
+  state,
+  agentA,
+  agentB,
+  draft,
+  onAbort,
+  onNewMatch,
+  onRunAgain,
+  onExportJson,
+  onRejudge,
+  rejudgeStatus,
+  rejudgeError,
+}: LiveArenaProps) {
   const showJudge = state.status === "judging" || state.status === "finished";
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
@@ -214,6 +309,18 @@ function LiveArena({ topic, state, agentA, agentB, draft, onAbort, onNewMatch, o
       : showErrorMidMatch && draft
         ? { label: "Run again", handler: onRunAgain, emphasis: "primary" as const }
         : { label: "End match", handler: onAbort, emphasis: "ghost" as const };
+
+  const footer = state.matchId
+    ? {
+        matchId: state.matchId,
+        canRejudge: state.status === "finished" || state.status === "error" || state.status === "cancelled",
+        rejudgeStatus,
+        rejudgeError,
+        judgedAt: state.judgedAt,
+        onExportJson,
+        onRejudge,
+      }
+    : undefined;
 
   return (
     <div className="grid gap-8">
@@ -259,6 +366,7 @@ function LiveArena({ topic, state, agentA, agentB, draft, onAbort, onNewMatch, o
           reasoning={state.verdict?.reasoning}
           verdict={state.verdict}
           errorMessage={state.errorMessage}
+          footer={footer}
         />
       ) : null}
 
@@ -341,6 +449,12 @@ function toRequest(draft: MatchDraft): DebateStreamRequest {
 function providerById(providers: readonly RedactedProvider[], id?: string): RedactedProvider | undefined {
   if (!id) return undefined;
   return providers.find((provider) => provider.id === id);
+}
+
+function messageFromError(error: unknown): string {
+  if (error instanceof MatchesApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return typeof error === "string" ? error : "Something went wrong.";
 }
 
 function BrandSpark({ className = "" }: { className?: string }) {

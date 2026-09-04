@@ -5,6 +5,7 @@ import { openDebateStream, type DebateStreamRequest } from "@/shared/api/debate-
 import {
   initialRuntimeState,
   reduceDebateRuntime,
+  type DebateRuntimeAction,
   type DebateRuntimeState,
 } from "./reducer";
 
@@ -24,6 +25,12 @@ export interface UseDebateStreamResult {
    * reducer preserves precedence: an existing error or verdict wins.
    */
   readonly cancel: () => void;
+  /**
+   * Direct dispatch into the runtime reducer. Used by the v0.2 re-judge flow
+   * to replace the live verdict in-place once the server returns the new
+   * decision. Prefer the higher-level helpers when they fit.
+   */
+  readonly dispatch: (action: DebateRuntimeAction) => void;
 }
 
 /**
@@ -89,5 +96,5 @@ export function useDebateStream(options: UseDebateStreamOptions = {}): UseDebate
     dispatch({ type: "cancel" });
   }, []);
 
-  return { state, start, reset, cancel };
+  return { state, start, reset, cancel, dispatch };
 }

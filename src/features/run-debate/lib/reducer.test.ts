@@ -255,3 +255,129 @@ describe("reduceDebateRuntime stream contract v1", () => {
     expect(state.verdict).toEqual(verdict);
   });
 });
+
+describe("reduceDebateRuntime matchId threading", () => {
+  it("captures the matchId from the first enveloped event", () => {
+    const next = reduceDebateRuntime(initialRuntimeState, {
+      type: "stream-event",
+      event: {
+        v: 1,
+        matchId: "match-abc",
+        seq: 1,
+        type: "phase",
+        phase: "OPENING_A",
+        side: "A",
+      },
+    });
+    expect(next.matchId).toBe("match-abc");
+  });
+
+  it("keeps the first matchId it sees even if a later event carries a different id", () => {
+    let state = reduceDebateRuntime(initialRuntimeState, {
+      type: "stream-event",
+      event: { v: 1, matchId: "first", seq: 1, type: "phase", phase: "OPENING_A", side: "A" },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { v: 1, matchId: "second", seq: 2, type: "token", side: "A", text: "hi" },
+    });
+    expect(state.matchId).toBe("first");
+  });
+
+  it("does not set matchId when the envelope is missing", () => {
+    const next = reduceDebateRuntime(initialRuntimeState, {
+      type: "stream-event",
+      event: { type: "phase", phase: "OPENING_A", side: "A" },
+    });
+    expect(next.matchId).toBeUndefined();
+  });
+
+  it("reset clears matchId so the next match starts fresh", () => {
+    const running = reduceDebateRuntime(initialRuntimeState, {
+      type: "stream-event",
+      event: { v: 1, matchId: "old-match", seq: 1, type: "phase", phase: "OPENING_A", side: "A" },
+    });
+    expect(running.matchId).toBe("old-match");
+    const fresh = reduceDebateRuntime(running, { type: "reset" });
+    expect(fresh.matchId).toBeUndefined();
+  });
+});
+
+describe("reduceDebateRuntime rejudge-success", () => {
+  const rejudged: DebateStreamVerdict = {
+    winner: "B",
+    scoreA: 60,
+    scoreB: 72,
+    criteria: {
+      argumentQualityA: 55,
+      argumentQualityB: 70,
+      rebuttalA: 60,
+      rebuttalB: 75,
+      consistencyA: 65,
+      consistencyB: 70,
+      relevanceA: 60,
+      relevanceB: 75,
+    },
+    reasoning: "On a closer look B rebuts more cleanly",
+  };
+
+  it("replaces the verdict and stamps judgedAt when a match is already finished", () => {
+    const finished: DebateRuntimeState = {
+      ...initialRuntimeState,
+      status: "finished",
+      topic: "topic",
+      verdict,
+      currentPhase: "FINISHED",
+      matchId: "match-x",
+    };
+    const next = reduceDebateRuntime(finished, {
+      type: "rejudge-success",
+      verdict: rejudged,
+      judgedAt: "2026-01-01T00:00:00.000Z",
+    });
+    expect(next.status).toBe("finished");
+    expect(next.verdict).toEqual(rejudged);
+    expect(next.judgedAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(next.matchId).toBe("match-x");
+    expect(next.errorMessage).toBeUndefined();
+  });
+
+  it("clears the cancelled flag when a re-judge arrives for a cancelled match", () => {
+    const cancelled: DebateRuntimeState = {
+      ...initialRuntimeState,
+      status: "cancelled",
+      cancelled: true,
+      topic: "topic",
+      currentPhase: "OPENING_A",
+      matchId: "match-y",
+    };
+    // Cancelled without a verdict should NOT show a verdict panel; rejudge
+    // should still set the verdict (server may have produced one before the
+    // cancel landed) and reset the cancelled bit.
+    const next = reduceDebateRuntime(cancelled, {
+      type: "rejudge-success",
+      verdict: rejudged,
+      judgedAt: "2026-01-01T00:00:00.000Z",
+    });
+    expect(next.status).toBe("finished");
+    expect(next.cancelled).toBe(false);
+    expect(next.verdict).toEqual(rejudged);
+  });
+
+  it("preserves error precedence: a rejudge never overwrites an error state", () => {
+    const errored: DebateRuntimeState = {
+      ...initialRuntimeState,
+      status: "error",
+      topic: "topic",
+      errorMessage: "Provider 500",
+    };
+    const next = reduceDebateRuntime(errored, {
+      type: "rejudge-success",
+      verdict: rejudged,
+      judgedAt: "2026-01-01T00:00:00.000Z",
+    });
+    expect(next).toBe(errored);
+    expect(next.status).toBe("error");
+    expect(next.verdict).toBeUndefined();
+  });
+});
