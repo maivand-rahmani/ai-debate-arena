@@ -14,10 +14,14 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.58",
     "@ai-sdk/openai-compatible": "latest",
+    "@react-three/drei": "10.7.8",
+    "@react-three/fiber": "9.7.0",
+    "@react-three/rapier": "2.2.0",
     "ai": "latest",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "three": "0.185.1",
     "zod": "latest"
   },
   "devDependencies": {
@@ -25,6 +29,7 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@types/three": "0.185.4",
     "autoprefixer": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
@@ -33,5 +38,9 @@
     "tsx": "latest",
     "typescript": "latest",
     "vitest": "latest"
+  },
+  "//optionalDepsNote": "@rolldown/binding-win32-x64-msvc is a Windows native-binding hoist for rolldown (pulled in via vite/vitest); npm's optional-deps install bug drops it from node_modules, breaking vitest. Keep its version aligned with the installed rolldown version whenever rolldown bumps, and add sibling platform bindings the same way if other OSes need them.",
+  "optionalDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "1.2.7"
   }
 }

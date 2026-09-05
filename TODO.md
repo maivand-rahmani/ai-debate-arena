@@ -277,6 +277,8 @@ Milestone: a match feels like a funny, cinematic sports broadcast with two AI co
 - [ ] [P1] F4-25 Keep the first 3D pass lightweight: limited assets and animations, no physics, no free-roam world, and no complex character-rigging pipeline.
 - [ ] [P0] F4-26 Review the working v0.3 Arena with the user before moving to v0.4; record the accepted direction and the remaining visual polish.
 
+NOTE (2026-09-05, 3D stack): three/@react-three/fiber 9 caps React <19.3 — fiber/drei/rapier/three must bump together when 19.3 lands.
+
 ### v0.4 evidence and challenge UX
 
 - [ ] [P0] F4-27 Add an explicit challenge request/resolution surface with remaining challenge budget.

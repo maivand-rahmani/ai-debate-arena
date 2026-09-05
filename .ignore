@@ -1,0 +1,3 @@
+# Ignore OpenCode-readable local state (kept out of git by .gitignore)
+!.slim/deepwork/
+!.slim/deepwork/**
