@@ -11,7 +11,7 @@
  * hide a provider failure or fabricate a draw.
  */
 
-import type { DebateSide } from "@/entities/debate";
+import type { DebateSide } from "@arena/debate-engine";
 import type {
   DebateStreamEvent,
   DebateStreamPhase,
@@ -374,3 +374,4 @@ export function isInMatch(state: DebateRuntimeState): boolean {
 export function lastReachedPhase(state: DebateRuntimeState): DebateStreamPhase {
   return state.currentPhase;
 }
+

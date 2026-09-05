@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import type { DebateSide } from "@/entities/debate";
+import type { DebateSide } from "@arena/debate-engine";
 import type { ContenderMood } from "../mood";
 
 interface ContenderMascotProps {
@@ -479,3 +479,4 @@ function MoodOverlay({ mood, accent, accentLight, accentDeep }: MoodOverlayProps
       );
   }
 }
+

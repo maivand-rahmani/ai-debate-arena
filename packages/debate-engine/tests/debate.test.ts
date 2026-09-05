@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { DebatePhase } from "./types";
-import { advanceDebate, createDebateState } from "./state";
-import { parseDebateVerdict } from "./verdict";
+import { DebatePhase } from "../src/types";
+import { advanceDebate, createDebateState } from "../src/state";
+import { parseDebateVerdict } from "../src/verdict";
 
 describe("debate domain", () => {
   it("progresses deterministically through every phase", () => {
@@ -18,3 +18,4 @@ describe("debate domain", () => {
     expect(parseDebateVerdict('{"winner":"X","scoreA":8,"scoreB":6,"reasoning":"bad"}').success).toBe(false);
   });
 });
+

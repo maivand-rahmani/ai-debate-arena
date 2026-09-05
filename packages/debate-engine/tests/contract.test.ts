@@ -5,7 +5,7 @@ import {
   matchRecordSchema,
   transcriptSchema,
   verdictSchemaRef,
-} from "./contract";
+} from "../src/contract";
 
 function validConfig() {
   return {
@@ -120,3 +120,4 @@ describe("versioned contracts", () => {
     expect(matchRecordSchema.safeParse(record).success).toBe(true);
   });
 });
+

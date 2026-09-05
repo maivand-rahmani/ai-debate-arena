@@ -1,6 +1,6 @@
 "use client";
 
-import type { DebateSide } from "@/entities/debate";
+import type { DebateSide } from "@arena/debate-engine";
 import type { RedactedProvider } from "@/shared/api/providers";
 import { PHASE_ROUNDS, type SpeechPanel } from "../lib/reducer";
 import { Caret } from "./atoms";
@@ -144,3 +144,4 @@ function SpeechPanelView({ tone, side, round, panel, isActive }: SpeechPanelView
     </article>
   );
 }
+

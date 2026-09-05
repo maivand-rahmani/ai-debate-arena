@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CONTRACT_VERSION, type MatchRecord } from "../../entities/debate/contract";
+import { CONTRACT_VERSION, type MatchRecord } from "@arena/debate-engine";
 import {
   listMatchRecords,
   loadMatchRecord,

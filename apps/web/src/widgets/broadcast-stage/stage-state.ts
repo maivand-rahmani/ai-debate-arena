@@ -18,7 +18,7 @@
  *   here as additional data-attributes for the CSS to consume.
  */
 
-import type { DebateSide } from "@/entities/debate";
+import type { DebateSide } from "@arena/debate-engine";
 import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
 import { deriveMoods, type MoodView } from "./mood";
 import { deriveReaction, type ReactionView } from "./reaction";
@@ -155,3 +155,4 @@ function computeStageLabel(
   }
   return "Ready";
 }
+

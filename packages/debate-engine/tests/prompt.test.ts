@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentSystemPrompt } from "./prompts";
-import { buildJudgePrompt } from "./prompts";
+import { buildAgentSystemPrompt } from "../src/prompts";
+import { buildJudgePrompt } from "../src/prompts";
 import {
   buildDebatePrompt,
   buildPromptContext,
   limitAgentHistory,
-} from "./prompt";
-import { createDebateState } from "./state";
-import { DebatePhase, type DebateConfig, type DebateTurn } from "./types";
+} from "../src/prompt";
+import { createDebateState } from "../src/state";
+import { DebatePhase, type DebateConfig, type DebateTurn } from "../src/types";
 
 function turn(side: "A" | "B", content: string): DebateTurn {
   return {
@@ -84,3 +84,4 @@ describe("agent context limits (F9-15)", () => {
     }
   });
 });
+

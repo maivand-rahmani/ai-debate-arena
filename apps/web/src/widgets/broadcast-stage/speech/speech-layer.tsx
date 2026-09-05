@@ -1,6 +1,6 @@
 "use client";
 
-import type { DebateSide } from "@/entities/debate";
+import type { DebateSide } from "@arena/debate-engine";
 import type { RedactedProvider } from "@/shared/api/providers";
 import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
 import { Teleprompter } from "./teleprompter";
@@ -63,3 +63,4 @@ export function SpeechLayer({
     </div>
   );
 }
+

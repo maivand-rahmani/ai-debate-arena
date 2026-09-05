@@ -1,10 +1,11 @@
+import type { MatchMode } from "@arena/types";
+
+export type { MatchMode };
+
 export const AGENT_MAX_OUTPUT_TOKENS = 2000;
 export const JUDGE_MAX_OUTPUT_TOKENS = 2000;
 
 export type TokenPolicyName = "Quick" | "Standard" | "Hardcore";
-
-/** Lowercase match modes used by v0.2 contracts, records, and profiles. */
-export type MatchMode = "quick" | "standard" | "hardcore";
 
 export interface MatchProfile {
   readonly mode: MatchMode;

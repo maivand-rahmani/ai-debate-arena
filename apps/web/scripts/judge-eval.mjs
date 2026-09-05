@@ -30,8 +30,8 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, Output } from "ai";
 
 import { runJudge } from "../src/features/run-debate/server/debate-runner.ts";
-import { GOLDEN_TRANSCRIPT_FIXTURES } from "../src/entities/debate/__fixtures__/transcripts/index.ts";
-import { debateVerdictSchema } from "../src/entities/debate/verdict.ts";
+import { GOLDEN_TRANSCRIPT_FIXTURES } from "@arena/debate-engine/testing";
+import { debateVerdictSchema } from "@arena/debate-engine";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = dirname(dirname(dirname(HERE)));

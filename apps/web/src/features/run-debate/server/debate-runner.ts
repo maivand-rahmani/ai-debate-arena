@@ -1,30 +1,35 @@
 import { randomUUID } from "node:crypto";
 import {
+  AGENT_PROMPT_VERSION,
+  appendTurn,
+  attachVerdict,
+  buildAgentSystemPrompt,
+  buildDebatePrompt,
+  buildJudgePrompt,
+  buildPromptContext,
+  CONTRACT_VERSION,
+  createDebateState,
+  debateVerdictSchema,
   DebatePhase,
+  isDegenerateVerdict,
+  JUDGE_PROMPT_VERSION,
+  JUDGE_SYSTEM_PROMPT,
+  MATCH_PROFILES,
+  normalizeVerdictWinner,
+  parseDebateVerdict,
+  RUBRIC_VERSION,
   type DebateConfig,
   type DebatePosition,
   type DebateSide,
   type DebateState,
   type DebateTurn,
   type DebateVerdict,
-} from "../../../entities/debate/types";
-import { appendTurn, attachVerdict, createDebateState } from "../../../entities/debate/state";
-import { AGENT_PROMPT_VERSION, buildDebatePrompt, buildPromptContext } from "../../../entities/debate/prompt";
-import {
-  buildAgentSystemPrompt,
-  buildJudgePrompt,
-  JUDGE_PROMPT_VERSION,
-  JUDGE_SYSTEM_PROMPT,
-} from "../../../entities/debate/prompts";
-import { RUBRIC_VERSION, type RubricVersion } from "../../../entities/debate/rubric";
-import {
-  debateVerdictSchema,
-  isDegenerateVerdict,
-  normalizeVerdictWinner,
-  parseDebateVerdict,
-} from "../../../entities/debate/verdict";
-import { CONTRACT_VERSION, type MatchRecord, type MatchTerminal } from "../../../entities/debate/contract";
-import { MATCH_PROFILES, type MatchMode, type MatchProfile } from "../../../shared/token-policy";
+  type MatchMode,
+  type MatchProfile,
+  type MatchRecord,
+  type MatchTerminal,
+  type RubricVersion,
+} from "@arena/debate-engine";
 import { toSafeErrorMessage } from "../../../shared/api/llm/errors";
 
 export interface RunnerAgentInput {

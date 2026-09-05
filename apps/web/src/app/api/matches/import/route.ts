@@ -1,4 +1,4 @@
-import { CONTRACT_VERSION, matchRecordSchema } from "@/entities/debate/contract";
+import { CONTRACT_VERSION, matchRecordSchema } from "@arena/debate-engine";
 import { matchSummary } from "@/features/run-debate/server/export";
 import { loadMatchRecord, saveMatchRecord } from "@/shared/config/match-store";
 

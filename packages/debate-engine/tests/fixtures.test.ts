@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { transcriptSchema } from "./contract";
+import { transcriptSchema } from "../src/contract";
 import {
   GOLDEN_TRANSCRIPT_FIXTURES,
   getGoldenFixture,
   type GoldenTranscriptFixture,
-} from "./__fixtures__/transcripts/index";
-import { EXPECTED_VERDICTS } from "./__snapshots__/expected-verdicts";
+} from "../src/__fixtures__/transcripts/index";
+import { EXPECTED_VERDICTS } from "../src/__snapshots__/expected-verdicts";
 
 /**
  * Structural validation for the golden transcript fixtures (v0.2 F3-08 / F9-09).
@@ -110,3 +110,4 @@ describe("golden transcript fixtures", () => {
     expect(fullText).toContain("Mars colony");
   });
 });
+

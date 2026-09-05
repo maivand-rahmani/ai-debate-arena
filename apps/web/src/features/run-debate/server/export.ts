@@ -1,4 +1,4 @@
-import { CONTRACT_VERSION, type MatchRecord } from "../../../entities/debate/contract";
+import { CONTRACT_VERSION, type MatchRecord } from "@arena/debate-engine";
 
 export interface MatchSummary {
   readonly id: string;

@@ -3,7 +3,7 @@ import "server-only";
 import { chmod, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import { matchRecordSchema, type MatchRecord } from "../../entities/debate/contract";
+import { matchRecordSchema, type MatchRecord } from "@arena/debate-engine";
 
 export type { MatchRecord };
 

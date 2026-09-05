@@ -11,7 +11,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, afterAll, describe, expect, it, vi } from "vitest";
-import type { MatchRecord } from "../../../entities/debate/contract";
+import type { MatchRecord } from "@arena/debate-engine";
 import { runDebate } from "../../../features/run-debate/server/debate-runner";
 import { exportMatchJson } from "../../../features/run-debate/server/export";
 import { getProvider } from "../../../shared/config/provider-store";

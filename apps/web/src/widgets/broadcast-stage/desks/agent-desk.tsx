@@ -1,6 +1,6 @@
 "use client";
 
-import type { DebateSide } from "@/entities/debate";
+import type { DebateSide } from "@arena/debate-engine";
 import type { RedactedProvider } from "@/shared/api/providers";
 import type { ContenderMood } from "../mood";
 import type { StageSideActivity, StageView } from "../stage-state";
@@ -101,3 +101,4 @@ export function AgentDesk({
     </section>
   );
 }
+

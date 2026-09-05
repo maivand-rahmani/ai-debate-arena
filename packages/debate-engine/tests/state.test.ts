@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DebatePhase, type DebateTurn } from "./types";
-import { appendTurn, attachVerdict, createDebateState, InvalidTransitionError, transitionPhase } from "./state";
+import { DebatePhase, type DebateTurn } from "../src/types";
+import { appendTurn, attachVerdict, createDebateState, InvalidTransitionError, transitionPhase } from "../src/state";
 
 describe("state helpers", () => {
   it("appends turns immutably", () => {
@@ -63,3 +63,4 @@ describe("state helpers", () => {
     }
   });
 });
+

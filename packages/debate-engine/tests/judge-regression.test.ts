@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { buildJudgePrompt } from "./prompts";
+import { buildJudgePrompt } from "../src/prompts";
 import {
   isDegenerateVerdict,
   normalizeVerdictWinner,
   parseDebateVerdict,
-} from "./verdict";
-import type { DebateVerdict } from "./types";
+} from "../src/verdict";
+import type { DebateVerdict } from "../src/types";
 import {
   getGoldenFixture,
   type GoldenFixtureId,
-} from "./__fixtures__/transcripts/index";
+} from "../src/__fixtures__/transcripts/index";
 import {
   EXPECTED_VERDICTS,
   type RegressionCaseId,
-} from "./__snapshots__/expected-verdicts";
+} from "../src/__snapshots__/expected-verdicts";
 
 /**
  * Judge regression suite (v0.2 F3-08 / F9-09 / F7-12). Deterministic, no network.
@@ -350,3 +350,4 @@ describe("judge output-shape behavior", () => {
     expect(result.error).toBe("Judge returned invalid verdict");
   });
 });
+

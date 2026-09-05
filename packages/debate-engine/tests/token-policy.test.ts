@@ -8,7 +8,7 @@ import {
   TOKEN_POLICIES,
   getMatchProfile,
   getTokenPolicy,
-} from "./token-policy";
+} from "../src/token-policy";
 
 describe("token policy", () => {
   it("keeps Quick active with the P0 limits", () => {
@@ -65,3 +65,4 @@ describe("match profiles", () => {
     expect(MATCH_PROFILES.hardcore).toMatchObject({ rounds: 4, agentMaxOutputTokens: 3000 });
   });
 });
+

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DebatePhase } from "../../../entities/debate/types";
-import type { MatchRecord } from "../../../entities/debate/contract";
-import { MATCH_PROFILES } from "../../../shared/token-policy";
+import { DebatePhase, MATCH_PROFILES, type MatchRecord } from "@arena/debate-engine";
 import { runDebate, type DebateStreamEvent, type ModelCallArgs } from "./debate-runner";
 
 const verdictJson = JSON.stringify({

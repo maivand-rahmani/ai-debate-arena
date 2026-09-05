@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { runDebate } from "@/features/run-debate/server/debate-runner";
-import { matchConfigSchema } from "@/entities/debate/contract";
+import { matchConfigSchema } from "@arena/debate-engine";
 import { getProvider } from "@/shared/config/provider-store";
-import { MATCH_PROFILES, MATCH_TIMEOUT_MS } from "@/shared/token-policy";
+import { MATCH_PROFILES, MATCH_TIMEOUT_MS } from "@arena/debate-engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTRACT_VERSION, type MatchRecord } from "../../../entities/debate/contract";
+import { CONTRACT_VERSION, type MatchRecord } from "@arena/debate-engine";
 import { exportMatchJson, exportMatchMarkdown, matchSummary } from "./export";
 
 function verdictRecord(): MatchRecord {

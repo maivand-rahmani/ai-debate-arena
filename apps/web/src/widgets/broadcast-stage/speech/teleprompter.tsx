@@ -1,6 +1,6 @@
 "use client";
 
-import type { DebateSide } from "@/entities/debate";
+import type { DebateSide } from "@arena/debate-engine";
 import type { RedactedProvider } from "@/shared/api/providers";
 import type { SpeechPanel } from "@/features/run-debate/lib/reducer";
 
@@ -107,3 +107,4 @@ function panelLabel(phase: SpeechPanel["phase"]): string {
       return phase;
   }
 }
+

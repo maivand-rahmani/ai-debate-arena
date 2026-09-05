@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractJsonObject, isDegenerateVerdict, normalizeVerdictWinner, parseDebateVerdict } from "./verdict";
+import { extractJsonObject, isDegenerateVerdict, normalizeVerdictWinner, parseDebateVerdict } from "../src/verdict";
 
 const criteria = {
   argumentQualityA: 80,
@@ -149,3 +149,4 @@ describe("parseDebateVerdict with markdown-wrapped output", () => {
     }
   });
 });
+

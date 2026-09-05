@@ -1,4 +1,4 @@
-import type { TokenPolicyName } from "@/shared/token-policy";
+import type { TokenPolicyName } from "./token-policy";
 
 export enum DebatePhase {
   CREATED = "CREATED",

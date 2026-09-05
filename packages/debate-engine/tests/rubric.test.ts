@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_PROMPT_VERSION, JUDGE_PROMPT_VERSION } from "./prompt";
-import { buildDebatePrompt, buildPromptContext } from "./prompt";
-import { buildAgentSystemPrompt, buildJudgePrompt } from "./prompts";
+import { AGENT_PROMPT_VERSION, JUDGE_PROMPT_VERSION } from "../src/prompt";
+import { buildDebatePrompt, buildPromptContext } from "../src/prompt";
+import { buildAgentSystemPrompt, buildJudgePrompt } from "../src/prompts";
 import {
   buildCriteriaFieldList,
   buildRubricPhrase,
   JUDGE_RUBRIC_CRITERIA,
   RUBRIC_VERSION,
   RUBRIC_VERSIONS,
-} from "./rubric";
-import { DebatePhase, type DebateTurn } from "./types";
-import { createDebateState } from "./state";
+} from "../src/rubric";
+import { DebatePhase, type DebateTurn } from "../src/types";
+import { createDebateState } from "../src/state";
 
 const TURNS: readonly DebateTurn[] = [
   {
@@ -110,3 +110,4 @@ describe("versioned rubrics (F3-07/F9-07)", () => {
     expect(prompt).not.toBe(JUDGE_PROMPT_SNAPSHOT);
   });
 });
+

@@ -1,0 +1,24 @@
+{
+  "name": "@arena/debate-engine",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./testing": {
+      "types": "./src/__fixtures__/transcripts/index.ts",
+      "default": "./src/__fixtures__/transcripts/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arena/types": "*",
+    "zod": "latest"
+  }
+}

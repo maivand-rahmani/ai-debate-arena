@@ -9,7 +9,7 @@
  * `fetch` is cancelled and the iterator is closed cleanly.
  */
 
-import type { DebateSide } from "@/entities/debate";
+import type { DebateSide } from "@arena/types";
 
 export type DebateStreamMode = "quick";
 
@@ -303,3 +303,4 @@ function toMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return typeof error === "string" ? error : "Network request failed";
 }
+

@@ -1,13 +1,16 @@
-import type { DebateTurn } from "@/entities/debate/types";
-import { AGENT_PROMPT_VERSION, JUDGE_PROMPT_VERSION } from "@/entities/debate/prompt";
-import { RUBRIC_VERSION } from "@/entities/debate/rubric";
-import type { MatchRecord } from "@/entities/debate/contract";
+import {
+  AGENT_PROMPT_VERSION,
+  JUDGE_PROMPT_VERSION,
+  MATCH_TIMEOUT_MS,
+  RUBRIC_VERSION,
+  type DebateTurn,
+  type MatchRecord,
+} from "@arena/debate-engine";
 import { matchSummary } from "@/features/run-debate/server/export";
 import { runJudge, type ModelUsage } from "@/features/run-debate/server/debate-runner";
 import { toSafeErrorMessage } from "@/shared/api/llm/errors";
 import { getProvider } from "@/shared/config/provider-store";
 import { loadMatchRecord, matchRecordPath, saveMatchRecord } from "@/shared/config/match-store";
-import { MATCH_TIMEOUT_MS } from "@/shared/token-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
