@@ -34,7 +34,7 @@ import { GOLDEN_TRANSCRIPT_FIXTURES } from "../src/entities/debate/__fixtures__/
 import { debateVerdictSchema } from "../src/entities/debate/verdict.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = dirname(HERE);
+const REPO_ROOT = dirname(dirname(dirname(HERE)));
 const REPORT_PATH = join(REPO_ROOT, "docs", "eval", "rubric-v1-vs-v2.md");
 const CASE_TIMEOUT_MS = 120_000;
 const RUBRIC_VERSIONS = ["1", "2"];
