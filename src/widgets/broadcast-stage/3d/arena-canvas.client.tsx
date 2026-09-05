@@ -2,35 +2,11 @@
 
 import { Suspense, useCallback, useEffect, useRef } from "react";
 import { Canvas, type RootState } from "@react-three/fiber";
+import { ArenaScene } from "./arena-scene";
+import { ARENA_LAYOUT } from "./scene-layout";
 
 /**
- * Phase A placeholder scene: proves the R3F pipeline (lit ground plane +
- * one emissive cube) without any world content. OrbitControls and physics
- * arrive in Phase B.
- */
-function PlaceholderScene() {
-  return (
-    <>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[4, 6, 3]} intensity={1.2} />
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]}>
-        <planeGeometry args={[20, 20]} />
-        <meshStandardMaterial color="#1a1f2e" roughness={0.9} metalness={0} />
-      </mesh>
-      <mesh position={[0, 0.5, 0]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial
-          color="#111111"
-          emissive="#ff5a3c"
-          emissiveIntensity={1.6}
-        />
-      </mesh>
-    </>
-  );
-}
-
-/**
- * Minimal client-only R3F canvas shell. Loaded exclusively through
+ * Client-only R3F canvas shell. Loaded exclusively through
  * `canvas-gate.tsx` via `next/dynamic(..., { ssr: false })` — never import
  * this module (or `three`) from server components or pure test modules.
  *
@@ -39,6 +15,11 @@ function PlaceholderScene() {
  * listener in a mount-scoped effect cleanup, so React 19 StrictMode
  * double-mount (mount → cleanup → remount with a fresh renderer) is safe:
  * the stale root is nulled and never touched again.
+ *
+ * The canvas sits at the bottom of a `relative`-positioned frame with
+ * `pointer-events: auto` so the spectator camera (OrbitControls) works
+ * everywhere on the world surface; HTML overlays above the canvas opt
+ * back into pointer events for their interactive children only.
  */
 export default function ArenaCanvasClient() {
   const rootRef = useRef<RootState | null>(null);
@@ -73,20 +54,28 @@ export default function ArenaCanvasClient() {
     };
   }, []);
 
+  const { initialPosition, fov } = ARENA_LAYOUT.camera;
+
   return (
     <div
-      className="relative h-full w-full"
-      aria-label="3D arena preview"
+      className="absolute inset-0 h-full w-full"
+      aria-label="3D debate arena"
       data-testid="arena-canvas"
     >
       <Canvas
         dpr={[1, 1.5]}
+        shadows
         gl={{ powerPreference: "high-performance", antialias: true }}
-        camera={{ position: [4, 3, 6], fov: 45 }}
+        camera={{
+          position: [initialPosition[0], initialPosition[1], initialPosition[2]],
+          fov,
+          near: 0.1,
+          far: 80,
+        }}
         onCreated={handleCreated}
       >
         <Suspense fallback={null}>
-          <PlaceholderScene />
+          <ArenaScene />
         </Suspense>
       </Canvas>
     </div>

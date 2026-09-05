@@ -1,4 +1,6 @@
 export { BroadcastStage, type BroadcastStageProps } from "./broadcast-stage";
+export { ArenaFrame } from "./arena-frame";
+export { ArenaHud, type ArenaHudProps } from "./arena-hud";
 export { BroadcastBanner } from "./broadcast-banner";
 export { IdleSetup } from "./idle/idle-setup";
 export { VerdictReveal, VerdictEvaluating, type JudgePanelFooter } from "./verdict/verdict-reveal";

@@ -19,15 +19,14 @@ import {
 import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match-history-drawer";
 import { exportJsonBlob } from "@/features/run-debate/ui/match-history/match-actions";
 import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
-import { BroadcastStage } from "@/widgets/broadcast-stage";
+import { ArenaFrame } from "@/widgets/broadcast-stage";
 
 /**
  * The arena is the first impression and main interface — there is no
- * separate dashboard layout. The BroadcastStage owns the banner, backdrop,
- * three-character set, teleprompter / verdict / idle-setup slot, and the
- * curated reactions overlay. This screen only orchestrates the runtime
- * lifecycle, provider lookup, history drawer, re-judge state, and the
- * mute toggle.
+ * separate dashboard layout. The ArenaFrame owns the 3D canvas (with the
+ * original 2D CSS broadcast stage as the no-WebGL fallback) plus the HUD
+ * overlay layer. This screen only orchestrates the runtime lifecycle,
+ * provider lookup, history drawer, re-judge state, and the mute toggle.
  */
 export default function ArenaScreen() {
   const { providers } = useProviders();
@@ -150,7 +149,7 @@ export default function ArenaScreen() {
     <main className="min-h-screen overflow-x-hidden" style={{ background: "#0c0a07" }}>
       <div className="ambient-glow" aria-hidden="true" />
       <div className="relative z-10 mx-auto w-full max-w-[1280px] px-4 pb-12 pt-4 sm:px-6 lg:px-8">
-        <BroadcastStage
+        <ArenaFrame
           topic={topic}
           state={state}
           agentA={agentA}

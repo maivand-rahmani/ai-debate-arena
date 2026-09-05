@@ -193,11 +193,14 @@ textarea { resize: none; }
    v0.3 Broadcast stage — television-studio composition
    ===========================================================================
    Root:           .broadcast-stage        carries data-stage / data-camera /
-                                            data-round / data-mood-a /
-                                            data-mood-b / data-mood-judge /
-                                            data-reaction
+                                             data-round / data-mood-a /
+                                             data-mood-b / data-mood-judge /
+                                             data-reaction
+   Arena frame:    .arena-frame            3D-or-2D wrapper for the v0.3
+                                             surface; absolute stacks the
+                                             canvas + HUD overlay above
    Banner:         .broadcast-banner        top strip with show title, episode
-                                            mark, mute toggle, history toggle
+                                             mark, mute toggle, history toggle
    Backdrop:       .stage-backdrop          cyclorama (sky + floor + halos)
    Set:            .broadcast-stage__set    three-column desk/plinth row
    Agent desk:     .agent-desk              contender podium + monitor + mascot
@@ -207,9 +210,13 @@ textarea { resize: none; }
    Verdict:        .verdict-reveal          dramatic TV verdict surface
    Setup panel:    .idle-setup              integrated setup inside idle stage
    Reactions:      .reaction-overlay        floating curated sticker
+   Arena HUD:      .arena-hud               3D-mode overlay (banner, teleprompters,
+                                             verdict, etc.) — pointer-events: none
+                                             by default; interactive children
+                                             opt back into pointer-events: auto.
    Reduced motion: the @media block at the bottom neutralises camera pulls
                    and mascot flourishes but keeps information legible.
-=========================================================================== */
+   =========================================================================== */
 
 /* --- Root composition ------------------------------------------------------- */
 .broadcast-stage {
@@ -219,6 +226,105 @@ textarea { resize: none; }
   gap: clamp(20px, 3vw, 32px);
   padding: clamp(8px, 1.5vw, 18px) 0 clamp(36px, 5vw, 64px);
 }
+
+/* --- Arena frame (3D canvas + HUD overlay) -------------------------------- */
+.arena-frame {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: clamp(520px, 72vh, 900px);
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 100% 60% at 50% 110%, rgba(200, 155, 61, 0.10), transparent 70%),
+    radial-gradient(ellipse 70% 90% at 50% -10%, rgba(201, 122, 93, 0.10), transparent 65%),
+    linear-gradient(180deg, #1d150e 0%, #14110d 55%, #0c0a07 100%);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+/* The 3D Canvas wrapper itself fills the frame; OrbitControls absorb clicks
+   on the empty regions. */
+.arena-frame [data-testid="arena-canvas"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  cursor: grab;
+}
+.arena-frame [data-testid="arena-canvas"]:active {
+  cursor: grabbing;
+}
+
+/* When CanvasGate falls back to the 2D BroadcastStage, fit it into the
+   arena-frame footprint (the 2D stage's own padding applies inside). */
+.arena-frame > .broadcast-stage {
+  height: 100%;
+  overflow: auto;
+}
+
+/* --- Arena HUD overlay (3D-only, pointer-events discipline) ---------------- */
+.arena-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 14px;
+  padding: 14px 18px;
+}
+
+/* Top: broadcast banner. Buttons inside re-enable pointer events. */
+.arena-hud__top {
+  pointer-events: none;
+}
+.arena-hud__top > *,
+.arena-hud__top button,
+.arena-hud__top a,
+.arena-hud__top input,
+.arena-hud__top select,
+.arena-hud__top textarea {
+  pointer-events: auto;
+}
+
+/* Round marker — chip below the banner, centered. */
+.arena-hud__round {
+  justify-self: center;
+  pointer-events: auto;
+}
+
+/* Speech teleprompters — anchored to the bottom edge. */
+.arena-hud__speech {
+  align-self: end;
+  pointer-events: auto;
+}
+.arena-hud__speech .teleprompter {
+  cursor: default;
+}
+
+/* Terminal surfaces (verdict / idle / cancelled) — modal-ish panel above
+   the canvas. Pointer events on the panel + its buttons so users can
+   interact; the backdrop layer below stays transparent so the 3D world
+   shows through dimly. */
+.arena-hud__terminal {
+  position: absolute;
+  inset: auto 16px 16px 16px;
+  pointer-events: auto;
+  max-height: 70%;
+  overflow: auto;
+}
+.arena-hud__terminal > * {
+  pointer-events: auto;
+}
+
+/* Reduced-motion override — keep the HUD readable, drop any pop animations. */
+@media (prefers-reduced-motion: reduce) {
+  .arena-hud {
+    animation: none !important;
+  }
+}
+
 
 /* --- Banner ---------------------------------------------------------------- */
 .broadcast-banner {
