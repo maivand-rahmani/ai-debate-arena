@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { runDebate } from "@/features/run-debate/server/debate-runner";
+import { runDebate } from "@arena/debate-engine";
+import { webCallModel, webSaveMatch } from "@/features/run-debate/server/web-adapter";
 import { matchConfigSchema } from "@arena/debate-engine";
 import { getProvider } from "@/shared/config/provider-store";
 import { MATCH_PROFILES, MATCH_TIMEOUT_MS } from "@arena/debate-engine";
@@ -37,6 +38,8 @@ export async function POST(request: Request): Promise<Response> {
   const matchId = randomUUID();
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(MATCH_TIMEOUT_MS)]);
   const events = runDebate(parsed.data, {
+    callModel: webCallModel,
+    saveMatch: webSaveMatch,
     abortSignal: signal,
     matchId,
     profile: MATCH_PROFILES[parsed.data.mode],

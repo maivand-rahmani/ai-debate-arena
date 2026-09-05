@@ -1,36 +1,150 @@
 import { randomUUID } from "node:crypto";
 import {
   AGENT_PROMPT_VERSION,
-  appendTurn,
-  attachVerdict,
-  buildAgentSystemPrompt,
   buildDebatePrompt,
-  buildJudgePrompt,
   buildPromptContext,
-  CONTRACT_VERSION,
-  createDebateState,
-  debateVerdictSchema,
-  DebatePhase,
-  isDegenerateVerdict,
   JUDGE_PROMPT_VERSION,
-  JUDGE_SYSTEM_PROMPT,
-  MATCH_PROFILES,
-  normalizeVerdictWinner,
-  parseDebateVerdict,
-  RUBRIC_VERSION,
+} from "./prompt";
+import { buildAgentSystemPrompt, buildJudgePrompt, JUDGE_SYSTEM_PROMPT } from "./prompts";
+import { appendTurn, attachVerdict, createDebateState } from "./state";
+import {
+  DebatePhase,
   type DebateConfig,
   type DebatePosition,
   type DebateSide,
   type DebateState,
   type DebateTurn,
   type DebateVerdict,
+} from "./types";
+import { isDegenerateVerdict, normalizeVerdictWinner, parseDebateVerdict } from "./verdict";
+import { MATCH_PROFILES, type MatchProfile } from "./token-policy";
+import { RUBRIC_VERSION, type RubricVersion } from "./rubric";
+import {
+  CONTRACT_VERSION,
   type MatchMode,
-  type MatchProfile,
   type MatchRecord,
   type MatchTerminal,
-  type RubricVersion,
-} from "@arena/debate-engine";
-import { toSafeErrorMessage } from "../../../shared/api/llm/errors";
+} from "./contract";
+import type {
+  DebateStreamEvent,
+  DebateStreamEventBody,
+  DebateStreamTerminal,
+  DebateStreamTurn,
+  DebateStreamVerdict,
+} from "@arena/types";
+
+/**
+ * Canonical stream wire types (see `@arena/types`). The inline event body
+ * shapes that used to live in the web `debate-runner.ts` were verified
+ * byte-equivalent to these canonical shapes, so the runner now uses them
+ * directly. The `DebateStreamEvent` / `DebateStreamTurn` alias names are
+ * re-exported here so existing importers keep working unchanged.
+ */
+export type {
+  DebateStreamEvent,
+  DebateStreamEventBody,
+  DebateStreamTerminal,
+  DebateStreamTurn,
+  DebateStreamVerdict,
+};
+
+/**
+ * Verbatim mirror of the error-normalization helpers in `@arena/ai`
+ * (`packages/ai/src/errors.ts`).
+ *
+ * The engine keeps zero SDK/Next dependencies, so the normalization lives
+ * here as a copy instead of an import. User-facing error texts are part of
+ * the v0.3 freeze: keep this block identical to `@arena/ai` errors.ts.
+ */
+const TIMEOUT_CODES = new Set(["ETIMEDOUT", "ESOCKETTIMEDOUT"]);
+const UNREACHABLE_CODES = new Set([
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "ECONNRESET",
+  "EPIPE",
+]);
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
+}
+
+function readText(err: unknown): string {
+  if (typeof err === "string") return err;
+  const record = readRecord(err);
+  if (!record) return "";
+  const parts: string[] = [];
+  if (typeof record["name"] === "string") parts.push(record["name"]);
+  if (typeof record["message"] === "string") parts.push(record["message"]);
+  const causeText = readText(record["cause"]);
+  if (causeText) parts.push(causeText);
+  return parts.join(": ");
+}
+
+function readCode(err: unknown): string {
+  const record = readRecord(err);
+  const code = record?.["code"] ?? readRecord(record?.["cause"])?.["code"];
+  return typeof code === "string" ? code.toUpperCase() : "";
+}
+
+function readStatus(err: unknown): number | undefined {
+  const records = [readRecord(err), readRecord(readRecord(err)?.["cause"])].filter(
+    (record): record is Record<string, unknown> => record !== undefined,
+  );
+  for (const record of records) {
+    for (const key of ["status", "statusCode"]) {
+      const value = record[key];
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+    }
+    const status = readRecord(record["response"])?.["status"];
+    if (typeof status === "number" && Number.isFinite(status)) return status;
+  }
+  return undefined;
+}
+
+function sanitizeErrorText(text: string): string {
+  return text
+    .replace(/(\w+:\/\/[^/\s:]+:)[^/\s@]+@/g, "$1<redacted>@")
+    .replace(/\b(sk-[A-Za-z0-9_-]{8,})\b/g, "<redacted-key>")
+    .replace(/((?:api[_-]?key|access[_-]?token|secret)\s*[:=]\s*["']?)[^"'\s&;,]+/gi, "$1<redacted>")
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/g, "$1<redacted>");
+}
+
+function toSafeErrorMessage(err: unknown): string {
+  const status = readStatus(err);
+  const text = readText(err);
+  const code = readCode(err);
+  const name = readRecord(err)?.["name"];
+
+  if (status === 401 || status === 403 || /unauthorized|\bforbidden\b|invalid api key|incorrect api key/i.test(text)) {
+    return "Provider authentication failed. Check the configured API key.";
+  }
+  if (status === 429 || /rate limit|too many requests/i.test(text)) {
+    return "Provider rate limit exceeded. Please wait and try again.";
+  }
+  if (
+    TIMEOUT_CODES.has(code) ||
+    name === "AbortError" ||
+    /timed out|\btimeout\b|\babort/i.test(text)
+  ) {
+    return "Provider request timed out. Please try again.";
+  }
+  if (
+    UNREACHABLE_CODES.has(code) ||
+    /fetch failed|failed to fetch|ENOTFOUND|ECONNREFUSED|EAI_AGAIN|getaddrinfo|network unreachable|connection refused|unable to connect/i.test(
+      text,
+    )
+  ) {
+    return "Provider is unreachable. Check the base URL and network connection.";
+  }
+  if (status !== undefined) {
+    return `Provider request failed (status ${status}).`;
+  }
+  const clean = sanitizeErrorText(text).slice(0, 200).trim();
+  return clean || "Model request failed.";
+}
 
 export interface RunnerAgentInput {
   readonly providerId: string;
@@ -50,31 +164,6 @@ export interface RunnerSideInput {
   readonly providerName: string;
   readonly modelId: string;
   readonly position: DebatePosition;
-}
-
-type DebateEventBody =
-  | { readonly type: "phase"; readonly phase: DebatePhase; readonly side: DebateSide | null }
-  | { readonly type: "token"; readonly side: DebateSide; readonly text: string }
-  | { readonly type: "turn"; readonly turn: DebateStreamTurn }
-  | { readonly type: "judge-start" }
-  | { readonly type: "verdict"; readonly verdict: DebateVerdict }
-  | { readonly type: "error"; readonly message: string }
-  | { readonly type: "done"; readonly terminal: MatchTerminal };
-
-/** Stream contract v1: every event carries `{ v: 1, matchId, seq }`. */
-export type DebateStreamEvent = DebateEventBody & {
-  readonly v: 1;
-  readonly matchId: string;
-  readonly seq: number;
-};
-
-export interface DebateStreamTurn {
-  readonly id: string;
-  readonly side: DebateSide;
-  readonly phase: DebatePhase;
-  readonly content: string;
-  readonly model: string;
-  readonly createdAt: string;
 }
 
 export interface ModelCallArgs {
@@ -148,79 +237,6 @@ const AGENT_PHASES: ReadonlyArray<{ readonly phase: DebateTurn["phase"]; readonl
   { phase: DebatePhase.REBUTTAL_B, side: "B" },
 ];
 
-async function defaultCallModel(args: ModelCallArgs): Promise<ModelCallResult> {
-  const [{ createConfiguredModel }, ai] = await Promise.all([
-    import("../../../shared/api/llm/model"),
-    import("ai"),
-  ]);
-  const model = await createConfiguredModel(args.providerId, args.modelId);
-  // Quick mode is cost-first: cap reasoning effort on providers that honor it
-  // (@ai-sdk/openai responses models). Unknown keys are ignored elsewhere.
-  const providerOptions = { openai: { reasoningEffort: "low" } };
-  if (args.kind === "judge") {
-    const total: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
-    try {
-      const structured = await ai.generateText({
-        model,
-        system: args.system,
-        prompt: args.prompt,
-        maxOutputTokens: args.maxOutputTokens,
-        abortSignal: args.abortSignal,
-        providerOptions,
-        output: ai.Output.object({ schema: debateVerdictSchema }),
-      });
-      addUsage(total, toModelUsage(structured.usage));
-      // Some providers (notably Responses API) can resolve without throwing
-      // yet leave `output` undefined/null. Never serialize that into
-      // "undefined"/"null" text — fall through to the plain-text fallback.
-      const structuredOutput: unknown = (structured as { readonly output?: unknown }).output;
-      if (!structuredOutput || typeof structuredOutput !== "object" || Array.isArray(structuredOutput)) {
-        throw new Error("Judge structured output was empty");
-      }
-      return { text: JSON.stringify(structuredOutput), chunks: [], usage: { ...total } };
-    } catch {
-      // Provider/model rejected structured output or returned nothing usable;
-      // fall back to deterministic plain JSON so the existing parser applies.
-      const fallback = await ai.generateText({
-        model,
-        system: args.system,
-        prompt:
-          `${args.prompt}\n\nRespond with ONLY valid JSON matching the required schema: ` +
-          `concrete integer scores 0-100, no markdown fences, no prose.`,
-        maxOutputTokens: args.maxOutputTokens,
-        abortSignal: args.abortSignal,
-        temperature: 0,
-        providerOptions,
-      });
-      addUsage(total, toModelUsage(fallback.usage));
-      return { text: fallback.text, chunks: [], usage: { ...total } };
-    }
-  }
-  const result = ai.streamText({
-    model,
-    system: args.system,
-    prompt: args.prompt,
-    maxOutputTokens: args.maxOutputTokens,
-    abortSignal: args.abortSignal,
-    providerOptions,
-  });
-  const chunks: string[] = [];
-  for await (const chunk of result.textStream) chunks.push(chunk);
-  const text = await result.text;
-  let usage: ModelUsage = ZERO_USAGE;
-  try {
-    usage = toModelUsage(await result.usage);
-  } catch {
-    usage = ZERO_USAGE;
-  }
-  return { text, chunks, usage };
-}
-
-async function defaultSaveMatch(record: MatchRecord): Promise<void> {
-  const { saveMatchRecord } = await import("../../../shared/config/match-store");
-  await saveMatchRecord(record);
-}
-
 export interface RunJudgeInput {
   readonly topic: string;
   readonly turns: readonly DebateTurn[];
@@ -250,7 +266,8 @@ export interface RunJudgeResult {
  * invalid-verdict message).
  */
 export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): Promise<RunJudgeResult> {
-  const callModel = deps.callModel ?? defaultCallModel;
+  const callModel = deps.callModel;
+  if (!callModel) throw new Error("callModel is required");
   const maxOutputTokens = input.maxOutputTokens ?? MATCH_PROFILES.quick.judgeMaxOutputTokens;
   const startMs = Date.now();
   const judgePrompt = buildJudgePrompt(input.topic, input.turns, { rubricVersion: input.rubricVersion });
@@ -315,10 +332,11 @@ function toStreamTurn(turn: DebateTurn): DebateStreamTurn {
 }
 
 export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}): AsyncGenerator<DebateStreamEvent> {
-  const callModel = deps.callModel ?? defaultCallModel;
+  const callModel = deps.callModel;
+  if (!callModel) throw new Error("callModel is required");
   const matchId = deps.matchId ?? randomUUID();
   const profile = deps.profile ?? MATCH_PROFILES[input.mode];
-  const saveMatch = deps.saveMatch ?? defaultSaveMatch;
+  const saveMatch = deps.saveMatch;
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
   const turnsMs: number[] = [];
@@ -330,7 +348,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
   let saved = false;
   let seq = 0;
 
-  const envelope = <T extends DebateEventBody>(event: T): DebateStreamEvent => ({
+  const envelope = <T extends DebateStreamEventBody>(event: T): DebateStreamEvent => ({
     ...event,
     v: 1 as const,
     matchId,
@@ -367,6 +385,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
         usage: { ...usageTotal },
       },
     };
+    if (!saveMatch) return;
     try {
       await saveMatch(record);
     } catch (error) {

@@ -1,0 +1,118 @@
+import "server-only";
+
+import { generateText, Output, streamText } from "ai";
+import { buildAiModel, toSafeErrorMessage } from "@arena/ai";
+import type { LanguageModelV4 } from "@ai-sdk/provider";
+import {
+  debateVerdictSchema,
+  toModelUsage,
+  type MatchRecord,
+  type ModelCallArgs,
+  type ModelCallResult,
+  type ModelUsage,
+} from "@arena/debate-engine";
+import { getProvider } from "@/shared/config/provider-store";
+import { saveMatchRecord } from "@/shared/config/match-store";
+
+/**
+ * Creates a server-side model; credentials never leave this module.
+ * (Verbatim body of the former `createConfiguredModel` in
+ * `shared/api/llm/model.ts`, kept inline so the runner adapter owns the
+ * whole web seam in one file.)
+ */
+async function createWebModel(providerId: string, modelId?: string): Promise<LanguageModelV4> {
+  try {
+    const config = await getProvider(providerId);
+    if (!config) throw new Error(`Provider not found: ${providerId}`);
+    return buildAiModel(config, modelId);
+  } catch (err) {
+    throw new Error(toSafeErrorMessage(err));
+  }
+}
+
+/**
+ * Web `callModel` dep for the engine runner: verbatim body of the former
+ * `defaultCallModel` in `features/run-debate/server/debate-runner.ts`
+ * (agent `streamText` path, judge `generateText` + `Output.object` +
+ * plain-text fallback + retry logic), with dynamic imports replaced by the
+ * static imports above. Every log/error string is unchanged.
+ */
+const ZERO_USAGE: ModelUsage = { promptTokens: 0, completionTokens: 0 };
+
+export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult> {
+  const model = await createWebModel(args.providerId, args.modelId);
+  // Quick mode is cost-first: cap reasoning effort on providers that honor it
+  // (@ai-sdk/openai responses models). Unknown keys are ignored elsewhere.
+  const providerOptions = { openai: { reasoningEffort: "low" } };
+  if (args.kind === "judge") {
+    const total: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
+    try {
+      const structured = await generateText({
+        model,
+        system: args.system,
+        prompt: args.prompt,
+        maxOutputTokens: args.maxOutputTokens,
+        abortSignal: args.abortSignal,
+        providerOptions,
+        output: Output.object({ schema: debateVerdictSchema }),
+      });
+      addUsage(total, toModelUsage(structured.usage));
+      // Some providers (notably Responses API) can resolve without throwing
+      // yet leave `output` undefined/null. Never serialize that into
+      // "undefined"/"null" text — fall through to the plain-text fallback.
+      const structuredOutput: unknown = (structured as { readonly output?: unknown }).output;
+      if (!structuredOutput || typeof structuredOutput !== "object" || Array.isArray(structuredOutput)) {
+        throw new Error("Judge structured output was empty");
+      }
+      return { text: JSON.stringify(structuredOutput), chunks: [], usage: { ...total } };
+    } catch {
+      // Provider/model rejected structured output or returned nothing usable;
+      // fall back to deterministic plain JSON so the existing parser applies.
+      const fallback = await generateText({
+        model,
+        system: args.system,
+        prompt:
+          `${args.prompt}\n\nRespond with ONLY valid JSON matching the required schema: ` +
+          `concrete integer scores 0-100, no markdown fences, no prose.`,
+        maxOutputTokens: args.maxOutputTokens,
+        abortSignal: args.abortSignal,
+        temperature: 0,
+        providerOptions,
+      });
+      addUsage(total, toModelUsage(fallback.usage));
+      return { text: fallback.text, chunks: [], usage: { ...total } };
+    }
+  }
+  const result = streamText({
+    model,
+    system: args.system,
+    prompt: args.prompt,
+    maxOutputTokens: args.maxOutputTokens,
+    abortSignal: args.abortSignal,
+    providerOptions,
+  });
+  const chunks: string[] = [];
+  for await (const chunk of result.textStream) chunks.push(chunk);
+  const text = await result.text;
+  let usage: ModelUsage = ZERO_USAGE;
+  try {
+    usage = toModelUsage(await result.usage);
+  } catch {
+    usage = ZERO_USAGE;
+  }
+  return { text, chunks, usage };
+}
+
+function addUsage(into: { promptTokens: number; completionTokens: number }, usage: ModelUsage | undefined): void {
+  if (!usage) return;
+  into.promptTokens += usage.promptTokens;
+  into.completionTokens += usage.completionTokens;
+}
+
+/**
+ * Web `saveMatch` dep for the engine runner: verbatim body of the former
+ * `defaultSaveMatch` minus the dynamic import (static match-store import).
+ */
+export async function webSaveMatch(record: MatchRecord): Promise<void> {
+  await saveMatchRecord(record);
+}

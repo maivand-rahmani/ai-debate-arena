@@ -14,6 +14,13 @@ export * from "./verdict";
 export * from "./rubric";
 export * from "./contract";
 export * from "./token-policy";
+// Runner (pure orchestration: runDebate/runJudge + stream envelope + usage
+// math). `callModel` is a required injected dep; `saveMatch` is optional.
+// NOTE: "./runner" re-exports the canonical `DebateStream*` wire types from
+// `@arena/types` under the same names the explicit list below pins. Explicit
+// named exports take precedence over the star export, and both resolve to
+// the identical canonical types, so no name is silently dropped.
+export * from "./runner";
 // Canonical wire + streaming primitives (zero-dep `@arena/types`). The
 // explicit `MatchMode` pin takes precedence over the star-exported
 // `MatchMode` from both `./contract` and `./token-policy` (identical

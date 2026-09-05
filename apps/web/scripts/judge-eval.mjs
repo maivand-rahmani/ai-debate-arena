@@ -29,7 +29,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, Output } from "ai";
 
-import { runJudge } from "../src/features/run-debate/server/debate-runner.ts";
+import { runJudge } from "@arena/debate-engine";
 import { GOLDEN_TRANSCRIPT_FIXTURES } from "@arena/debate-engine/testing";
 import { debateVerdictSchema } from "@arena/debate-engine";
 

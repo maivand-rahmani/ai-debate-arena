@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DebatePhase, MATCH_PROFILES, type MatchRecord } from "@arena/debate-engine";
-import { runDebate, type DebateStreamEvent, type ModelCallArgs } from "./debate-runner";
+import { runDebate, type DebateStreamEvent, type ModelCallArgs } from "../src/runner";
 
 const verdictJson = JSON.stringify({
   winner: "A",
@@ -584,7 +584,7 @@ describe("runDebate token metrics (F7-13)", () => {
   });
 
   it("sums judge usage across retry attempts in runJudge", async () => {
-    const { runJudge } = await import("./debate-runner");
+    const { runJudge } = await import("../src/runner");
     let calls = 0;
     const result = await runJudge(
       {
@@ -607,7 +607,7 @@ describe("runDebate token metrics (F7-13)", () => {
   });
 
   it("treats malformed usage as zeros without throwing", async () => {
-    const { runJudge, toModelUsage } = await import("./debate-runner");
+    const { runJudge, toModelUsage } = await import("../src/runner");
     expect(toModelUsage(undefined)).toEqual({ promptTokens: 0, completionTokens: 0 });
     expect(toModelUsage({ inputTokens: -5, outputTokens: Number.NaN })).toEqual({ promptTokens: 0, completionTokens: 0 });
     expect(toModelUsage({ inputTokens: { total: 9 }, outputTokens: 2 })).toEqual({ promptTokens: 9, completionTokens: 2 });
