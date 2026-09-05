@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef } from "react";
-import { Canvas, type RootState } from "@react-three/fiber";
+import { Suspense, useCallback, useEffect, useRef, useLayoutEffect } from "react";
+import { Canvas, useFrame, type RootState } from "@react-three/fiber";
 import { ArenaScene } from "./arena-scene";
 import { ARENA_LAYOUT } from "./scene-layout";
 import type { SceneSignal } from "./scene-signal";
@@ -14,6 +14,8 @@ import type { SceneSignal } from "./scene-signal";
  */
 export interface ArenaCanvasClientProps {
   readonly signal?: SceneSignal | undefined;
+  /** Fired once after the R3F tree's first rendered frame. */
+  readonly onFirstFrame?: () => void;
 }
 
 /**
@@ -33,9 +35,14 @@ export interface ArenaCanvasClientProps {
  * lighting, characters, confetti). The lazy gate stays three-free; only
  * this client file touches three/r3f.
  */
-export default function ArenaCanvasClient({ signal }: ArenaCanvasClientProps) {
+export default function ArenaCanvasClient({ signal, onFirstFrame }: ArenaCanvasClientProps) {
   const rootRef = useRef<RootState | null>(null);
   const lostHandlerRef = useRef<((event: Event) => void) | null>(null);
+  const firstFrameFiredRef = useRef(false);
+  const onFirstFrameRef = useRef(onFirstFrame);
+  useLayoutEffect(() => {
+    onFirstFrameRef.current = onFirstFrame;
+  }, [onFirstFrame]);
 
   const handleCreated = useCallback((state: RootState) => {
     rootRef.current = state;
@@ -74,7 +81,7 @@ export default function ArenaCanvasClient({ signal }: ArenaCanvasClientProps) {
       aria-label="3D debate arena"
       data-testid="arena-canvas"
     >
-      <Canvas
+<Canvas
         dpr={[1, 1.5]}
         shadows
         gl={{ powerPreference: "high-performance", antialias: true }}
@@ -88,8 +95,29 @@ export default function ArenaCanvasClient({ signal }: ArenaCanvasClientProps) {
       >
         <Suspense fallback={null}>
           <ArenaScene signal={signal} />
+          <FirstFrameProbe firedRef={firstFrameFiredRef} onReadyRef={onFirstFrameRef} />
         </Suspense>
       </Canvas>
     </div>
   );
+}
+
+/**
+ * Tiny probe that fires the parent's `onFirstFrame` callback exactly once
+ * after the R3F render loop produces its first frame. Used to gate the
+ * entry-hero intro reveal.
+ */
+function FirstFrameProbe({
+  firedRef,
+  onReadyRef,
+}: {
+  readonly firedRef: React.MutableRefObject<boolean>;
+  readonly onReadyRef: React.MutableRefObject<(() => void) | undefined>;
+}) {
+  useFrame(() => {
+    if (firedRef.current) return;
+    firedRef.current = true;
+    onReadyRef.current?.();
+  });
+  return null;
 }

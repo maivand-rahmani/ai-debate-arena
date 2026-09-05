@@ -20,8 +20,8 @@ import { ARENA_LAYOUT } from "./scene-layout";
  */
 export type ArenaOrbitCameraHandle = ComponentRef<typeof OrbitControls>;
 
-export const ArenaOrbitCamera = forwardRef<ArenaOrbitCameraHandle>(
-  function ArenaOrbitCamera(_props, ref) {
+export const ArenaOrbitCamera = forwardRef<ArenaOrbitCameraHandle, { heroProgress?: number }>(
+  function ArenaOrbitCamera({ heroProgress = 1 }, ref) {
     const {
       initialTarget,
       minDistance,
@@ -38,6 +38,7 @@ export const ArenaOrbitCamera = forwardRef<ArenaOrbitCameraHandle>(
         enableDamping
         dampingFactor={0.08}
         enablePan={false}
+        enableZoom={heroProgress >= 0.98}
         target={[initialTarget[0], initialTarget[1], initialTarget[2]]}
         minDistance={minDistance}
         maxDistance={maxDistance}

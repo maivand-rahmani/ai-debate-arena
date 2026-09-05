@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { RedactedProvider } from "@/shared/api/providers";
 import type { DebateStreamRequest } from "@/shared/api/debate-stream";
 import {
@@ -16,6 +16,11 @@ import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match
 import { exportJsonBlob } from "@/features/run-debate/ui/match-history/match-actions";
 import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
 import { ArenaFrame } from "@/widgets/broadcast-stage";
+import {
+  EntryHero,
+  IntroOverlayManager,
+  useHeroProgress,
+} from "@/widgets/entry-hero/entry-hero";
 
 /**
  * The arena is the first impression and main interface — there is no
@@ -32,6 +37,24 @@ export default function ArenaScreen() {
   const [rejudgeStatus, setRejudgeStatus] = useState<RejudgeStatus>("idle");
   const [rejudgeError, setRejudgeError] = useState<string | undefined>(undefined);
   const [reactionsMuted, setReactionsMuted] = useState(false);
+  const reducedMotion = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  }, []);
+  const { progress: heroProgress, scrolledAtLeastOnce } =
+    useHeroProgress(reducedMotion);
+  const [introSettled, setIntroSettled] = useState(reducedMotion);
+
+  // IntroOverlayManager owns its own RAF loop. The canvas first-frame
+  // callback lands here; the manager reads the same ref so the two stay
+  // in sync without re-rendering the surrounding tree.
+  const markCanvasReadyRef = useRef<() => void>(() => {});
+  const handleCanvasFirstFrame = useCallback(() => {
+    markCanvasReadyRef.current();
+  }, []);
+  const stableOnSettledChange = useCallback((next: boolean) => {
+    setIntroSettled((prev) => (prev === next ? prev : next));
+  }, []);
 
   const inMatch = isInMatch(state);
 
@@ -112,10 +135,6 @@ export default function ArenaScreen() {
     [providers, matchDraft],
   );
 
-  // The judge provider/model is intentionally not in the runtime state — for
-  // the local Quick demo, the judge re-uses the first configured provider
-  // and its default model. This keeps the existing v0.2 contract (no new
-  // judge wiring required) and stays server-only.
   const judgeProvider = providers[0];
   const judgeModel = judgeProvider?.model;
 
@@ -132,32 +151,44 @@ export default function ArenaScreen() {
     : undefined;
 
   return (
-    <main
-      className="relative h-screen w-screen overflow-hidden"
-      style={{ background: "#0c0a07" }}
-    >
-      <ArenaFrame
-        topic={topic}
-        state={state}
-        agentA={agentA}
-        agentB={agentB}
-        judgeProvider={judgeProvider}
-        judgeModel={judgeModel}
-        draftSideAModel={matchDraft?.sideA.model}
-        draftSideBModel={matchDraft?.sideB.model}
-        draftSideAPosition={matchDraft?.sideA.position}
-        draftSideBPosition={matchDraft?.sideB.position}
-        footer={footer}
-        onNewMatch={handleNewMatch}
-        inMatch={inMatch}
-        onEndMatch={handleEndMatch}
-        onOpenHistory={handleOpenHistory}
-        onStart={handleStart}
-        busy={state.status === "starting"}
-        errorMessage={state.status === "error" && !inMatch ? state.errorMessage : undefined}
-        reactionsMuted={reactionsMuted}
-        onToggleMute={handleToggleMute}
-      />
+    <main className="arena-entry-runway" style={{ background: "#0c0a07" }}>
+      <div className="arena-entry-sticky">
+        <ArenaFrame
+          topic={topic}
+          state={state}
+          agentA={agentA}
+          agentB={agentB}
+          judgeProvider={judgeProvider}
+          judgeModel={judgeModel}
+          draftSideAModel={matchDraft?.sideA.model}
+          draftSideBModel={matchDraft?.sideB.model}
+          draftSideAPosition={matchDraft?.sideA.position}
+          draftSideBPosition={matchDraft?.sideB.position}
+          footer={footer}
+          onNewMatch={handleNewMatch}
+          inMatch={inMatch}
+          onEndMatch={handleEndMatch}
+          onOpenHistory={handleOpenHistory}
+          onStart={handleStart}
+          busy={state.status === "starting"}
+          errorMessage={state.status === "error" && !inMatch ? state.errorMessage : undefined}
+          reactionsMuted={reactionsMuted}
+          onToggleMute={handleToggleMute}
+          heroProgress={heroProgress}
+          onFirstFrame={handleCanvasFirstFrame}
+        />
+        <EntryHero
+          progress={heroProgress}
+          reducedMotion={reducedMotion}
+          scrolled={scrolledAtLeastOnce}
+          introSettled={introSettled}
+        />
+        <IntroOverlayManager
+          reducedMotion={reducedMotion}
+          markCanvasReadyRef={markCanvasReadyRef}
+          onSettledChange={stableOnSettledChange}
+        />
+      </div>
 
       <MatchHistoryDrawer open={historyOpen} onClose={handleCloseHistory} />
     </main>

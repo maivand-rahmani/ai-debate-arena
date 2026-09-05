@@ -91,7 +91,7 @@ function World({ signal }: ArenaSceneProps) {
         <VerdictDirector signal={signal} handlesRef={verdictHandlesRef} />
       </Physics>
 
-      <SpectatorCamera orbitRef={orbitRef} />
+      <SpectatorCamera orbitRef={orbitRef} signal={signal} />
       <CameraDirector signal={signal} orbitRef={orbitRef} />
     </>
   );
@@ -172,8 +172,10 @@ function ArenaCharacterAssembly({ signal }: CharacterSignal) {
  */
 function SpectatorCamera({
   orbitRef,
+  signal,
 }: {
   orbitRef: React.MutableRefObject<ArenaOrbitCameraHandle | null>;
+  signal?: SceneSignal | undefined;
 }) {
   const { camera } = useThree();
   const initRef = useRef(false);
@@ -195,5 +197,5 @@ function SpectatorCamera({
     }
   }, [camera]);
 
-  return <ArenaOrbitCamera ref={orbitRef} />;
+  return <ArenaOrbitCamera ref={orbitRef} heroProgress={signal?.heroProgress ?? 1} />;
 }

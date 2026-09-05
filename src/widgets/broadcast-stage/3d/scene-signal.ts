@@ -38,6 +38,8 @@ export interface SceneSignal {
    * not on every re-render of an already-landed verdict).
    */
   readonly verdictStamp: string | null;
+  /** Bounded entry scroll, additive to the existing camera director. */
+  readonly heroProgress: number;
 }
 
 const INITIAL_VIEW: StageView = {
@@ -73,6 +75,7 @@ const INITIAL_VIEW: StageView = {
 export function deriveSceneSignal(
   state: DebateRuntimeState,
   reducedMotion: boolean,
+  heroProgress = 1,
 ): SceneSignal {
   let view: StageView;
   try {
@@ -102,6 +105,7 @@ export function deriveSceneSignal(
     status: state.status,
     reducedMotion,
     verdictStamp,
+    heroProgress: Math.max(0, Math.min(1, Number.isFinite(heroProgress) ? heroProgress : 1)),
   };
 }
 

@@ -12,6 +12,7 @@ import {
 } from "./camera-presets";
 import type { ArenaOrbitCameraHandle } from "./arena-orbit-camera";
 import type { SceneSignal } from "./scene-signal";
+import { projectHeroCamera } from "./hero-camera";
 
 /**
  * Camera director — owns the spectator camera during cinematic cuts.
@@ -78,9 +79,14 @@ export function CameraDirector({ signal, orbitRef }: CameraDirectorProps) {
     const presetKey = presetForMode(signal.mode, signal.camera);
     const nextPreset = CAMERA_PRESETS[presetKey];
 
+    const previous = stateRef.current.lastSignal;
     stateRef.current.lastSignal = signal;
     stateRef.current.targetPreset = nextPreset;
-    stateRef.current.startedAt = performance.now();
+    // Scroll progress is a continuous additive offset, not a new cinematic cut.
+    // Do not restart the stateful stage transition on every RAF-sized update.
+    if (!previous || previous.mode !== signal.mode || previous.camera !== signal.camera || previous.verdictStamp !== signal.verdictStamp) {
+      stateRef.current.startedAt = performance.now();
+    }
   }, [signal]);
 
   useFrame(() => {
@@ -94,32 +100,43 @@ export function CameraDirector({ signal, orbitRef }: CameraDirectorProps) {
     const eased = reducedMotion ? 1 : easeInOut(t);
 
     const cam = camera as THREE.PerspectiveCamera;
-    cam.position.set(
+    const basePosition: readonly [number, number, number] = [
       lerp(stateRef.current.currentPreset.position[0], targetPreset.position[0], eased),
       lerp(stateRef.current.currentPreset.position[1], targetPreset.position[1], eased),
       lerp(stateRef.current.currentPreset.position[2], targetPreset.position[2], eased),
-    );
+    ];
+    const baseTarget: readonly [number, number, number] = [
+      lerp(stateRef.current.currentPreset.target[0], targetPreset.target[0], eased),
+      lerp(stateRef.current.currentPreset.target[1], targetPreset.target[1], eased),
+      lerp(stateRef.current.currentPreset.target[2], targetPreset.target[2], eased),
+    ];
+    const basePreset = {
+      position: basePosition,
+      target: baseTarget,
+      fov: lerp(stateRef.current.currentPreset.fov, targetPreset.fov, eased),
+      holdMs: targetPreset.holdMs,
+      label: targetPreset.label,
+    };
+    const projected = projectHeroCamera(basePreset, lastSignal.heroProgress, reducedMotion);
+    cam.position.set(projected.position[0], projected.position[1], projected.position[2]);
 
     const orbit = (orbitRef.current ?? controls) as OrbitControlsImpl | null;
     if (orbit && "target" in orbit) {
-      orbit.target.set(
-        lerp(stateRef.current.currentPreset.target[0], targetPreset.target[0], eased),
-        lerp(stateRef.current.currentPreset.target[1], targetPreset.target[1], eased),
-        lerp(stateRef.current.currentPreset.target[2], targetPreset.target[2], eased),
-      );
+      orbit.target.set(projected.target[0], projected.target[1], projected.target[2]);
       orbit.update?.();
     }
 
     // FOV interpolation lives on the camera object itself.
-    const targetFov = targetPreset.fov;
-    if (Math.abs(cam.fov - targetFov) > 0.01) {
-      cam.fov = lerp(stateRef.current.currentPreset.fov, targetFov, eased);
+    if (Math.abs(cam.fov - projected.fov) > 0.01) {
+      cam.fov = projected.fov;
       cam.updateProjectionMatrix();
     }
 
     // Disable orbit during the cut; re-enable once we hit the destination.
     if (orbit && "enabled" in orbit) {
-      const shouldHold = t < 1 && !reducedMotion;
+      // The page owns the wheel during the bounded entry runway. Once the
+      // additive camera move settles, OrbitControls receives normal input.
+      const shouldHold = (t < 1 && !reducedMotion) || lastSignal.heroProgress < 0.98;
       orbit.enabled = !shouldHold;
     }
 

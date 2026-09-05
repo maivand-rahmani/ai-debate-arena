@@ -245,6 +245,167 @@ textarea { resize: none; }
     linear-gradient(180deg, #1d150e 0%, #14110d 55%, #0c0a07 100%);
 }
 
+/* --- First-entry runway -----------------------------------------------------
+   The arena stays mounted and sticky; only the camera signal and overlay
+   hierarchy travel through this short, bounded piece of scroll. This leaves
+   the document normally scrollable and hands OrbitControls back at the end. */
+.arena-entry-runway {
+  position: relative;
+  min-height: 185svh;
+  width: 100%;
+  overflow: clip;
+}
+.arena-entry-sticky {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  min-height: 560px;
+  overflow: hidden;
+}
+.entry-hero {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(ellipse 54% 42% at 50% 44%, rgba(200,155,61,.075), transparent 72%);
+  opacity: 0;
+  transition: opacity .6s ease;
+}
+/* Once the staged intro overlay settles, the EntryHero container fades
+   in. The "AI DEBATE ARENA" lockup inside EntryHero stays at opacity 0
+   while the intro overlay is up so the doubled-title effect never
+   appears. */
+.entry-hero[data-intro-settled] {
+  opacity: 1;
+}
+.entry-hero__hairline {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  width: min(56vw, 720px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(244,237,225,.3), transparent);
+  transform: translateX(-50%);
+  opacity: 0.7;
+}
+.entry-hero__lockup {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  text-align: center;
+  will-change: opacity, transform;
+  transition: opacity .08s linear, transform .08s linear;
+}
+.entry-hero__kicker,
+.entry-hero__enter,
+.entry-hero__index {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: var(--stage-taupe);
+}
+.entry-hero__lockup h1 {
+  margin: 0;
+  max-width: 10ch;
+  font-family: 'Syne', ui-sans-serif, sans-serif;
+  font-size: clamp(3.2rem, 10vw, 9.5rem);
+  line-height: .86;
+  letter-spacing: -.075em;
+  color: var(--stage-cream);
+  text-shadow: 0 20px 70px rgba(0,0,0,.65);
+}
+.entry-hero__lockup p {
+  margin: 0;
+  font-size: clamp(13px, 1.4vw, 16px);
+  letter-spacing: .04em;
+  color: var(--stage-taupe);
+}
+.entry-hero__enter {
+  position: absolute;
+  bottom: 8%;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  color: var(--stage-cream);
+  opacity: 1;
+  will-change: opacity;
+  animation: entry-breathe 2.4s ease-in-out infinite;
+  transition: opacity .25s linear;
+}
+.entry-hero__enter-line { width: 1px; height: 42px; background: linear-gradient(var(--stage-honey), transparent); }
+.entry-hero__index { position: absolute; right: 4%; bottom: 8%; color: var(--stage-taupe); }
+.entry-hero__index span { margin: 0 8px; color: var(--stage-honey); }
+@keyframes entry-breathe { 0%, 100% { opacity: .45; transform: translateY(0); } 50% { opacity: 1; transform: translateY(5px); } }
+
+.arena-frame .arena-hud { opacity: clamp(0, calc((var(--entry-progress) - .38) * 2.2), 1); transition: opacity .2s linear; }
+.arena-frame[data-entry-phase="hero"] .arena-hud__top,
+.arena-frame[data-entry-phase="hero"] .arena-hud__round,
+.arena-frame[data-entry-phase="hero"] .arena-hud__terminal { pointer-events: none; }
+.arena-frame[data-entry-phase="arena"] .entry-hero:not([data-intro-settled]) { opacity: 0; }
+
+/* --- Intro reveal overlay -------------------------------------------------
+   Black overlay sits above the canvas, the EntryHero lockup, and the HUD.
+   Opacity is driven from the projected intro overlay; CSS keeps the
+   transitions buttery without rewriting the React tree per frame. */
+.entry-intro-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  background: #0c0a07;
+  pointer-events: none;
+  will-change: opacity;
+}
+.entry-intro-overlay[data-intro-phase="settled"] {
+  background: transparent;
+  opacity: 0 !important;
+}
+.entry-intro-title {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18px;
+  width: min(70vw, 720px);
+  opacity: 0;
+  will-change: opacity, transform;
+}
+.entry-intro-title h1 {
+  margin: 0;
+  font-family: 'Syne', ui-sans-serif, sans-serif;
+  font-weight: 800;
+  font-size: clamp(2.4rem, 7vw, 6.4rem);
+  letter-spacing: -.05em;
+  color: var(--stage-cream);
+  white-space: nowrap;
+  text-align: center;
+}
+.entry-intro-title__bar {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(244,237,225,.4), transparent);
+  transform: scaleX(0.2);
+  transform-origin: center;
+}
+
+@media (max-width: 700px) {
+  .arena-entry-runway { min-height: 165svh; }
+  .entry-hero__lockup { gap: 14px; padding: 20px; }
+  .entry-hero__lockup h1 { font-size: clamp(3rem, 16vw, 5.5rem); }
+  .entry-hero__hairline { width: 80vw; top: 14%; }
+  .entry-hero__index { right: 7%; }
+  .entry-intro-title { grid-template-columns: 1fr; gap: 8px; }
+  .entry-intro-title__bar { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arena-entry-runway { min-height: 100svh; }
+  .entry-hero { display: none; }
+  .arena-frame .arena-hud { opacity: 1; }
+  .entry-intro-overlay { display: none; }
+}
+
 /* The 3D Canvas wrapper itself fills the frame; OrbitControls absorb clicks
    on the empty regions. */
 .arena-frame [data-testid="arena-canvas"] {
@@ -2239,4 +2400,3 @@ textarea { resize: none; }
     animation: none !important;
   }
 }
-

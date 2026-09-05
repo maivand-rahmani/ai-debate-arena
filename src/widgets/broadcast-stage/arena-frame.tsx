@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { CanvasGate } from "./3d";
 import { BroadcastStage, type BroadcastStageProps } from "./broadcast-stage";
 import { deriveSceneSignal } from "./3d/scene-signal";
@@ -20,7 +20,12 @@ import { ArenaHud } from "./arena-hud";
  * Reduced motion: we read the media query once via SSR-safe snapshot.
  * The canvas side uses it to short-circuit lerps into instant snaps.
  */
-export function ArenaFrame(props: BroadcastStageProps) {
+export function ArenaFrame(
+  props: BroadcastStageProps & {
+    readonly heroProgress?: number;
+    readonly onFirstFrame?: () => void;
+  },
+) {
   // Reduced-motion detection — re-evaluated on each render so OS toggles
   // take effect without a remount. Type-safe window access for SSR.
   const reducedMotion = useMemo(() => {
@@ -36,13 +41,21 @@ export function ArenaFrame(props: BroadcastStageProps) {
   const isReducedMotion = Boolean(reducedMotion);
 
   const signal = useMemo(
-    () => deriveSceneSignal(props.state, isReducedMotion),
-    [props.state, isReducedMotion],
+    () => deriveSceneSignal(props.state, isReducedMotion, props.heroProgress),
+    [props.state, isReducedMotion, props.heroProgress],
   );
 
   return (
-    <section className="arena-frame" aria-label="Live debate broadcast">
-      <CanvasGate canvasProps={signal}>
+    <section
+      className="arena-frame"
+      aria-label="Live debate broadcast"
+      data-entry-phase={(props.heroProgress ?? 1) >= 0.98 ? "arena" : "hero"}
+      style={{ "--entry-progress": props.heroProgress ?? 1 } as CSSProperties}
+    >
+      <CanvasGate
+        canvasProps={signal}
+        onFirstFrame={props.onFirstFrame}
+      >
         <BroadcastStage {...props} />
       </CanvasGate>
       <ArenaHud {...props} />

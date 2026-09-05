@@ -79,6 +79,11 @@ export interface CanvasGateProps {
    * three-free — it just hands the POJO through to the lazy canvas.
    */
   readonly canvasProps?: SceneSignal;
+  /**
+   * Fired once when the lazy canvas reports its first rendered frame.
+   * Add-on for the entry-hero intro sequence; absent in normal Arena use.
+   */
+  readonly onFirstFrame?: () => void;
 }
 
 /**
@@ -107,7 +112,7 @@ function getCapabilityServerSnapshot(): WebGLSupport {
   return UNSUPPORTED;
 }
 
-export function CanvasGate({ children, loadingFallback, canvasProps }: CanvasGateProps) {
+export function CanvasGate({ children, loadingFallback, canvasProps, onFirstFrame }: CanvasGateProps) {
   const support = useSyncExternalStore(
     subscribeCapability,
     getCapabilitySnapshot,
@@ -119,7 +124,10 @@ export function CanvasGate({ children, loadingFallback, canvasProps }: CanvasGat
   return (
     <ArenaLoadingFallbackContext.Provider value={loadingFallback}>
       <CanvasErrorBoundary fallback={children}>
-        <ArenaCanvasLazy {...(canvasProps ? { signal: canvasProps } : {})} />
+        <ArenaCanvasLazy
+          {...(canvasProps ? { signal: canvasProps } : {})}
+          {...(onFirstFrame ? { onFirstFrame } : {})}
+        />
       </CanvasErrorBoundary>
     </ArenaLoadingFallbackContext.Provider>
   );
