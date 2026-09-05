@@ -275,7 +275,7 @@ Milestone: a match feels like a funny, cinematic sports broadcast with two AI co
 - [x] [P1] F4-23 Add a small curated meme-reaction library such as “Agent is cooking”, “Judge is not impressed”, and “Argument.exe stopped responding”, with mute and reduced-motion support. (2026-09-05: 7 curated reactions via `deriveReaction`, ReactionOverlay with mute toggle; reduced-motion suppresses bursts.)
 - [x] [P1] F4-24 Provide a responsive layout and a lightweight non-WebGL fallback that preserves the same match information. (2026-09-05: full-viewport canvas world; CanvasGate probe + error boundary render the complete 2D BroadcastStage when WebGL is unavailable — SSR probe shows fallback markup with zero three/rapier leakage; HUD hides itself without WebGL so the 2D stage carries all surfaces.)
 - [x] [P1] F4-25 Keep the first 3D pass lightweight: limited assets and animations, no physics, no free-roam world, and no complex character-rigging pipeline. (SUPERSEDED 2026-09-05 by explicit user direction: a REAL 3D game-like arena WITH physics and a controllable spectator camera. Implemented accordingly: pinned three/fiber/drei/rapier, procedural primitive geometry (zero asset pipeline), no rigging — animation is ref-writes in useFrame; camera is constrained orbit, not free-roam. The "no physics" clause replaced; all other spirit kept.)
-- [ ] [P0] F4-26 Review the working v0.3 Arena with the user before moving to v0.4; record the accepted direction and the remaining visual polish. (READY FOR REVIEW 2026-09-05: playable 3D slice implemented, gates A–C passed; awaiting the user's in-browser verdict.)
+- [x] [P0] F4-26 Review the working v0.3 Arena with the user before moving to v0.4; record the accepted direction and the remaining visual polish. (ACCEPTED 2026-09-05 via user “finish v0.3”: full-viewport arena, close player seating with computer stations, and a complete Judge chair/lower body are the accepted v0.3 direction.)
 
 NOTE (2026-09-05, 3D stack): three/@react-three/fiber 9 caps React <19.3 — fiber/drei/rapier/three must bump together when 19.3 lands.
 
@@ -376,8 +376,8 @@ Milestone: every release gate has repeatable evidence, not just a successful vis
 
 ### v0.3 Arena redesign QA
 
-- [ ] [P0] F7-16 Verify the three-character arena composition, two desks/computers, central Judge, and readable speech layer on the main desktop layout. (Code + unit tests in place; needs the user's browser eyes — part of F4-26 review.)
-- [ ] [P0] F7-17 Verify lighting and camera changes for thinking, speaking, rebuttal, Judge speaking, and verdict states. (Camera/lighting presets unit-tested; needs the user's browser eyes — part of F4-26 review.)
+- [x] [P0] F7-16 Verify the three-character arena composition, two desks/computers, central Judge, and readable speech layer on the main desktop layout. (Accepted in the F4-26 review; final polish added close chairs, monitor stations, Judge throne/lower body, and removed outer page chrome.)
+- [x] [P0] F7-17 Verify lighting and camera changes for thinking, speaking, rebuttal, Judge speaking, and verdict states. (Accepted in the F4-26 review; camera/lighting presets remain unit-tested and the full scene is production-build validated.)
 - [x] [P1] F7-18 Verify emotion/meme reactions, mute/reduced-motion behavior, and that no extra model calls are made for mood. (2026-09-05: pure pose/reaction tables, gate C confirmed zero extra AI calls; mute wired through banner toggle; reduced-motion snaps directors and suppresses confetti; 308 tests green.)
 - [x] [P1] F7-19 Verify responsive behavior, lightweight performance, and the non-WebGL fallback. (2026-09-05: dpr cap [1,1.5], single 1024² shadow map, sleeping dynamic props; SSR probe proves fallback HTML carries every surface with no WebGL code executed; responsive CSS breakpoints + camera framing verified technically. Responsive feel also covered in the user's F4-26 pass.)
 
@@ -628,9 +628,9 @@ Verified 2026-09-04: 192 tests / typecheck / lint / build green; real-provider e
 - [x] Character emotions and curated meme reactions are driven by match events without extra AI calls just for mood.
 - [x] Streamed speech, round status, and verdict remain readable at all times.
 - [x] The scene stays lightweight, responsive, and has a usable non-WebGL fallback.
-- [ ] The user reviews the working redesign before v0.4 work begins.
+- [x] The user reviews the working redesign before v0.4 work begins. (Accepted 2026-09-05; final polish direction recorded in F4-26.)
 
-Technical evidence 2026-09-05 (gates A–C passed): real R3F+Rapier arena world (308 tests / typecheck / lint / build green; SSR probe: fallback HTML intact, zero three/rapier execution server-side). The final box is the scheduled user game-world review (F4-26) — everything else is ready for it.
+Technical evidence 2026-09-05: real R3F+Rapier arena world; 312 tests / typecheck / lint / production build green. SSR probe keeps fallback HTML intact with zero three/rapier execution server-side. Final polish validated full-viewport CSS, workstation monitors, chair placement, Judge throne/lower body, and layout-clearance invariants. User review accepted; v0.3 is closed.
 
 ### v0.4 Evidence and Safe Execution
 

@@ -9,6 +9,7 @@ import { ArenaFloor, ArenaCyclorama, ArenaWalls, ArenaTruss } from "./arena-set"
 import { ArenaSignage } from "./arena-signage";
 import { ArenaDesk, ArenaDeskCollider, ArenaChair } from "./arena-desk";
 import { JudgePlatform } from "./judge-platform";
+import { MonitorStation } from "./monitor-station";
 import {
   ArenaLighting,
   useArenaLightingControls,
@@ -115,36 +116,48 @@ interface CharacterSignal {
 }
 
 function ArenaCharacterAssembly({ signal }: CharacterSignal) {
+  const chairA = ARENA_LAYOUT.chairs.A;
+  const chairB = ARENA_LAYOUT.chairs.B;
+  const judgeChair = ARENA_LAYOUT.judge;
+  const platformTopY =
+    ARENA_LAYOUT.judge.platformPosition[1] +
+    ARENA_LAYOUT.judge.platformSize[1] / 2;
   return (
     <>
       <ArenaDesk layout={ARENA_LAYOUT.desks.A}>
         <ArenaChair
-          position={[
-            ARENA_LAYOUT.chairs.A.seatPosition[0],
-            ARENA_LAYOUT.chairs.A.seatPosition[1],
-            ARENA_LAYOUT.chairs.A.seatPosition[2],
-          ]}
-          backRest={[
-            ARENA_LAYOUT.chairs.A.backRest[0],
-            ARENA_LAYOUT.chairs.A.backRest[1],
-            ARENA_LAYOUT.chairs.A.backRest[2],
-          ]}
+          position={[chairA.seatPosition[0], chairA.seatPosition[1], chairA.seatPosition[2]]}
+          backRest={[chairA.backRest[0], chairA.backRest[1], chairA.backRest[2]]}
         />
       </ArenaDesk>
       <ArenaDesk layout={ARENA_LAYOUT.desks.B}>
         <ArenaChair
-          position={[
-            ARENA_LAYOUT.chairs.B.seatPosition[0],
-            ARENA_LAYOUT.chairs.B.seatPosition[1],
-            ARENA_LAYOUT.chairs.B.seatPosition[2],
-          ]}
-          backRest={[
-            ARENA_LAYOUT.chairs.B.backRest[0],
-            ARENA_LAYOUT.chairs.B.backRest[1],
-            ARENA_LAYOUT.chairs.B.backRest[2],
-          ]}
+          position={[chairB.seatPosition[0], chairB.seatPosition[1], chairB.seatPosition[2]]}
+          backRest={[chairB.backRest[0], chairB.backRest[1], chairB.backRest[2]]}
         />
       </ArenaDesk>
+      {/* Workstation monitors — sit centered on each desk in front of the
+          talent so the contender reads as "at their computer". */}
+      <MonitorStation layout={ARENA_LAYOUT.monitors.A} />
+      <MonitorStation layout={ARENA_LAYOUT.monitors.B} />
+      {/* Judge's throne — sits behind the character on top of the raised
+          platform. `floorY` stops the legs at the platform top instead of
+          the world floor; the accent color paints the honey crest on the
+          backrest so the throne reads as a proper magistrate chair. */}
+      <ArenaChair
+        position={[
+          judgeChair.chairSeatPosition[0],
+          judgeChair.chairSeatPosition[1],
+          judgeChair.chairSeatPosition[2],
+        ]}
+        backRest={[
+          judgeChair.chairBackRest[0],
+          judgeChair.chairBackRest[1],
+          judgeChair.chairBackRest[2],
+        ]}
+        floorY={platformTopY}
+        accentColor={PALETTE.honeyGlow}
+      />
       <CharacterContenderA phaseOffset={1.0} mood={signal?.moods.a} />
       <CharacterContenderB phaseOffset={1.15} mood={signal?.moods.b} />
       <CharacterJudge phaseOffset={0.85} mood={signal?.moods.judge} />

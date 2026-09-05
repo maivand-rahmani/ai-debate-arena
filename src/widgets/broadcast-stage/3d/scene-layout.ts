@@ -39,11 +39,29 @@ export interface ChairLayout {
   readonly backRest: Vec3;
 }
 
+export interface MonitorLayout {
+  /** Desk-relative position of the monitor base on top of the desk. */
+  readonly basePosition: Vec3;
+  /** Visual size of the monitor screen (width, height, depth). */
+  readonly screenSize: Vec3;
+  /** Desk-relative position of the screen center. */
+  readonly screenPosition: Vec3;
+  /** Tilt of the screen around the X axis (radians, screen tilts toward talent). */
+  readonly screenTiltX: number;
+  /** Spin around Y so the screen faces the talent (radians). */
+  readonly screenRotationY: number;
+  /** Accent glow color (matches the contender signature). */
+  readonly accentColor: string;
+}
+
 export interface JudgeLayout {
   readonly platformPosition: Vec3;
   readonly platformSize: Vec3;
   readonly accentColor: string;
   readonly characterPosition: Vec3;
+  /** Position of the judge's chair on the raised platform. */
+  readonly chairSeatPosition: Vec3;
+  readonly chairBackRest: Vec3;
 }
 
 export interface ArenaLayout {
@@ -77,6 +95,7 @@ export interface ArenaLayout {
     readonly tone: "title" | "side";
   }>;
   readonly desks: { readonly A: DeskLayout; readonly B: DeskLayout };
+  readonly monitors: { readonly A: MonitorLayout; readonly B: MonitorLayout };
   readonly chairs: { readonly A: ChairLayout; readonly B: ChairLayout };
   readonly judge: JudgeLayout;
   readonly characters: {
@@ -115,6 +134,10 @@ const deskDepth = 1.0;
 const deskSlabThickness = 0.08;
 const deskTopHeight = 1.0;
 const deskForward = 0.5;
+/** Y of the seat surface for a standard desk chair. */
+const chairSeatY = 0.55;
+/** Y of the seat surface for the elevated judge chair on the platform. */
+const judgeSeatY = 1.25;
 
 export const ARENA_LAYOUT: ArenaLayout = {
   arenaFloor: {
@@ -183,21 +206,51 @@ export const ARENA_LAYOUT: ArenaLayout = {
       faceCameraRotationY: -Math.PI / 8,
     },
   },
-  chairs: {
+  monitors: {
+    // Monitors sit centered on each desk in front of the talent. The screen
+    // tilts back ~10° and turns toward the camera so it reads as a broadcast
+    // workstation monitor (partially visible to the audience).
     A: {
-      seatPosition: [-4.5, 0.55, -0.4],
-      backRest: [0.85, 1.0, 0.12],
+      basePosition: [-4.5, deskTopHeight + deskSlabThickness, deskForward - 0.15],
+      screenSize: [0.62, 0.42, 0.04],
+      screenPosition: [-4.5, deskTopHeight + deskSlabThickness + 0.34, deskForward - 0.15],
+      screenTiltX: -0.12,
+      screenRotationY: -Math.PI / 10,
+      accentColor: PALETTE.terracottaLight,
     },
     B: {
-      seatPosition: [4.5, 0.55, -0.4],
-      backRest: [0.85, 1.0, 0.12],
+      basePosition: [4.5, deskTopHeight + deskSlabThickness, deskForward - 0.15],
+      screenSize: [0.62, 0.42, 0.04],
+      screenPosition: [4.5, deskTopHeight + deskSlabThickness + 0.34, deskForward - 0.15],
+      screenTiltX: -0.12,
+      screenRotationY: Math.PI / 10,
+      accentColor: PALETTE.plumLight,
+    },
+  },
+  chairs: {
+    // Chairs are tucked right up against the back of each desk so the
+    // contender visibly sits at their workstation instead of standing
+    // a metre or more away from it. Seat Z sits just inside the desk
+    // back edge; the character sits centered on the chair seat.
+    A: {
+      seatPosition: [-4.5, chairSeatY, -0.15],
+      backRest: [0.7, 0.85, 0.12],
+    },
+    B: {
+      seatPosition: [4.5, chairSeatY, -0.15],
+      backRest: [0.7, 0.85, 0.12],
     },
   },
   judge: {
     platformPosition: [0, 0.35, -3.0],
     platformSize: [3.0, 0.7, 1.4],
     accentColor: PALETTE.honey,
-    characterPosition: [0, 0.7, -3.0],
+    characterPosition: [0, judgeSeatY, -3.0],
+    // The judge's throne sits centered on the raised platform, tucked just
+    // behind the character so the seat + backrest stay visible above the
+    // platform trim from a wide spectator camera.
+    chairSeatPosition: [0, judgeSeatY, -3.0 - 0.55],
+    chairBackRest: [0.95, 1.05, 0.14],
   },
   characters: {
     A: {
@@ -208,8 +261,11 @@ export const ARENA_LAYOUT: ArenaLayout = {
       position: [4.5, deskTopHeight, -0.2],
       headOffset: [0, 1.1, 0],
     },
+    // The judge sits on the elevated throne on top of the platform: base at
+    // chair-seat height so the legs (rendered by the judge visual) drop
+    // visibly from the torso to the platform top.
     judge: {
-      position: [0, 0.7 + 0.35, -3.0],
+      position: [0, judgeSeatY, -3.0],
       headOffset: [0, 1.3, 0],
     },
   },

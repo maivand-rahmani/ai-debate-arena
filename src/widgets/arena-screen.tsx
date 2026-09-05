@@ -11,11 +11,7 @@ import {
 import { useProviders } from "@/features/create-debate/use-providers";
 import type { MatchDraft } from "@/features/create-debate/draft";
 import { useDebateStream } from "@/features/run-debate/lib/use-debate-stream";
-import {
-  isInMatch,
-  statusLineFor,
-  type DebateRuntimeState,
-} from "@/features/run-debate/lib/reducer";
+import { isInMatch } from "@/features/run-debate/lib/reducer";
 import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match-history-drawer";
 import { exportJsonBlob } from "@/features/run-debate/ui/match-history/match-actions";
 import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
@@ -66,13 +62,6 @@ export default function ArenaScreen() {
     }
     cancel();
   }, [cancel, reset, state.status]);
-
-  const handleRunAgain = useCallback(() => {
-    if (!matchDraft) return;
-    setRejudgeStatus("idle");
-    setRejudgeError(undefined);
-    start(toRequest(matchDraft));
-  }, [matchDraft, start]);
 
   const handleOpenHistory = useCallback(() => setHistoryOpen(true), []);
   const handleCloseHistory = useCallback(() => setHistoryOpen(false), []);
@@ -130,7 +119,6 @@ export default function ArenaScreen() {
   const judgeProvider = providers[0];
   const judgeModel = judgeProvider?.model;
 
-  const tone = statusToneFor(state);
   const footer = state.matchId
     ? {
         matchId: state.matchId,
@@ -143,86 +131,37 @@ export default function ArenaScreen() {
       }
     : undefined;
 
-  const showStatusLine = inMatch;
-
   return (
-    <main className="min-h-screen overflow-x-hidden" style={{ background: "#0c0a07" }}>
-      <div className="ambient-glow" aria-hidden="true" />
-      <div className="relative z-10 mx-auto w-full h-full">
-        <ArenaFrame
-          topic={topic}
-          state={state}
-          agentA={agentA}
-          agentB={agentB}
-          judgeProvider={judgeProvider}
-          judgeModel={judgeModel}
-          draftSideAModel={matchDraft?.sideA.model}
-          draftSideBModel={matchDraft?.sideB.model}
-          draftSideAPosition={matchDraft?.sideA.position}
-          draftSideBPosition={matchDraft?.sideB.position}
-          footer={footer}
-          onNewMatch={handleNewMatch}
-          inMatch={inMatch}
-          onEndMatch={handleEndMatch}
-          onOpenHistory={handleOpenHistory}
-          onStart={handleStart}
-          busy={state.status === "starting"}
-          errorMessage={state.status === "error" && !inMatch ? state.errorMessage : undefined}
-          reactionsMuted={reactionsMuted}
-          onToggleMute={handleToggleMute}
-        />
+    <main
+      className="relative h-screen w-screen overflow-hidden"
+      style={{ background: "#0c0a07" }}
+    >
+      <ArenaFrame
+        topic={topic}
+        state={state}
+        agentA={agentA}
+        agentB={agentB}
+        judgeProvider={judgeProvider}
+        judgeModel={judgeModel}
+        draftSideAModel={matchDraft?.sideA.model}
+        draftSideBModel={matchDraft?.sideB.model}
+        draftSideAPosition={matchDraft?.sideA.position}
+        draftSideBPosition={matchDraft?.sideB.position}
+        footer={footer}
+        onNewMatch={handleNewMatch}
+        inMatch={inMatch}
+        onEndMatch={handleEndMatch}
+        onOpenHistory={handleOpenHistory}
+        onStart={handleStart}
+        busy={state.status === "starting"}
+        errorMessage={state.status === "error" && !inMatch ? state.errorMessage : undefined}
+        reactionsMuted={reactionsMuted}
+        onToggleMute={handleToggleMute}
+      />
 
-        {showStatusLine ? (
-          <div
-            className={`status-strip status-strip--${tone}`}
-            role="status"
-            aria-live="polite"
-            style={{ marginTop: "12px" }}
-          >
-            <span className="pulse-dot" aria-hidden="true" />
-            <span>{statusLineFor(state)}</span>
-          </div>
-        ) : null}
-
-        {inMatch ? (
-          <div className="flex flex-wrap items-center justify-between gap-3" style={{ marginTop: "12px" }}>
-            <ActionButton
-              label={
-                state.status === "cancelled" || state.status === "finished"
-                  ? "New match"
-                  : state.status === "error" && matchDraft
-                    ? "Run again"
-                    : "End match"
-              }
-              handler={
-                state.status === "cancelled" || state.status === "finished"
-                  ? handleNewMatch
-                  : state.status === "error" && matchDraft
-                    ? handleRunAgain
-                    : handleEndMatch
-              }
-              emphasis={state.status === "cancelled" || state.status === "finished" || (state.status === "error" && matchDraft) ? "primary" : "ghost"}
-            />
-          </div>
-        ) : null}
-      </div>
       <MatchHistoryDrawer open={historyOpen} onClose={handleCloseHistory} />
     </main>
   );
-}
-
-function statusToneFor(state: DebateRuntimeState): "neutral" | "judge" | "error" | "cancelled" {
-  switch (state.status) {
-    case "error":
-      return "error";
-    case "cancelled":
-      return "cancelled";
-    case "judging":
-    case "finished":
-      return "judge";
-    default:
-      return "neutral";
-  }
 }
 
 // --- Helpers ----------------------------------------------------------------
@@ -253,23 +192,4 @@ function messageFromError(error: unknown): string {
   if (error instanceof MatchesApiError) return error.message;
   if (error instanceof Error) return error.message;
   return typeof error === "string" ? error : "Something went wrong.";
-}
-
-interface ActionButtonProps {
-  readonly label: string;
-  readonly handler: () => void;
-  readonly emphasis: "primary" | "ghost";
-}
-
-function ActionButton({ label, handler, emphasis }: ActionButtonProps) {
-  const base = "rounded-lg px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] transition";
-  const cls =
-    emphasis === "primary"
-      ? `${base} border border-arena-coral-300/40 bg-arena-coral-300/[0.08] text-arena-coral-100 hover:border-arena-coral-300/70 hover:text-arena-50`
-      : `${base} border border-white/10 text-arena-200 hover:border-white/25 hover:text-arena-50`;
-  return (
-    <button type="button" onClick={handler} className={cls}>
-      {label}
-    </button>
-  );
 }

@@ -131,14 +131,31 @@ export function ArenaDeskCollider({ layout }: { readonly layout: DeskLayout }) {
 /**
  * Simple chair tucked behind a desk: seat cube + backrest. Static collider so
  * the gavel/mics (if launched backward) settle against it without clipping.
+ *
+ * `floorY` lets the chair sit on an elevated surface (e.g. the judge platform)
+ * instead of always grounding at y=0. Defaults to 0 for the floor-mounted case.
+ *
+ * `accentColor` paints the chair's backrest + legs in the supplied honey/honey-
+ * glow tone (used by the judge throne so it reads as a magistrate chair).
+ * When omitted the chair uses the default walnut palette — the same neutral
+ * look the contender desks have always used.
  */
-export function ArenaChair({ position, backRest }: {
+export function ArenaChair({ position, backRest, floorY = 0, accentColor }: {
   readonly position: readonly [number, number, number];
   readonly backRest: readonly [number, number, number];
+  readonly floorY?: number;
+  readonly accentColor?: string;
 }) {
   const seatSize: [number, number, number] = [0.7, 0.08, 0.7];
-  const legHeight = position[1] - seatSize[1] / 2;
+  const seatBottomY = position[1] - seatSize[1] / 2;
   const seatY = position[1];
+  // Legs drop from the seat bottom to the supplied floor surface (defaults to
+  // the world floor at y=0). Keeps the chair geometry grounded without the
+  // visual "legs through the platform" artifact for elevated placements.
+  const effectiveLegHeight = Math.max(0, seatBottomY - floorY);
+  const legCenterY = (seatBottomY + floorY) / 2;
+  const backrestColor = accentColor ?? PALETTE.walnutShadow;
+  const legColor = accentColor ?? PALETTE.walnutBlackened;
 
   return (
     <group>
@@ -154,45 +171,45 @@ export function ArenaChair({ position, backRest }: {
 
       {/* Legs (visual only — collider on whole seat would suffice). */}
       <mesh
-        position={[position[0] - seatSize[0] / 2 + 0.05, legHeight, position[2] - seatSize[2] / 2 + 0.05]}
+        position={[position[0] - seatSize[0] / 2 + 0.05, legCenterY, position[2] - seatSize[2] / 2 + 0.05]}
         castShadow
       >
-        <boxGeometry args={[0.05, legHeight, 0.05]} />
+        <boxGeometry args={[0.05, effectiveLegHeight, 0.05]} />
         <meshStandardMaterial
-          color={PALETTE.walnutBlackened}
+          color={legColor}
           roughness={0.5}
           metalness={0.2}
         />
       </mesh>
       <mesh
-        position={[position[0] + seatSize[0] / 2 - 0.05, legHeight, position[2] - seatSize[2] / 2 + 0.05]}
+        position={[position[0] + seatSize[0] / 2 - 0.05, legCenterY, position[2] - seatSize[2] / 2 + 0.05]}
         castShadow
       >
-        <boxGeometry args={[0.05, legHeight, 0.05]} />
+        <boxGeometry args={[0.05, effectiveLegHeight, 0.05]} />
         <meshStandardMaterial
-          color={PALETTE.walnutBlackened}
+          color={legColor}
           roughness={0.5}
           metalness={0.2}
         />
       </mesh>
       <mesh
-        position={[position[0] - seatSize[0] / 2 + 0.05, legHeight, position[2] + seatSize[2] / 2 - 0.05]}
+        position={[position[0] - seatSize[0] / 2 + 0.05, legCenterY, position[2] + seatSize[2] / 2 - 0.05]}
         castShadow
       >
-        <boxGeometry args={[0.05, legHeight, 0.05]} />
+        <boxGeometry args={[0.05, effectiveLegHeight, 0.05]} />
         <meshStandardMaterial
-          color={PALETTE.walnutBlackened}
+          color={legColor}
           roughness={0.5}
           metalness={0.2}
         />
       </mesh>
       <mesh
-        position={[position[0] + seatSize[0] / 2 - 0.05, legHeight, position[2] + seatSize[2] / 2 - 0.05]}
+        position={[position[0] + seatSize[0] / 2 - 0.05, legCenterY, position[2] + seatSize[2] / 2 - 0.05]}
         castShadow
       >
-        <boxGeometry args={[0.05, legHeight, 0.05]} />
+        <boxGeometry args={[0.05, effectiveLegHeight, 0.05]} />
         <meshStandardMaterial
-          color={PALETTE.walnutBlackened}
+          color={legColor}
           roughness={0.5}
           metalness={0.2}
         />
@@ -206,11 +223,34 @@ export function ArenaChair({ position, backRest }: {
       >
         <boxGeometry args={backRest} />
         <meshStandardMaterial
-          color={PALETTE.walnutShadow}
+          color={backrestColor}
           roughness={0.6}
           metalness={0.1}
         />
       </mesh>
+
+      {/* Honey accent crest along the top of the backrest for the elevated
+          (judge) variant. Renders only when `accentColor` is supplied so the
+          floor-mounted contender chairs stay visually subdued. */}
+      {accentColor ? (
+        <mesh
+          position={[
+            position[0],
+            seatY + backRest[1] + 0.05,
+            position[2] - seatSize[2] / 2 + backRest[2] / 2,
+          ]}
+        >
+          <boxGeometry args={[backRest[0] * 0.85, 0.05, backRest[2] * 0.9]} />
+          <meshStandardMaterial
+            color={accentColor}
+            emissive={accentColor}
+            emissiveIntensity={0.7}
+            roughness={0.4}
+            metalness={0.55}
+            toneMapped={false}
+          />
+        </mesh>
+      ) : null}
 
       {/* Static collider for the whole chair volume (prevents prop tunneling). */}
       <RigidBody type="fixed" colliders={false}>

@@ -33,6 +33,7 @@ export {
   type DeskLayout,
   type JudgeLayout,
   type ChairLayout,
+  type MonitorLayout,
   type Vec2,
   type Vec3,
   type Box3,

@@ -77,6 +77,80 @@ describe("ARENA_LAYOUT", () => {
     expect(ARENA_LAYOUT.props.micA.initialPosition[0]).toBeCloseTo(A.position[0], 5);
     expect(ARENA_LAYOUT.props.micB.initialPosition[0]).toBeCloseTo(B.position[0], 5);
   });
+
+  it("tucks each contender chair directly behind its desk (close to desk, not far)", () => {
+    // The user-visible fix: chairs were 1+ m behind the desk front. Now the
+    // chair seat sits within ~0.3 m of the desk back edge so the contender
+    // visibly sits at their workstation.
+    const { A, B } = ARENA_LAYOUT.desks;
+    const { A: chairA, B: chairB } = ARENA_LAYOUT.chairs;
+    const deskBackZ = (desk: typeof A) => desk.position[2] - desk.topSize[2] / 2;
+    const distanceA = deskBackZ(A) - chairA.seatPosition[2];
+    const distanceB = deskBackZ(B) - chairB.seatPosition[2];
+    // Chairs should sit close to the desk back edge (≤0.3 m behind it),
+    // never "standing a metre away from it" the way the original layout did.
+    expect(distanceA).toBeLessThanOrEqual(0.3);
+    expect(distanceA).toBeGreaterThan(-0.3);
+    expect(distanceB).toBeLessThanOrEqual(0.3);
+    expect(distanceB).toBeGreaterThan(-0.3);
+    // X must match the desk center (no off-axis chairs).
+    expect(chairA.seatPosition[0]).toBeCloseTo(A.position[0], 5);
+    expect(chairB.seatPosition[0]).toBeCloseTo(B.position[0], 5);
+    // Seat Y is the standard 0.55 m desk-chair seat height.
+    expect(chairA.seatPosition[1]).toBeCloseTo(0.55, 5);
+    expect(chairB.seatPosition[1]).toBeCloseTo(0.55, 5);
+  });
+
+  it("puts a workstation monitor on each contender desk at the right height", () => {
+    const { A, B } = ARENA_LAYOUT.desks;
+    const { A: monA, B: monB } = ARENA_LAYOUT.monitors;
+    const deskTopY = A.position[1] + A.topSize[1] / 2;
+    // Monitor base sits on the desk top (small skin tolerance).
+    expect(monA.basePosition[1]).toBeGreaterThanOrEqual(deskTopY);
+    expect(monB.basePosition[1]).toBeGreaterThanOrEqual(deskTopY);
+    // Base is centered on the desk's X (within 0.1 m).
+    expect(monA.basePosition[0]).toBeCloseTo(A.position[0], 1);
+    expect(monB.basePosition[0]).toBeCloseTo(B.position[0], 1);
+    // Screen sits above the desk top — never below it.
+    expect(monA.screenPosition[1]).toBeGreaterThan(deskTopY);
+    expect(monB.screenPosition[1]).toBeGreaterThan(deskTopY);
+    // Screens face the talent (sign of rotation Y is mirrored per side).
+    expect(monA.screenRotationY).toBeLessThan(0);
+    expect(monB.screenRotationY).toBeGreaterThan(0);
+  });
+
+  it("places the judge's throne on the platform, behind the character", () => {
+    const { judge, characters } = ARENA_LAYOUT;
+    const platformTopY = judge.platformPosition[1] + judge.platformSize[1] / 2;
+    // Chair seat is on top of the platform (elevated, not floor-mounted).
+    expect(judge.chairSeatPosition[1]).toBeGreaterThan(platformTopY);
+    // Chair sits behind the character (more negative Z).
+    expect(judge.chairSeatPosition[2]).toBeLessThan(characters.judge.position[2]);
+    // X stays on the centerline.
+    expect(judge.chairSeatPosition[0]).toBeCloseTo(0, 5);
+    // Chair also fits inside the platform's depth footprint.
+    const chairZ = judge.chairSeatPosition[2];
+    expect(chairZ).toBeGreaterThanOrEqual(
+      judge.platformPosition[2] - judge.platformSize[2] / 2,
+    );
+    expect(chairZ).toBeLessThanOrEqual(
+      judge.platformPosition[2] + judge.platformSize[2] / 2,
+    );
+  });
+
+  it("keeps the gavel clear of the relocated judge capsule", () => {
+    // After dropping the judge onto the elevated throne, the new capsule sits
+    // at (0, 1.25, -3.0) with radius ≈ 0.385. The gavel spawns at (0, 0.76, -2.4)
+    // — distance ≥ 0.10 m radially so it doesn't pop on frame 0.
+    const judge = ARENA_LAYOUT.characters.judge.position;
+    const judgeRadius = 0.55 * 0.7; // matches arena-character.tsx capsule math
+    const gavel = ARENA_LAYOUT.props.gavel.initialPosition;
+    const dx = gavel[0] - judge[0];
+    const dy = gavel[1] - judge[1];
+    const dz = gavel[2] - judge[2];
+    const radial = Math.sqrt(dx * dx + dy * dy + dz * dz) - judgeRadius;
+    expect(radial).toBeGreaterThanOrEqual(0.1);
+  });
 });
 
 describe("PHYSICS_CONFIG", () => {

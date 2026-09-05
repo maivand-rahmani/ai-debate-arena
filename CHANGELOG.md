@@ -13,13 +13,14 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 - `deriveSceneSignal` projects the existing `DebateRuntimeState` into a serializable signal fed to four in-canvas directors: CameraDirector (7 cinematic presets — wide/A/B/rebuttal/judge/verdict/error — blending with OrbitControls handoff and re-acquisition), LightingDirector (per-speaker spotlight states), character poses (contender 10 + judge 6 mood poses via named anchors; winner celebration / loser slump on verdict), and VerdictDirector (gavel strike + confetti burst, StrictMode-safe).
 - Reactions: 7 curated meme captions (`deriveReaction`) with banner mute toggle; reduced-motion snaps directors and suppresses confetti. Zero extra AI calls for mood/emotion.
 - Setup moved into the world: the idle Arena shows an in-scene BroadcastConsole (same draft/validation flows) instead of the old dashboard hero; the page no longer looks like a website shell around a form.
+- Final v0.3 polish removes the remaining outer page chrome so the Arena owns the viewport, moves contender chairs directly to their desks, adds procedural powered monitor stations, and gives the Judge a throne, robe lower body, legs, and shoes for a grounded silhouette.
 
 ### Preserved
 - Engine, reducer, stream contract, API routes, Quick mode, cancellation/error handling, judge verdict semantics, history drawer/export/rejudge — untouched (gate C diff-verified).
 - Non-WebGL fallback: the full 2D broadcast stage + IdleSetup render unchanged when WebGL is absent — no user ever sees a blank canvas.
 
 ### Known limitations
-- Character visuals are procedural primitive puppets (deliberate: no rigging pipeline yet); polish candidates will be recorded during the F4-26 user review.
+- Character visuals are procedural primitive puppets (deliberate: no rigging pipeline yet); the v0.3 visual direction was accepted after the final game-world review.
 - Judge model = first configured provider (selection UI deferred to v0.4 per provider-UI gate).
 - `fiber@9` caps React `<19.3`; the 3D stack must bump together.
 

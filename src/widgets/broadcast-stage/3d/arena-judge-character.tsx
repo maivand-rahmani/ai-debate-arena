@@ -131,6 +131,46 @@ function JudgeVisual(refs: CharacterAnchorRefs) {
         <boxGeometry args={[0.14, 0.025, 0.02]} />
         <meshStandardMaterial color={PALETTE.walnutDeep} />
       </mesh>
+
+      {/* Lower body / legs — the judge now visibly sits on the throne.
+          Robe skirt hangs from the torso bottom down to the platform top
+          (local y ≈ -0.46) so the legs read as physically present. Two
+          honey shoes peek out at the front so the feet anchor the pose. */}
+      <mesh position={[0, -0.09, 0.04]} castShadow receiveShadow>
+        <boxGeometry args={[0.74, 0.73, 0.38]} />
+        <meshStandardMaterial
+          color={PALETTE.honeyDeep}
+          roughness={0.78}
+          metalness={0.02}
+        />
+      </mesh>
+      {/* Front drape — slightly forward, lighter tone, suggests the robe
+          folds falling over the knees. */}
+      <mesh position={[0, -0.08, 0.22]} rotation-x={0.04}>
+        <boxGeometry args={[0.58, 0.66, 0.04]} />
+        <meshStandardMaterial
+          color={PALETTE.honey}
+          roughness={0.7}
+        />
+      </mesh>
+      {/* Two feet peeking out beneath the robe skirt, anchored on the
+          platform top. */}
+      <mesh position={[-0.16, -0.43, 0.16]} castShadow>
+        <boxGeometry args={[0.18, 0.07, 0.26]} />
+        <meshStandardMaterial
+          color={PALETTE.walnutShadow}
+          roughness={0.55}
+          metalness={0.15}
+        />
+      </mesh>
+      <mesh position={[0.16, -0.43, 0.16]} castShadow>
+        <boxGeometry args={[0.18, 0.07, 0.26]} />
+        <meshStandardMaterial
+          color={PALETTE.walnutShadow}
+          roughness={0.55}
+          metalness={0.15}
+        />
+      </mesh>
     </group>
   );
 }
