@@ -10,6 +10,12 @@
  * Symmetry: the broadcaster desks are mirrored across X. Desks A and B sit at
  * equal +/−X offsets with the same depth and height; the judge plinth is
  * dead-center and slightly forward of the cyclorama.
+ *
+ * PROP CLEARANCE INVARIANT (Gate B): dynamic props (gavel, mics) must START
+ * at least 0.10 m radially clear of the nearest character capsule surface —
+ * contender capsules: radius 0.315 centered at z=-0.2; judge capsule: radius
+ * 0.385 at z=-3.0. A spawn inside a fixed collider makes Rapier pop the body
+ * on frame 0. Re-check this math before editing any prop initialPosition.
  */
 
 import { PALETTE } from "./colors";
@@ -209,15 +215,19 @@ export const ARENA_LAYOUT: ArenaLayout = {
   },
   props: {
     gavel: {
-      initialPosition: [0, 0.7 + 0.06, -2.6], // initial drop onto judge platform top
+      // Judge platform top; z=-2.4 keeps it on the platform (z range -3.7..-2.3)
+      // with 0.215 m radial clearance from the judge capsule (Gate B fix).
+      initialPosition: [0, 0.7 + 0.06, -2.4],
       size: [0.18, 0.07, 0.06],
     },
     micA: {
-      initialPosition: [-4.5, deskTopHeight + deskSlabThickness + 0.12, deskForward - 0.3],
+      // Near the desk front edge so the spawn clears the character capsule by
+      // ≥0.10 m radially (capsule edge at z=0.115; mic at z=0.45 → 0.335 m).
+      initialPosition: [-4.5, deskTopHeight + deskSlabThickness + 0.12, deskForward - 0.05],
       size: [0.07, 0.18, 0.07],
     },
     micB: {
-      initialPosition: [4.5, deskTopHeight + deskSlabThickness + 0.12, deskForward - 0.3],
+      initialPosition: [4.5, deskTopHeight + deskSlabThickness + 0.12, deskForward - 0.05],
       size: [0.07, 0.18, 0.07],
     },
   },

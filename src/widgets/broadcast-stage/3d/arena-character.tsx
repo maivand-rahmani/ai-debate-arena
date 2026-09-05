@@ -4,7 +4,6 @@ import { useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CapsuleCollider } from "@react-three/rapier";
-import { PALETTE } from "./colors";
 import {
   type Vec3,
 } from "./scene-layout";
@@ -91,11 +90,6 @@ export function SeatedCharacter(props: ArenaCharacterProps) {
       <group position={headOffset}>
         {/* Empty marker — surfaces the anchor position for callers. */}
       </group>
-      {/* Hint for the linter: palette used by callers extending the scaffold. */}
-      <mesh visible={false}>
-        <boxGeometry args={[0.001, 0.001, 0.001]} />
-        <meshStandardMaterial color={PALETTE.ink} />
-      </mesh>
     </group>
   );
 }

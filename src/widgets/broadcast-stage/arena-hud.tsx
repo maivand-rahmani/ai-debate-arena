@@ -1,21 +1,16 @@
 "use client";
 
-import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
-import type { RedactedProvider } from "@/shared/api/providers";
 
 import { BroadcastBanner } from "./broadcast-banner";
 import { RoundMarker } from "./monitors/round-marker";
 import { ReactionOverlay } from "./reactions/reaction-overlay";
 import { SpeechLayer } from "./speech/speech-layer";
-import {
-  VerdictEvaluating,
-  VerdictReveal,
-  type JudgePanelFooter,
-} from "./verdict/verdict-reveal";
+import { VerdictEvaluating, VerdictReveal } from "./verdict/verdict-reveal";
 import { IdleSetup } from "./idle/idle-setup";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
 import { deriveStageView } from "./stage-state";
+import type { BroadcastStageProps } from "./broadcast-stage";
 import { useWebGLSupport } from "./3d";
 
 /**
@@ -23,28 +18,7 @@ import { useWebGLSupport } from "./3d";
  * `arena-frame.tsx` orchestrator can swap the world (canvas vs 2D fallback)
  * without consumer changes.
  */
-export interface ArenaHudProps {
-  readonly topic: string;
-  readonly state: DebateRuntimeState;
-  readonly agentA?: RedactedProvider;
-  readonly agentB?: RedactedProvider;
-  readonly judgeProvider?: RedactedProvider;
-  readonly judgeModel?: string;
-  readonly draftSideAModel?: string;
-  readonly draftSideBModel?: string;
-  readonly draftSideAPosition?: "FOR" | "AGAINST";
-  readonly draftSideBPosition?: "FOR" | "AGAINST";
-  readonly footer?: JudgePanelFooter;
-  readonly onNewMatch?: () => void;
-  readonly inMatch: boolean;
-  readonly onEndMatch?: () => void;
-  readonly onOpenHistory?: () => void;
-  readonly onStart?: (draft: import("@/features/create-debate/draft").MatchDraft) => void;
-  readonly busy?: boolean;
-  readonly errorMessage?: string;
-  readonly reactionsMuted: boolean;
-  readonly onToggleMute?: () => void;
-}
+export type ArenaHudProps = BroadcastStageProps;
 
 /**
  * HTML HUD overlay rendered above the 3D canvas when WebGL is available.
