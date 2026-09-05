@@ -3,6 +3,8 @@
 import { SeatedCharacter, type ArenaCharacterProps, type CharacterAnchorRefs } from "./arena-character";
 import { PALETTE } from "./colors";
 import { ARENA_LAYOUT } from "./scene-layout";
+import type { JudgeMood } from "@/widgets/broadcast-stage/mood";
+import type { ReactionBurst } from "./character-poses";
 
 /**
  * Judge — "The Magistrate".
@@ -11,7 +13,15 @@ import { ARENA_LAYOUT } from "./scene-layout";
  * sterner brow set. Seated behind the central platform. Uses an extra
  * `gavelArm` ref hook through Phase C; for Phase B the arm is static.
  */
-export function CharacterJudge({ phaseOffset }: { readonly phaseOffset: number }) {
+export function CharacterJudge({
+  phaseOffset,
+  mood,
+  verdictBoost,
+}: {
+  readonly phaseOffset: number;
+  readonly mood?: JudgeMood | undefined;
+  readonly verdictBoost?: ReactionBurst | undefined;
+}) {
   const props: ArenaCharacterProps = {
     position: ARENA_LAYOUT.characters.judge.position,
     headOffset: ARENA_LAYOUT.characters.judge.headOffset,
@@ -21,6 +31,8 @@ export function CharacterJudge({ phaseOffset }: { readonly phaseOffset: number }
     suitColor: PALETTE.honey,
     suitDeepColor: PALETTE.honeyDeep,
     visual: JudgeVisual,
+    mood,
+    verdictBoost,
   };
   return <SeatedCharacter {...props} />;
 }

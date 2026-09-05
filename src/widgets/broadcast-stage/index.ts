@@ -3,6 +3,7 @@ export { ArenaFrame } from "./arena-frame";
 export { ArenaHud, type ArenaHudProps } from "./arena-hud";
 export { BroadcastBanner } from "./broadcast-banner";
 export { IdleSetup } from "./idle/idle-setup";
+export { BroadcastConsole } from "./broadcast-console";
 export { VerdictReveal, VerdictEvaluating, type JudgePanelFooter } from "./verdict/verdict-reveal";
 export { Teleprompter } from "./speech/teleprompter";
 export { ReactionOverlay } from "./reactions/reaction-overlay";

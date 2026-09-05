@@ -8,6 +8,7 @@ import { ReactionOverlay } from "./reactions/reaction-overlay";
 import { SpeechLayer } from "./speech/speech-layer";
 import { VerdictEvaluating, VerdictReveal } from "./verdict/verdict-reveal";
 import { IdleSetup } from "./idle/idle-setup";
+import { BroadcastConsole } from "./broadcast-console";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
 import { deriveStageView } from "./stage-state";
 import type { BroadcastStageProps } from "./broadcast-stage";
@@ -133,7 +134,14 @@ export function ArenaHud(props: ArenaHudProps) {
         </div>
       ) : showSetup && onStart ? (
         <div className="arena-hud__terminal arena-hud__terminal--form">
-          <IdleSetup onStart={onStart} busy={busy} errorMessage={errorMessage} />
+          {/* 3D-aware console UI (idle desktop visual). The 2D fallback
+              BroadcastStage keeps using the original IdleSetup so users on
+              non-WebGL clients see the same form they had pre-Phase C. */}
+          {support.supported ? (
+            <BroadcastConsole onStart={onStart} busy={busy} errorMessage={errorMessage} />
+          ) : (
+            <IdleSetup onStart={onStart} busy={busy} errorMessage={errorMessage} />
+          )}
         </div>
       ) : null}
     </div>

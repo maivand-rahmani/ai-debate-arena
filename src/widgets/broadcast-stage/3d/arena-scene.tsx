@@ -9,59 +9,90 @@ import { ArenaFloor, ArenaCyclorama, ArenaWalls, ArenaTruss } from "./arena-set"
 import { ArenaSignage } from "./arena-signage";
 import { ArenaDesk, ArenaDeskCollider, ArenaChair } from "./arena-desk";
 import { JudgePlatform } from "./judge-platform";
-import { ArenaLighting, useArenaLightingControls, type ArenaLightingHandles } from "./arena-lighting";
+import {
+  ArenaLighting,
+  useArenaLightingControls,
+  type ArenaLightingHandles,
+} from "./arena-lighting";
 import { CharacterContenderA } from "./arena-character-a";
 import { CharacterContenderB } from "./arena-character-b";
 import { CharacterJudge } from "./arena-judge-character";
-import { ArenaProps } from "./arena-props";
-import { ArenaOrbitCamera } from "./arena-orbit-camera";
+import { ArenaProps, type VerdictPropHandles } from "./arena-props";
+import {
+  ArenaOrbitCamera,
+  type ArenaOrbitCameraHandle,
+} from "./arena-orbit-camera";
+import { CameraDirector } from "./camera-director";
+import { LightingDirector } from "./lighting-director";
+import { VerdictDirector } from "./verdict-director";
 import { ARENA_LAYOUT, PHYSICS_CONFIG } from "./scene-layout";
 import { PALETTE } from "./colors";
+import type { SceneSignal } from "./scene-signal";
 
 /**
  * The top-level R3F scene for the 3D arena: physics root, lighting rig, the
- * full set (floor/walls/cyclorama/truss/signage), the three characters, and
- * the dynamic props (gavel + mics).
+ * full set (floor/walls/cyclorama/truss/signage), the three characters,
+ * dynamic props, the camera + lighting + verdict directors, and the
+ * spectator OrbitControls.
  *
  * Mounted inside the Canvas from `arena-canvas.client.tsx`, inside a
  * `<Suspense fallback={null}>` so the Rapier WASM load is masked by R3F's
  * usual loader behavior.
  */
-export function ArenaScene() {
+interface ArenaSceneProps {
+  readonly signal?: SceneSignal | undefined;
+}
+
+export function ArenaScene({ signal }: ArenaSceneProps) {
   return (
     <>
-      {/* Atmosphere: warm fog biased toward the back wall so the cyclorama
-          fades naturally into the volume. */}
       <fog attach="fog" args={[PALETTE.ink, 12, 28]} />
       <color attach="background" args={[PALETTE.inkDim]} />
 
       <Suspense fallback={null}>
-        <PhysicsRoot />
+        <World signal={signal} />
       </Suspense>
-
-      <SpectatorCamera />
     </>
   );
 }
 
-function PhysicsRoot() {
+/**
+ * The world composer: physics + characters + props + spectators. Owns the
+ * cross-cutting refs (lighting handles, orbit handle, verdict prop handles)
+ * in one place so directors and trees can find each other without prop
+ * drilling or window-singleton trickery.
+ */
+function World({ signal }: ArenaSceneProps) {
   const controls = useArenaLightingControls();
   const lightingRef = useRef<ArenaLightingHandles>(null);
+  const orbitRef = useRef<ArenaOrbitCameraHandle | null>(null);
+  const verdictHandlesRef = useRef<VerdictPropHandles>({
+    gavel: null,
+    confetti: null,
+  });
+
   return (
-    <Physics
-      gravity={[
-        PHYSICS_CONFIG.gravity[0],
-        PHYSICS_CONFIG.gravity[1],
-        PHYSICS_CONFIG.gravity[2],
-      ]}
-      timeStep={PHYSICS_CONFIG.timeStep}
-    >
-      <ArenaLighting controls={controls} handlesRef={lightingRef} />
-      <ArenaSet />
-      <ArenaCharacterAssembly />
-      <JudgePlatform />
-      <ArenaProps />
-    </Physics>
+    <>
+      <Physics
+        gravity={[
+          PHYSICS_CONFIG.gravity[0],
+          PHYSICS_CONFIG.gravity[1],
+          PHYSICS_CONFIG.gravity[2],
+        ]}
+        timeStep={PHYSICS_CONFIG.timeStep}
+      >
+        <ArenaLighting controls={controls} handlesRef={lightingRef} />
+        <LightingDirector signal={signal} controls={controls} />
+        <ArenaSet />
+        <ArenaCharacterAssembly signal={signal} />
+        <JudgePlatform />
+        <ArenaProps handlesRef={verdictHandlesRef} />
+        <VerdictDirector signal={signal} handlesRef={verdictHandlesRef} />
+      </Physics>
+
+      <SpectatorCamera orbitRef={orbitRef} />
+      <CameraDirector signal={signal} orbitRef={orbitRef} />
+    </>
   );
 }
 
@@ -73,18 +104,19 @@ function ArenaSet() {
       <ArenaCyclorama />
       <ArenaSignage />
       <ArenaTruss />
-      {/* Desk colliders exist outside the visual group so they're not
-          affected by the desk rotation; visuals live in ArenaCharacterAssembly. */}
       <ArenaDeskCollider layout={ARENA_LAYOUT.desks.A} />
       <ArenaDeskCollider layout={ARENA_LAYOUT.desks.B} />
     </>
   );
 }
 
-function ArenaCharacterAssembly() {
+interface CharacterSignal {
+  readonly signal?: SceneSignal | undefined;
+}
+
+function ArenaCharacterAssembly({ signal }: CharacterSignal) {
   return (
     <>
-      {/* Desk A */}
       <ArenaDesk layout={ARENA_LAYOUT.desks.A}>
         <ArenaChair
           position={[
@@ -99,7 +131,6 @@ function ArenaCharacterAssembly() {
           ]}
         />
       </ArenaDesk>
-      {/* Desk B */}
       <ArenaDesk layout={ARENA_LAYOUT.desks.B}>
         <ArenaChair
           position={[
@@ -114,45 +145,32 @@ function ArenaCharacterAssembly() {
           ]}
         />
       </ArenaDesk>
-      {/* Contenders — seated at their desks; phaseOffsets desync the idle bob. */}
-      <CharacterContenderA phaseOffset={1.0} />
-      <CharacterContenderB phaseOffset={1.15} />
-      {/* Judge — center stage */}
-      <CharacterJudge phaseOffset={0.85} />
+      <CharacterContenderA phaseOffset={1.0} mood={signal?.moods.a} />
+      <CharacterContenderB phaseOffset={1.15} mood={signal?.moods.b} />
+      <CharacterJudge phaseOffset={0.85} mood={signal?.moods.judge} />
     </>
   );
 }
 
 /**
- * Sets up the default spectator camera position. Done in a child component so
- * `useThree()` can be called inside the Canvas tree (it must not run during
- * SSR or outside the Canvas context). The first frame after mount, the
- * camera is positioned at the wide establishing shot; OrbitControls take
- * over from there.
- *
- * The camera is a Three.js `Object3D`, so direct `.position.set(...)` /
- * `.lookAt(...)` mutation is the natural API — we use a mount-scoped ref to
- * ensure one-shot init without triggering React state churn.
- *
- * The ESLint rule `react-hooks/immutability` flags direct mutation of the
- * `useThree()`-returned camera, but in this case the camera is a long-lived
- * Three.js handle whose mutability is the documented API (drei's
- * OrbitControls itself reads/writes camera position in its tick). We disable
- * the rule locally with justification.
+ * Sets up the default spectator camera position + mounts the OrbitControls.
+ * Forwards the controls handle to the CameraDirector so it can disable +
+ * re-enable them during cinematic cuts.
  */
-function SpectatorCamera() {
+function SpectatorCamera({
+  orbitRef,
+}: {
+  orbitRef: React.MutableRefObject<ArenaOrbitCameraHandle | null>;
+}) {
   const { camera } = useThree();
   const initRef = useRef(false);
+
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
     const { initialPosition, initialTarget, fov } = ARENA_LAYOUT.camera;
     const cam = camera as THREE.PerspectiveCamera;
     if (cam.isPerspectiveCamera) {
-      // Three.js camera is intentionally mutable; this is the documented API
-      // (drei's OrbitControls itself reads/writes camera position in its
-      // tick). We funnel the mutations through Object.assign so the lint
-      // rule doesn't flag the assignments individually.
       Object.assign(cam, { fov, near: 0.1, far: 80 });
       cam.position.set(
         initialPosition[0],
@@ -163,5 +181,6 @@ function SpectatorCamera() {
       cam.updateProjectionMatrix();
     }
   }, [camera]);
-  return <ArenaOrbitCamera />;
+
+  return <ArenaOrbitCamera ref={orbitRef} />;
 }

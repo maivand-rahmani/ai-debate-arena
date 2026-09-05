@@ -4,6 +4,17 @@ import { Suspense, useCallback, useEffect, useRef } from "react";
 import { Canvas, type RootState } from "@react-three/fiber";
 import { ArenaScene } from "./arena-scene";
 import { ARENA_LAYOUT } from "./scene-layout";
+import type { SceneSignal } from "./scene-signal";
+
+/**
+ * Props the parent CanvasGate forwards into the lazy canvas. We treat the
+ * signal as optional so the canvas still mounts (idle default) before the
+ * orchestrator computes the first projection — first frame momentarily
+ * renders the idle scene signal, then syncs.
+ */
+export interface ArenaCanvasClientProps {
+  readonly signal?: SceneSignal | undefined;
+}
 
 /**
  * Client-only R3F canvas shell. Loaded exclusively through
@@ -16,12 +27,13 @@ import { ARENA_LAYOUT } from "./scene-layout";
  * double-mount (mount → cleanup → remount with a fresh renderer) is safe:
  * the stale root is nulled and never touched again.
  *
- * The canvas sits at the bottom of a `relative`-positioned frame with
- * `pointer-events: auto` so the spectator camera (OrbitControls) works
- * everywhere on the world surface; HTML overlays above the canvas opt
- * back into pointer events for their interactive children only.
+ * Scene signal forwarding: the parent {@link CanvasGate} passes a
+ * serializable POJO describing the debate state. We hand it to
+ * {@link ArenaScene} which routes it through the directors (camera,
+ * lighting, characters, confetti). The lazy gate stays three-free; only
+ * this client file touches three/r3f.
  */
-export default function ArenaCanvasClient() {
+export default function ArenaCanvasClient({ signal }: ArenaCanvasClientProps) {
   const rootRef = useRef<RootState | null>(null);
   const lostHandlerRef = useRef<((event: Event) => void) | null>(null);
 
@@ -75,7 +87,7 @@ export default function ArenaCanvasClient() {
         onCreated={handleCreated}
       >
         <Suspense fallback={null}>
-          <ArenaScene />
+          <ArenaScene signal={signal} />
         </Suspense>
       </Canvas>
     </div>

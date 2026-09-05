@@ -3,6 +3,8 @@
 import { SeatedCharacter, type ArenaCharacterProps, type CharacterAnchorRefs } from "./arena-character";
 import { PALETTE } from "./colors";
 import { ARENA_LAYOUT } from "./scene-layout";
+import type { ContenderMood } from "@/widgets/broadcast-stage/mood";
+import type { ReactionBurst } from "./character-poses";
 
 /**
  * Contender A (Terracotta — "The Challenger").
@@ -10,7 +12,15 @@ import { ARENA_LAYOUT } from "./scene-layout";
  * Angular silhouette: square jaw, sharp wedge hair, terracotta suit
  * jacket, terracotta tie. Seated behind desk A.
  */
-export function CharacterContenderA({ phaseOffset }: { readonly phaseOffset: number }) {
+export function CharacterContenderA({
+  phaseOffset,
+  mood,
+  verdictBoost,
+}: {
+  readonly phaseOffset: number;
+  readonly mood?: ContenderMood | undefined;
+  readonly verdictBoost?: ReactionBurst | undefined;
+}) {
   const props: ArenaCharacterProps = {
     position: ARENA_LAYOUT.characters.A.position,
     headOffset: ARENA_LAYOUT.characters.A.headOffset,
@@ -20,6 +30,8 @@ export function CharacterContenderA({ phaseOffset }: { readonly phaseOffset: num
     suitColor: PALETTE.terracotta,
     suitDeepColor: PALETTE.terracottaDeep,
     visual: ContenderAVisual,
+    mood,
+    verdictBoost,
   };
   return <SeatedCharacter {...props} />;
 }

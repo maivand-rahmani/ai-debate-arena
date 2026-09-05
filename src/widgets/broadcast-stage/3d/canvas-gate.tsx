@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { probeWebGLSupport, type WebGLSupport } from "./webgl-capabilities";
+import type { SceneSignal } from "./scene-signal";
 
 /**
  * Shared chunk loader for the client-only arena canvas. Kept at module
@@ -72,6 +73,12 @@ export interface CanvasGateProps {
   readonly children?: ReactNode;
   /** Shown while the arena chunk loads (before the canvas can mount). */
   readonly loadingFallback?: ReactNode;
+  /**
+   * Serializable scene signal forwarded to the canvas client. Built by
+   * `deriveSceneSignal` in {@link ./scene-signal}; the gate itself stays
+   * three-free — it just hands the POJO through to the lazy canvas.
+   */
+  readonly canvasProps?: SceneSignal;
 }
 
 /**
@@ -100,7 +107,7 @@ function getCapabilityServerSnapshot(): WebGLSupport {
   return UNSUPPORTED;
 }
 
-export function CanvasGate({ children, loadingFallback }: CanvasGateProps) {
+export function CanvasGate({ children, loadingFallback, canvasProps }: CanvasGateProps) {
   const support = useSyncExternalStore(
     subscribeCapability,
     getCapabilitySnapshot,
@@ -112,7 +119,7 @@ export function CanvasGate({ children, loadingFallback }: CanvasGateProps) {
   return (
     <ArenaLoadingFallbackContext.Provider value={loadingFallback}>
       <CanvasErrorBoundary fallback={children}>
-        <ArenaCanvasLazy />
+        <ArenaCanvasLazy {...(canvasProps ? { signal: canvasProps } : {})} />
       </CanvasErrorBoundary>
     </ArenaLoadingFallbackContext.Provider>
   );

@@ -3,6 +3,8 @@
 import { SeatedCharacter, type ArenaCharacterProps, type CharacterAnchorRefs } from "./arena-character";
 import { PALETTE } from "./colors";
 import { ARENA_LAYOUT } from "./scene-layout";
+import type { ContenderMood } from "@/widgets/broadcast-stage/mood";
+import type { ReactionBurst } from "./character-poses";
 
 /**
  * Contender B (Plum — "The Advocate").
@@ -10,7 +12,15 @@ import { ARENA_LAYOUT } from "./scene-layout";
  * Rounder silhouette: rounder head, muted plum suit jacket, bowtie + curls,
  * round glasses silhouette. Seated behind desk B.
  */
-export function CharacterContenderB({ phaseOffset }: { readonly phaseOffset: number }) {
+export function CharacterContenderB({
+  phaseOffset,
+  mood,
+  verdictBoost,
+}: {
+  readonly phaseOffset: number;
+  readonly mood?: ContenderMood | undefined;
+  readonly verdictBoost?: ReactionBurst | undefined;
+}) {
   const props: ArenaCharacterProps = {
     position: ARENA_LAYOUT.characters.B.position,
     headOffset: ARENA_LAYOUT.characters.B.headOffset,
@@ -20,6 +30,8 @@ export function CharacterContenderB({ phaseOffset }: { readonly phaseOffset: num
     suitColor: PALETTE.plum,
     suitDeepColor: PALETTE.plumDeep,
     visual: ContenderBVisual,
+    mood,
+    verdictBoost,
   };
   return <SeatedCharacter {...props} />;
 }
