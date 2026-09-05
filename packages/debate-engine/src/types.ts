@@ -1,4 +1,5 @@
 import type { TokenPolicyName } from "./token-policy";
+import type { DebateSide } from "@arena/types";
 
 export enum DebatePhase {
   CREATED = "CREATED",
@@ -10,7 +11,7 @@ export enum DebatePhase {
   FINISHED = "FINISHED",
 }
 
-export type DebateSide = "A" | "B";
+export type { DebateSide };
 
 export interface Agent {
   readonly id: string;

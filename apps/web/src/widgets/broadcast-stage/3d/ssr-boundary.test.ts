@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -33,7 +34,7 @@ function walk(dir: string): string[] {
   return files;
 }
 
-const SRC = join(process.cwd(), "src");
+const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const allFiles = walk(SRC).filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
 
 describe("ssr boundary — three-family imports confined to 3d/ client files", () => {

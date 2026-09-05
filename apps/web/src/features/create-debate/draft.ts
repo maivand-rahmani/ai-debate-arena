@@ -6,9 +6,11 @@
  */
 
 import type { RedactedProvider } from "@/shared/api/providers";
+import type { MatchMode } from "@arena/types";
+
+export type { MatchMode };
 
 export type Position = "FOR" | "AGAINST";
-export type MatchMode = "quick" | "standard" | "hardcore";
 
 export interface MatchDraft {
   readonly topic: string;

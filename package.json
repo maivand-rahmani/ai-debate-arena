@@ -9,8 +9,8 @@
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "eval:judge": "npm -w @arena/web run eval:judge",
-    "provider:add": "npm -w @arena/web run provider:add"
+    "eval:judge": "tsx apps/web/scripts/judge-eval.mjs",
+    "provider:add": "tsx apps/web/scripts/provider-add.ts"
   },
   "//optionalDepsNote": "@rolldown/binding-win32-x64-msvc is a Windows native-binding hoist for rolldown (pulled in via vite/vitest); npm's optional-deps install bug drops it from node_modules, breaking vitest. Keep its version aligned with the installed rolldown version whenever rolldown bumps, and add sibling platform bindings the same way if other OSes need them.",
   "optionalDependencies": {

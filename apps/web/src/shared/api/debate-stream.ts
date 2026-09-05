@@ -10,6 +10,23 @@
  */
 
 import type { DebateSide } from "@arena/types";
+import type {
+  DebateStreamPhase,
+  DebateStreamTerminal,
+  DebateStreamVerdict,
+} from "@arena/types";
+
+// Canonical wire primitives (structurally identical to `@arena/types`).
+// The remaining client shapes below (Turn/EventBody/Event/Envelope) stay
+// local on purpose: they tolerate partial payloads (optional `createdAt`,
+// narrowed turn phases, optional `terminal`, partial envelope) so the UI
+// degrades gracefully instead of crashing.
+export type {
+  DebateStreamPhase,
+  DebateStreamTerminal,
+  DebateStreamVerdict,
+  DebateStreamVerdictCriteria,
+} from "@arena/types";
 
 export type DebateStreamMode = "quick";
 
@@ -36,18 +53,6 @@ export interface DebateStreamEnvelope {
   readonly seq: number;
 }
 
-export type DebateStreamTerminal = "completed" | "error" | "cancelled";
-
-/** Mirrors the server-side phase union (kept as strings to stay decoupled). */
-export type DebateStreamPhase =
-  | "CREATED"
-  | "OPENING_A"
-  | "OPENING_B"
-  | "REBUTTAL_A"
-  | "REBUTTAL_B"
-  | "JUDGING"
-  | "FINISHED";
-
 export interface DebateStreamTurn {
   readonly id: string;
   readonly side: DebateSide;
@@ -55,25 +60,6 @@ export interface DebateStreamTurn {
   readonly content: string;
   readonly model: string;
   readonly createdAt?: string;
-}
-
-export interface DebateStreamVerdictCriteria {
-  readonly argumentQualityA: number;
-  readonly argumentQualityB: number;
-  readonly rebuttalA: number;
-  readonly rebuttalB: number;
-  readonly consistencyA: number;
-  readonly consistencyB: number;
-  readonly relevanceA: number;
-  readonly relevanceB: number;
-}
-
-export interface DebateStreamVerdict {
-  readonly winner: DebateSide | "DRAW";
-  readonly scoreA: number;
-  readonly scoreB: number;
-  readonly criteria: DebateStreamVerdictCriteria;
-  readonly reasoning: string;
 }
 
 export type DebateStreamEventBody =

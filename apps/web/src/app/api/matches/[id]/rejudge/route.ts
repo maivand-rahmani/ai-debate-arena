@@ -9,7 +9,7 @@ import {
 import { matchSummary } from "@/features/run-debate/server/export";
 import { runJudge, type ModelUsage } from "@arena/debate-engine";
 import { webCallModel } from "@/features/run-debate/server/web-adapter";
-import { toSafeErrorMessage } from "@/shared/api/llm/errors";
+import { toSafeErrorMessage } from "@arena/ai";
 import { getProvider } from "@/shared/config/provider-store";
 import { loadMatchRecord, matchRecordPath, saveMatchRecord } from "@/shared/config/match-store";
 

@@ -11,11 +11,12 @@
  */
 
 import type { DebateStreamVerdict } from "./debate-stream";
+import type { MatchMode } from "@arena/types";
 
 // --- Public types -----------------------------------------------------------
 
 export type MatchTerminal = "completed" | "error" | "cancelled";
-export type MatchMode = "quick" | "standard" | "hardcore";
+export type { MatchMode };
 export type MatchWinner = "A" | "B" | "DRAW";
 
 export interface MatchSummary {
