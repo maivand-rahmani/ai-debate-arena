@@ -232,8 +232,7 @@ textarea { resize: none; }
   position: relative;
   isolation: isolate;
   width: 100%;
-  height: clamp(520px, 72vh, 900px);
-  border-radius: 22px;
+  height: clamp(520px, 94vh, 101vh);
   overflow: hidden;
   background:
     radial-gradient(ellipse 100% 60% at 50% 110%, rgba(200, 155, 61, 0.10), transparent 70%),

@@ -148,7 +148,7 @@ export default function ArenaScreen() {
   return (
     <main className="min-h-screen overflow-x-hidden" style={{ background: "#0c0a07" }}>
       <div className="ambient-glow" aria-hidden="true" />
-      <div className="relative z-10 mx-auto w-full max-w-[1280px] px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+      <div className="relative z-10 mx-auto w-full h-full">
         <ArenaFrame
           topic={topic}
           state={state}
@@ -206,10 +206,6 @@ export default function ArenaScreen() {
           </div>
         ) : null}
       </div>
-      <footer className="relative z-10 border-t px-5 py-5 text-center text-[10px] font-bold uppercase tracking-[0.18em]"
-              style={{ borderColor: "rgba(184,162,133,.18)", color: "#8a7a64" }}>
-        A calm place for strong opinions · Local demo mode
-      </footer>
       <MatchHistoryDrawer open={historyOpen} onClose={handleCloseHistory} />
     </main>
   );
