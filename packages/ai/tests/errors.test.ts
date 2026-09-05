@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeErrorText, toSafeErrorMessage } from "./errors";
+import { sanitizeErrorText, toSafeErrorMessage } from "../src/index";
 
 describe("toSafeErrorMessage", () => {
   it("maps auth failures without leaking the key", () => {

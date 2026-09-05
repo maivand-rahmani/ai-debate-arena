@@ -7,8 +7,8 @@
     "dev": "npm -w @arena/web run dev",
     "build": "npm -w @arena/web run build",
     "lint": "eslint .",
-    "typecheck": "npm -w @arena/web run typecheck",
-    "test": "npm -w @arena/web run test",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "eval:judge": "npm -w @arena/web run eval:judge",
     "provider:add": "npm -w @arena/web run provider:add"
   },
