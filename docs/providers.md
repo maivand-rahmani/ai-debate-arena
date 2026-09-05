@@ -1,6 +1,6 @@
 # Providers
 
-Any OpenAI-compatible chat API. Schema (`shared/config/provider.ts`):
+Any OpenAI-compatible chat API. Schema (`apps/web/src/shared/config/provider.ts`):
 
 | Field      | Rule                                              |
 | ---------- | ------------------------------------------------- |
@@ -12,15 +12,19 @@ Any OpenAI-compatible chat API. Schema (`shared/config/provider.ts`):
 | `apiKey`   | 1–4096 chars; stored, never returned or printed   |
 
 Use `api: "responses"` when the endpoint only serves the OpenAI Responses API
-(`POST {baseUrl}/responses`) instead of Chat Completions; the model factory
-then uses `createOpenAI(...).responses(model)` from `@ai-sdk/openai`.
+(`POST {baseUrl}/responses`) instead of Chat Completions; `buildAiModel` in
+`@arena/ai` then uses `createOpenAI(...).responses(model)` from
+`@ai-sdk/openai`, otherwise `createOpenAICompatible(...).languageModel(model)`.
+The chat-vs-responses branching lives entirely in `@arena/ai` — callers pass
+the stored provider record through unchanged.
 
 ## Storage
 
 `~/.ai-debate-arena/providers.json` (override: `AI_DEBATE_ARENA_PROVIDER_FILE`).
 Written atomically (tmp file + rename) with `0600`; parent dir `0700`.
-Missing file reads as `{ providers: [] }`. Server-only (`server-only` import;
-`createConfiguredModel` builds the `@ai-sdk/openai-compatible` model per call).
+Missing file reads as `{ providers: [] }`. Server-only (`server-only` import
+in `apps/web/src/shared/config/`); resolution runs provider-db → `@arena/ai`
+`buildAiModel` per call, so `@arena/ai` itself never touches fs or secrets.
 
 ## Masking
 
@@ -28,10 +32,10 @@ Missing file reads as `{ providers: [] }`. Server-only (`server-only` import;
 last 4 chars (all `•` for keys ≤ 8 chars). The CLI confirms the save without
 echoing the key.
 
-## CLI
+## CLI (`apps/web/scripts/provider-add.ts`)
 
 ```bash
-npm run provider:add
+npm run provider:add            # tsx apps/web/scripts/provider-add.ts, from the repo root
 # Provider id · Display name · Base URL [https://api.openai.com/v1] ·
 # API type (chat/responses) [chat] · Default model [gpt-4o-mini] · API key
 ```
@@ -42,7 +46,7 @@ npm run provider:add
 - `POST /api/debate` takes `providerId` + per-side `model` (may differ from the
   stored default); unknown ids fail as safe `error` events, not stack traces.
 
-## Safe errors (`shared/api/llm/errors.ts`)
+## Safe errors (`@arena/ai`, `packages/ai/src/errors.ts`)
 
 `toSafeErrorMessage` maps: 401/403 → auth failure ("check the configured API
 key"); 429 → rate limit ("wait and try again"); timeouts/`AbortError` →

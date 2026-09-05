@@ -1,8 +1,14 @@
-# Debate engine
+# Debate engine (`@arena/debate-engine`)
+
+Framework-free package (`packages/debate-engine/src`): no React/Next,
+no AI SDK, no filesystem — `node:crypto` (`randomUUID`) is its only builtin.
+The Next app consumes it through the `"."` barrel; golden fixtures go through
+`"./testing"`. Future `apps/api` + `apps/worker` will consume the same entry
+points without React/Next.
 
 ## Phase machine
 
-7 states in `entities/debate/state.ts`, strictly linear (`NEXT_PHASE`):
+7 states in `packages/debate-engine/src/state.ts`, strictly linear (`NEXT_PHASE`):
 
 ```
 CREATED → OPENING_A → OPENING_B → REBUTTAL_A → REBUTTAL_B → JUDGING → FINISHED
@@ -13,7 +19,7 @@ CREATED → OPENING_A → OPENING_B → REBUTTAL_A → REBUTTAL_B → JUDGING �
 forces `FINISHED`. Sides: `A` speaks in `OPENING_A`/`REBUTTAL_A`, `B` in the
 `_B` phases; each side holds a fixed `FOR`/`AGAINST` position.
 
-## Runner loop (`runDebate`, `features/run-debate/server`)
+## Runner loop (`runDebate`, `packages/debate-engine/src/runner.ts`)
 
 Async generator with injectable `deps.callModel` (tests stub it; no network).
 Per agent phase: set state → emit `phase` → build system + user prompt →
@@ -23,7 +29,7 @@ emit `turn`. Then `judge-start` → `generateText` with
 Model errors emit `error` (via `toSafeErrorMessage`) then `done`; an invalid
 judge JSON emits `Judge returned invalid verdict` then `done`.
 
-## Token economy (`shared/token-policy.ts`, active: Quick)
+## Token economy (`packages/debate-engine/src/token-policy.ts`, active: Quick)
 
 | Policy   | agent out | judge out | rounds | maxContextChars | maxHistoryTurns |
 | -------- | --------- | --------- | ------ | --------------- | --------------- |
@@ -39,7 +45,24 @@ non-Quick modes.
 Short by design. System: debater identity + side + FOR/AGAINST stance + topic +
 "one focused argument, do not converse, respect token budget, plain text".
 User prompt: topic + phase + last-N turns sliced by `maxHistoryTurns`
-(`prompt.ts`), so context stays bounded as history grows.
+(`packages/debate-engine/src/prompt.ts`), so context stays bounded as history
+grows.
+
+## Runner ports
+
+`runDebate` is an async generator; `runJudge` runs the judge leg standalone.
+Both take their side effects as injected ports — the engine never touches the
+network or disk:
+
+- `callModel` (required): `(args) => Promise<{ text, chunks }>` — the web
+  adapter (`apps/web/src/features/run-debate/server/web-adapter.ts`) implements
+  it via provider resolution + `@arena/ai` + the `ai` SDK.
+- `saveMatch` (optional): persists the redacted match record; web passes
+  `webSaveMatch`, other consumers may omit it.
+- Judge contract: structured-output `generateText` first, one deterministic
+  temperature-0 plain-text retry, then `Judge returned invalid verdict` —
+  a verdict is never fabricated. `toSafeErrorMessage` is duplicated into
+  `runner.ts` under a v0.3 freeze contract (keep in sync with `@arena/ai`).
 
 ## Stream contract (`POST /api/debate` → `application/x-ndjson`, one object/line)
 
@@ -56,7 +79,7 @@ then `judge-start → verdict`, then `done`. On failure: `error` then `done`
 (`done` is always last). Client disconnect aborts `request.signal`; the route
 returns the generator (`events.return()`) so no further provider calls happen.
 
-## Judge rubric + verdict shape
+## Judge rubric + verdict shape (`rubric.ts` + `verdict.ts` in `packages/debate-engine/src`)
 
 Rubric (0–100 each side): argument quality, rebuttal quality, consistency,
 relevance. The judge must reply with STRICT JSON only:
@@ -65,8 +88,9 @@ relevance. The judge must reply with STRICT JSON only:
 {"winner":"A","scoreA":82,"scoreB":74,
  "criteria":{"argumentQualityA":85,"argumentQualityB":75,"rebuttalA":80,"rebuttalB":72,
  "consistencyA":83,"consistencyB":74,"relevanceA":84,"relevanceB":73},
- "reasoning":"…"}
+  "reasoning":"…"}
 ```
 
-Missing/partial `criteria` default from `scoreA`/`scoreB`; anything else
+Missing/partial `criteria` default from `scoreA`/`scoreB` (see
+`packages/debate-engine/src/verdict.ts`); anything else
 invalid fails parsing and becomes an `error` event, never a guess.

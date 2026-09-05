@@ -2,6 +2,7 @@
 
 Two AI debaters argue a motion you set — opening statements, rebuttals, then an AI judge scores both sides and declares a winner.
 Runs locally on Next.js; bring any OpenAI-compatible provider (OpenAI, OpenRouter, local Ollama).
+npm workspaces monorepo: `@arena/web` (the Next app) + `@arena/debate-engine`, `@arena/ai`, `@arena/types` packages (see `docs/architecture.md`).
 
 ## Stack
 
@@ -37,13 +38,16 @@ printed or committed. Add a second provider, or reuse one for both sides.
 | `npm run build`        | Production build                         |
 | `npm run lint`         | ESLint over the repo                     |
 | `npm run typecheck`    | `tsc --noEmit`                           |
-| `npm test`             | `vitest run` (18 tests)                  |
+| `npm test`             | `vitest run` across all workspaces (33 files)    |
 | `npm run provider:add` | Interactive provider setup (see above)   |
 
 ## Where things live
 
+- `apps/web/` — Next.js app (`src/{app,features,widgets,shared}`, `scripts/`)
+- `packages/debate-engine/` — phase machine, prompts, rubric, verdict, runner
+- `packages/ai/` — model factory + safe errors · `packages/types/` — wire types
 - `TODO.md` — backlog and MVP definition of done
-- `docs/architecture.md` — layers, data flow, extension points
+- `docs/architecture.md` — workspaces, layers, data flow, extension points
 - `docs/debate-engine.md` — phase machine, stream contract, judge rubric
 - `docs/providers.md` — provider setup, endpoints, key safety
 - `docs/development.md` — checks, tests, adding a phase

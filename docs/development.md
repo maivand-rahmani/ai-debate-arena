@@ -3,26 +3,36 @@
 Tested on Node 22 + npm 11. No `.env` needed; provider secrets live in the
 `0600` JSON store, never in env files.
 
-## Checks (run all before submitting)
+## Checks (run all before submitting, from the repo root)
 
 ```bash
+npm install    # once: installs all workspaces (apps/*, packages/*)
 npm run lint       # eslint .
-npm run typecheck  # tsc --noEmit
-npm test           # vitest run
-npm run build      # next build
+npm run typecheck  # typecheck --workspaces
+npm test           # test --workspaces
+npm run build      # builds @arena/web
 ```
 
-## Tests (18 across 7 files, `vitest run`, node env)
+Per-workspace runs (same commands, scoped):
 
-| File                                              | Covers                                              |
-| ------------------------------------------------- | --------------------------------------------------- |
-| `entities/debate/debate.test.ts`                  | Phase progression, judge JSON accept/reject         |
-| `entities/debate/state.test.ts`                   | `appendTurn` immutability, `attachVerdict` finish   |
-| `entities/debate/verdict.test.ts`                 | Criteria present/missing/invalid                    |
-| `shared/token-policy.test.ts`                     | Quick P0 limits, per-policy budgets, tier scaling   |
-| `shared/config/provider.test.ts`                  | Schema validation, key redaction                    |
-| `shared/api/llm/errors.test.ts`                   | Safe-error mapping, no key/URL leakage              |
-| `features/run-debate/server/debate-runner.test.ts` | Event order via stubbed model, error→done           |
+```bash
+npm -w @arena/web run dev            # Next dev server
+npm -w @arena/web run test           # web suite only
+npm -w @arena/debate-engine run test # engine suite only
+npm -w @arena/ai run typecheck       # single-package check
+```
+
+## Tests (33 files, `npm test` runs every workspace suite, node env)
+
+| File                                                        | Covers                                              |
+| ----------------------------------------------------------- | --------------------------------------------------- |
+| `packages/debate-engine/tests/debate.test.ts`               | Phase progression, judge JSON accept/reject         |
+| `packages/debate-engine/tests/state.test.ts`                | `appendTurn` immutability, `attachVerdict` finish   |
+| `packages/debate-engine/tests/verdict.test.ts`              | Criteria present/missing/invalid                    |
+| `packages/debate-engine/src/token-policy.ts` (`token-policy.test.ts`) | Quick P0 limits, per-policy budgets, tier scaling |
+| `apps/web/src/shared/config/provider.test.ts`               | Schema validation, key redaction                    |
+| `packages/ai/tests/errors.test.ts`                          | Safe-error mapping, no key/URL leakage              |
+| `packages/debate-engine/tests/runner.test.ts`               | Event order via stubbed model, error→done           |
 
 The runner test stubs `deps.callModel`, so no network or `server-only`
 imports execute under vitest.
@@ -30,10 +40,13 @@ imports execute under vitest.
 ## Judge eval (rubric v1 vs v2, F9-25)
 
 ```bash
-npx tsx scripts/judge-eval.mjs                        # full run: 6 fixtures x v1/v2 = 12 judge calls
-npx tsx scripts/judge-eval.mjs --dry-run              # plan only: no network, no file writes
-npx tsx scripts/judge-eval.mjs "--only=clear-A,1"     # retry one fixture,version cell (quote the flag in PowerShell)
+npx tsx apps/web/scripts/judge-eval.mjs                        # full run: 6 fixtures x v1/v2 = 12 judge calls
+npx tsx apps/web/scripts/judge-eval.mjs --dry-run              # plan only: no network, no file writes
+npx tsx apps/web/scripts/judge-eval.mjs "--only=clear-A,1"     # retry one fixture,version cell (quote the flag in PowerShell)
 ```
+
+Scripts live in `apps/web/scripts/` — always run them from the repo root
+(the eval report path and `@/` alias resolve from there).
 
 Each case runs the golden transcript through the production `runJudge`
 pipeline against the configured provider (default: first entry in the
@@ -47,12 +60,12 @@ failing cases.
 
 ## Adding a phase end-to-end
 
-1. `entities/debate/types.ts` — extend `DebatePhase` (and turn-phase union).
-2. `entities/debate/state.ts` — add the `NEXT_PHASE` edge.
-3. `entities/debate/prompts.ts` — add its one-line `PHASE_INSTRUCTIONS`.
-4. `features/run-debate/server/debate-runner.ts` — extend `AGENT_PHASES`.
+1. `packages/debate-engine/src/types.ts` — extend `DebatePhase` (and turn-phase union).
+2. `packages/debate-engine/src/state.ts` — add the `NEXT_PHASE` edge.
+3. `packages/debate-engine/src/prompts.ts` — add its one-line `PHASE_INSTRUCTIONS`.
+4. `packages/debate-engine/src/runner.ts` — extend `AGENT_PHASES`.
 5. `docs/debate-engine.md` — extend the stream contract (byte-identical rest).
-6. `features/run-debate/lib` + `ui` — handle the new phase in reducer/panels.
+6. `apps/web/src/features/run-debate/lib` + `ui` — handle the new phase in reducer/panels.
 
 ## Build note
 
@@ -69,4 +82,4 @@ tracing. Harmless for this local app — no action needed.
 - `npx vitest run` — FAIL (exit 1, ~1.5s; rolldown startup error: `Cannot find native binding` / `Cannot find module '@rolldown/binding-wasm32-wasi'` via `./rolldown-binding.wasi.cjs`; captured as-is, no workaround applied).
 - `npm run build` (`next build`) — pass (~15s; only the expected Turbopack dynamic-filesystem-access warning in `provider-db.ts`).
 - Note: `npm ci` currently hits the same npm optional-dependencies bug for rolldown native bindings on this platform (workaround: use `npm install`).
-- Secret sweep (2026-09-04): no real keys in tracked files or history (only `sk-FAKE*` placeholders in `src/shared/api/llm/errors.test.ts`); secret store `providers.json` lives outside the repo and is untracked.
+- Secret sweep (2026-09-04): no real keys in tracked files or history (only `sk-FAKE*` placeholders in the safe-error tests, now `packages/ai/tests/errors.test.ts`); secret store `providers.json` lives outside the repo and is untracked.

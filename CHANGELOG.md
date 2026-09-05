@@ -2,6 +2,21 @@
 
 All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`.
 
+## [Unreleased]
+
+### Package-based architecture (no product changes)
+- npm workspaces (`apps/*`, `packages/*`): `@arena/web` (Next 16 app, FSD now
+  apps/web-internal, `entities` layer retired), `@arena/debate-engine` (phase
+  machine, prompts, rubric, verdict, contracts, `runDebate`/`runJudge` with
+  injected `callModel`/`saveMatch` ports), `@arena/ai` (`buildAiModel` factory
+  + safe errors, no fs/secrets), `@arena/types` (canonical NDJSON wire types).
+- Dependency direction is one-way with no cycles (web → engine/ai/types,
+  engine → types), enforced by `exports` maps (`"."` only + `"./testing"`
+  fixtures) and eslint boundary rules (no deep `@arena/*/src/*` imports, pure
+  packages free of react/next/three/ai-sdk/fs).
+- v0.3 behavior preserved byte-for-byte: NDJSON stream golden-verified
+  (31/31/8 events), routes and UI untouched, no user-facing changes.
+
 ## v0.3.0 — The Arena Becomes a Game (2026-09-05)
 
 ### Real-time 3D world (replaces the v0.3-first-pass CSS stage)
