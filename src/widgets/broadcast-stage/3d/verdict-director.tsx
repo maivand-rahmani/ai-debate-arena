@@ -11,11 +11,20 @@ import type { VerdictPropHandles } from "./arena-props";
  * defined in {@link ./confetti}.
  *
  * Behavior:
- *   - First poll of a NEW verdict (stamp differs from the last seen)
- *     schedules gavel strike at T=120ms, confetti burst at T=340ms.
+ *   - First poll of a NEW verdict (stamp never scheduled before) fires the
+ *     gavel strike at T=120ms, confetti burst at T=340ms.
+ *   - DRAW gets a centered confetti burst over the judge platform — the
+ *     celebration moment still reads, minus the winner-side framing
+ *     (accepted at Gate C; matches confetti.test.ts).
  *   - Reduced motion: confetti suppressed (per spec); gavel still ticks.
  *   - Cancelled/error transitions: nothing (no props get touched).
- *   - Unmount clears pending timers so a hot-reload doesn't leak.
+ *
+ * StrictMode note (Gate C fix #1): deliberately NO effect cleanup here.
+ * React 19 dev double-mount would clear a pending timer while the stamp
+ * guard had already consumed it — silently killing the verdict moment in
+ * dev. Instead we keep a set of scheduled stamps so the second mount is a
+ * no-op while the first mount's timers run. A debate session's verdict
+ * count is tiny, so the set needs no pruning.
  *
  * The director is rendered inside the canvas tree so it sits under
  * `<Physics>` (Rapier bodies need to exist) but reads from the bridge
@@ -28,33 +37,30 @@ export function VerdictDirector({
   readonly signal: SceneSignal | undefined;
   readonly handlesRef: React.MutableRefObject<VerdictPropHandles>;
 }) {
-  const lastStampRef = useRef<string | null>(null);
+  const scheduledStampsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!signal) return;
     if (signal.status !== "finished") return;
     if (!signal.verdictWinner) return;
-    if (signal.verdictStamp === lastStampRef.current) return;
-    lastStampRef.current = signal.verdictStamp;
+    const stamp = signal.verdictStamp;
+    if (stamp === null || scheduledStampsRef.current.has(stamp)) return;
 
     const handles = handlesRef.current;
     if (!handles) return;
+    scheduledStampsRef.current.add(stamp);
 
     const winner = signal.verdictWinner;
+    const reducedMotion = signal.reducedMotion;
 
-    // Schedule per the VERDICT_TIMING offsets. Cleanup clears both.
-    const gavelTimer = window.setTimeout(() => {
+    // Fire-and-forget: no cleanup — StrictMode must not cancel the moment.
+    window.setTimeout(() => {
       handles.gavel?.strike();
     }, VERDICT_TIMING.gavelStrikeMs);
 
-    const confettiTimer = window.setTimeout(() => {
-      handles.confetti?.burst(winner, signal.reducedMotion);
+    window.setTimeout(() => {
+      handles.confetti?.burst(winner, reducedMotion);
     }, VERDICT_TIMING.confettiTriggerMs);
-
-    return () => {
-      window.clearTimeout(gavelTimer);
-      window.clearTimeout(confettiTimer);
-    };
   }, [signal, handlesRef]);
 
   return null;

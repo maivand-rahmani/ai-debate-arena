@@ -105,7 +105,7 @@ export function BroadcastConsole({
   };
 
   return (
-    <div className="broadcast-console" aria-label="Match console">
+    <form className="broadcast-console" aria-label="Match console" onSubmit={submit}>
       <div className="broadcast-console__panel" role="group" aria-label="Topic">
         <header className="broadcast-console__panel-head">
           <span className="broadcast-console__eyebrow">{"Tonight\u2019s motion"}</span>
@@ -155,7 +155,7 @@ export function BroadcastConsole({
               ))}
             </ul>
           ) : null}
-          <form onSubmit={submit} aria-label="Start match" className="broadcast-console__form">
+          <div className="broadcast-console__form">
             {errorMessage ? (
               <div className="broadcast-console__error" role="alert">
                 {errorMessage}
@@ -172,10 +172,10 @@ export function BroadcastConsole({
                 →
               </span>
             </button>
-          </form>
+          </div>
         </div>
       </div>
-    </div>
+    </form>
   );
 }
 
