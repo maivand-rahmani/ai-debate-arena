@@ -34,10 +34,6 @@ export interface CharacterAnchorRefs {
 /** Pose shape accepted via the live `mood` prop. */
 export type Pose = ContenderPose | JudgePose;
 
-function isJudgePose(p: Pose): p is JudgePose {
-  return "browFurrow" in p;
-}
-
 /**
  * Character visual + physics scaffold props. The new `mood` field is
  * optional — if absent the character falls back to the baseline
@@ -166,6 +162,3 @@ export function SeatedCharacter(props: ArenaCharacterProps) {
     </group>
   );
 }
-
-// Internal helpers exposed for tests / collaborators.
-export { isJudgePose, poseForMood };

@@ -269,13 +269,13 @@ Milestone: a match feels like a funny, cinematic sports broadcast with two AI co
 - [x] [P0] F4-17 Before writing v0.3 UI code, pause and discuss the design brief with the user: scene layout, visual style, character direction, camera shots, lighting, emotions, and implementation scope. Do not start this redesign silently. (2026-09-04: premium hybrid 3D direction approved as Option B; CSS/SVG stage skeleton lane first, WebGL lane deferred.)
 - [x] [P0] F4-18 Confirm the stylized 3D/2.5D arena direction: two contenders seated at separate desks with computers, a Judge seated between them, an arena-like set, and a sports-broadcast feeling without copying UFC branding. (2026-09-04: confirmed with R1 CSS/SVG skeleton — two desks with monitors, central Judge plinth, perspective backdrop with floor, inline-SVG geometric mascots, central round marker; future WebGL atmosphere to layer on top.)
 - [x] [P0] F4-19 Build the main scene composition with two characters, two desks/computers, the central Judge, arena backdrop, round indicator, and match status. (2026-09-04: R1 CSS/SVG skeleton landed in `src/widgets/broadcast-stage/` — backdrop+floor, two `AgentDesk`s, central `JudgePlinth`, floating `RoundMarker`, monitor tiles carrying provider/model/status. Pure `deriveStageView` projection from existing `DebateRuntimeState`; 21 focused unit tests on the state mapping. Awaiting R2 review for emotion/meme and WebGL atmosphere layer.)
-- [ ] [P0] F4-20 Add state-driven lighting and a small set of planned camera changes for thinking, speaking, rebuttal, Judge speaking, and verdict. Do not build a free-roaming 3D camera.
-- [ ] [P0] F4-21 Keep streamed speech as a readable first-class layer over or beside the 3D scene; the visual spectacle must not hide the debate.
-- [ ] [P1] F4-22 Add simple character emotions and reactions tied to match events and phases; do not make an extra AI call only to decide an emotion.
-- [ ] [P1] F4-23 Add a small curated meme-reaction library such as “Agent is cooking”, “Judge is not impressed”, and “Argument.exe stopped responding”, with mute and reduced-motion support.
-- [ ] [P1] F4-24 Provide a responsive layout and a lightweight non-WebGL fallback that preserves the same match information.
-- [ ] [P1] F4-25 Keep the first 3D pass lightweight: limited assets and animations, no physics, no free-roam world, and no complex character-rigging pipeline.
-- [ ] [P0] F4-26 Review the working v0.3 Arena with the user before moving to v0.4; record the accepted direction and the remaining visual polish.
+- [x] [P0] F4-20 Add state-driven lighting and a small set of planned camera changes for thinking, speaking, rebuttal, Judge speaking, and verdict. Do not build a free-roaming 3D camera. (2026-09-05: replaced by the REAL 3D slice per user clarification — `camera-presets.ts`/`camera-director.tsx` with 7 broadcast shots driven by the scene signal, `lighting-presets.ts`/`lighting-director.tsx` lerping spot/key intensities per state; spectator OrbitControls (constrained) + automatic cinematic cuts; no free-roam. Unit-tested.)
+- [x] [P0] F4-21 Keep streamed speech as a readable first-class layer over or beside the 3D scene; the visual spectacle must not hide the debate. (2026-09-05: ArenaHud teleprompter rails/round marker/verdict render as real HTML above the canvas with pointer-events layering; SSR + tests confirm markup always present. Gate C checked readability boundaries.)
+- [x] [P1] F4-22 Add simple character emotions and reactions tied to match events and phases; do not make an extra AI call only to decide an emotion. (2026-09-05: `character-poses.ts` pure mood→pose tables applied through named anchors in the character `useFrame` — deterministic, zero extra AI calls (oracle gate C grep-confirmed).)
+- [x] [P1] F4-23 Add a small curated meme-reaction library such as “Agent is cooking”, “Judge is not impressed”, and “Argument.exe stopped responding”, with mute and reduced-motion support. (2026-09-05: 7 curated reactions via `deriveReaction`, ReactionOverlay with mute toggle; reduced-motion suppresses bursts.)
+- [x] [P1] F4-24 Provide a responsive layout and a lightweight non-WebGL fallback that preserves the same match information. (2026-09-05: full-viewport canvas world; CanvasGate probe + error boundary render the complete 2D BroadcastStage when WebGL is unavailable — SSR probe shows fallback markup with zero three/rapier leakage; HUD hides itself without WebGL so the 2D stage carries all surfaces.)
+- [x] [P1] F4-25 Keep the first 3D pass lightweight: limited assets and animations, no physics, no free-roam world, and no complex character-rigging pipeline. (SUPERSEDED 2026-09-05 by explicit user direction: a REAL 3D game-like arena WITH physics and a controllable spectator camera. Implemented accordingly: pinned three/fiber/drei/rapier, procedural primitive geometry (zero asset pipeline), no rigging — animation is ref-writes in useFrame; camera is constrained orbit, not free-roam. The "no physics" clause replaced; all other spirit kept.)
+- [ ] [P0] F4-26 Review the working v0.3 Arena with the user before moving to v0.4; record the accepted direction and the remaining visual polish. (READY FOR REVIEW 2026-09-05: playable 3D slice implemented, gates A–C passed; awaiting the user's in-browser verdict.)
 
 NOTE (2026-09-05, 3D stack): three/@react-three/fiber 9 caps React <19.3 — fiber/drei/rapier/three must bump together when 19.3 lands.
 
@@ -376,10 +376,10 @@ Milestone: every release gate has repeatable evidence, not just a successful vis
 
 ### v0.3 Arena redesign QA
 
-- [ ] [P0] F7-16 Verify the three-character arena composition, two desks/computers, central Judge, and readable speech layer on the main desktop layout.
-- [ ] [P0] F7-17 Verify lighting and camera changes for thinking, speaking, rebuttal, Judge speaking, and verdict states.
-- [ ] [P1] F7-18 Verify emotion/meme reactions, mute/reduced-motion behavior, and that no extra model calls are made for mood.
-- [ ] [P1] F7-19 Verify responsive behavior, lightweight performance, and the non-WebGL fallback.
+- [ ] [P0] F7-16 Verify the three-character arena composition, two desks/computers, central Judge, and readable speech layer on the main desktop layout. (Code + unit tests in place; needs the user's browser eyes — part of F4-26 review.)
+- [ ] [P0] F7-17 Verify lighting and camera changes for thinking, speaking, rebuttal, Judge speaking, and verdict states. (Camera/lighting presets unit-tested; needs the user's browser eyes — part of F4-26 review.)
+- [x] [P1] F7-18 Verify emotion/meme reactions, mute/reduced-motion behavior, and that no extra model calls are made for mood. (2026-09-05: pure pose/reaction tables, gate C confirmed zero extra AI calls; mute wired through banner toggle; reduced-motion snaps directors and suppresses confetti; 308 tests green.)
+- [x] [P1] F7-19 Verify responsive behavior, lightweight performance, and the non-WebGL fallback. (2026-09-05: dpr cap [1,1.5], single 1024² shadow map, sleeping dynamic props; SSR probe proves fallback HTML carries every surface with no WebGL code executed; responsive CSS breakpoints + camera framing verified technically. Responsive feel also covered in the user's F4-26 pass.)
 
 ### v0.4 security and evidence QA
 
@@ -621,14 +621,16 @@ Verified 2026-09-04: 192 tests / typecheck / lint / build green; real-provider e
 
 ### v0.3 Arena UI Redesign
 
-- [ ] All v0.2 gates remain green.
-- [ ] The coding agent pauses before implementation and discusses the scene plan with the user.
-- [ ] The main arena has two contenders at desks with computers, a central Judge, and a sports-broadcast/UFC-like atmosphere without copying UFC branding.
-- [ ] The 3D/2.5D scene changes lighting and camera emphasis for thinking, speaking, rebuttal, Judge speaking, and verdict.
-- [ ] Character emotions and curated meme reactions are driven by match events without extra AI calls just for mood.
-- [ ] Streamed speech, round status, and verdict remain readable at all times.
-- [ ] The scene stays lightweight, responsive, and has a usable non-WebGL fallback.
+- [x] All v0.2 gates remain green.
+- [x] The coding agent pauses before implementation and discusses the scene plan with the user.
+- [x] The main arena has two contenders at desks with computers, a central Judge, and a sports-broadcast/UFC-like atmosphere without copying UFC branding.
+- [x] The 3D/2.5D scene changes lighting and camera emphasis for thinking, speaking, rebuttal, Judge speaking, and verdict.
+- [x] Character emotions and curated meme reactions are driven by match events without extra AI calls just for mood.
+- [x] Streamed speech, round status, and verdict remain readable at all times.
+- [x] The scene stays lightweight, responsive, and has a usable non-WebGL fallback.
 - [ ] The user reviews the working redesign before v0.4 work begins.
+
+Technical evidence 2026-09-05 (gates A–C passed): real R3F+Rapier arena world (308 tests / typecheck / lint / build green; SSR probe: fallback HTML intact, zero three/rapier execution server-side). The final box is the scheduled user game-world review (F4-26) — everything else is ready for it.
 
 ### v0.4 Evidence and Safe Execution
 

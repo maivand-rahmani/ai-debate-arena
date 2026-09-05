@@ -8,6 +8,7 @@ import {
   useRef,
 } from "react";
 import { RigidBody, CuboidCollider, type RapierRigidBody } from "@react-three/rapier";
+import { useFrame } from "@react-three/fiber";
 import { PALETTE } from "./colors";
 import { ARENA_LAYOUT, PROP_MASS } from "./scene-layout";
 import {
@@ -236,8 +237,6 @@ const ConfettiPool = forwardRef<ConfettiHandle>(function ConfettiPool(_, ref) {
     Array.from({ length: CONFETTI_POOL_SIZE }, () => false),
   );
   const settleAtRef = useRef<number | null>(null);
-  // capture the cycle number so we don't double-fire intervals.
-  const cycleRef = useRef(0);
 
   const burst = useCallback((winner: "A" | "B" | "DRAW", reducedMotion: boolean) => {
     if (reducedMotion) return;
@@ -285,7 +284,6 @@ const ConfettiPool = forwardRef<ConfettiHandle>(function ConfettiPool(_, ref) {
       aliveRef.current[i] = true;
     }
     settleAtRef.current = performance.now() + VERDICT_TIMING.confettiSettleMs;
-    cycleRef.current += 1;
   }, []);
 
   const reset = useCallback(() => {
@@ -300,29 +298,18 @@ const ConfettiPool = forwardRef<ConfettiHandle>(function ConfettiPool(_, ref) {
 
   useImperativeHandle(ref, () => ({ burst, reset }), [burst, reset]);
 
-  // Mount-frame settle ticker: polls until the settle deadline elapses,
-  // then resets the pool. Cleanup handled by returning clearInterval.
-  useEffect(() => {
-    if (settleAtRef.current === null) return;
-    const myCycle = cycleRef.current;
-    const id = window.setInterval(() => {
-      if (settleAtRef.current === null) return;
-      if (myCycle !== cycleRef.current) {
-        window.clearInterval(id);
-        return;
-      }
-      if (performance.now() >= settleAtRef.current) {
-        for (let i = 0; i < CONFETTI_POOL_SIZE; i++) {
-          const body = bodiesRef.current[i];
-          if (!body) continue;
-          hidePiece(body);
-          aliveRef.current[i] = false;
-        }
-        settleAtRef.current = null;
-        window.clearInterval(id);
-      }
-    }, 220);
-    return () => window.clearInterval(id);
+  // Settle check rides the R3F frame loop (Gate C cleanup: no per-render
+  // setInterval churn; runs at most until the deadline, then no-ops).
+  useFrame(() => {
+    const settleAt = settleAtRef.current;
+    if (settleAt === null || performance.now() < settleAt) return;
+    for (let i = 0; i < CONFETTI_POOL_SIZE; i++) {
+      const body = bodiesRef.current[i];
+      if (!body) continue;
+      hidePiece(body);
+      aliveRef.current[i] = false;
+    }
+    settleAtRef.current = null;
   });
 
   const COLOR_INDEX = (i: number) =>
