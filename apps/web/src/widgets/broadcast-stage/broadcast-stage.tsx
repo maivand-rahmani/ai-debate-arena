@@ -2,6 +2,7 @@
 
 import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
+import { ErrorPanel } from "@/features/run-debate/ui/error-panel";
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
 import type { RedactedProvider } from "@/shared/api/providers";
 import { BroadcastBanner } from "./broadcast-banner";
@@ -73,6 +74,7 @@ export function BroadcastStage({
   const view = deriveStageView(state);
 
   const showCancelled = state.status === "cancelled";
+  const showError = state.status === "error";
   const showJudge = state.status === "judging" || state.status === "finished";
   const showLiveCaption = shouldShowLiveCaptionStatus(state.status);
   const broadcastLive = isBroadcastLiveStatus(state.status);
@@ -142,7 +144,11 @@ export function BroadcastStage({
           />
         </div>
 
-        <ReactionOverlay reaction={view.reaction} muted={reactionsMuted} position="top-right" />
+        <ReactionOverlay
+          reaction={state.status === "error" || state.status === "cancelled" ? null : view.reaction}
+          muted={reactionsMuted}
+          position="top-right"
+        />
       </div>
 
       {broadcastLive ? (
@@ -157,7 +163,13 @@ export function BroadcastStage({
         </div>
       ) : null}
 
-      {showCancelled ? (
+      {showError ? (
+        onNewMatch ? (
+          <div className="broadcast-stage__caption">
+            <ErrorPanel state={state} onNewMatch={onNewMatch} />
+          </div>
+        ) : null
+      ) : showCancelled ? (
         onNewMatch ? <CancelledPanel state={state} onNewMatch={onNewMatch} /> : null
       ) : showJudge ? (
         judgeState === "revealed" && verdict ? (

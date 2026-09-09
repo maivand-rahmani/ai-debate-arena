@@ -10,6 +10,7 @@ import { initialRuntimeState, type DebateRuntimeState } from "@/features/run-deb
 import { LiveCaption } from "./live-caption";
 import { VerdictCard } from "./verdict-card";
 import { CompactChip } from "./compact-chip";
+import { ErrorPanel } from "@/features/run-debate/ui/error-panel";
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
 
 const verdict: DebateStreamVerdict = {
@@ -96,6 +97,20 @@ describe("VerdictCard", () => {
     const html = renderToStaticMarkup(<VerdictCard verdict={draw} topic="Whatever" />);
     expect(html).toContain("Draw");
     expect(html).toContain("Tied");
+  });
+});
+
+describe("ErrorPanel", () => {
+  it("renders one clear recovery action for a failed match", () => {
+    const state: DebateRuntimeState = {
+      ...initialRuntimeState,
+      status: "error",
+      errorMessage: "Provider stopped responding",
+    };
+    const html = renderToStaticMarkup(<ErrorPanel state={state} onNewMatch={() => undefined} />);
+    expect(html).toContain("The debate could not finish");
+    expect(html).toContain("Provider stopped responding");
+    expect(html).toContain("New match");
   });
 });
 

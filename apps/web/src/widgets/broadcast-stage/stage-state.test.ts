@@ -47,9 +47,9 @@ describe("stage surface status rules", () => {
     expect(nonLiveStatuses.some(isBroadcastLiveStatus)).toBe(false);
   });
 
-  it("shows live captions for streamed text and recoverable errors only", () => {
+  it("shows live captions only for streamed text", () => {
     expect(shouldShowLiveCaptionStatus("streaming")).toBe(true);
-    expect(shouldShowLiveCaptionStatus("error")).toBe(true);
+    expect(shouldShowLiveCaptionStatus("error")).toBe(false);
     expect(shouldShowLiveCaptionStatus("judging")).toBe(false);
     expect(shouldShowLiveCaptionStatus("finished")).toBe(false);
     expect(shouldShowLiveCaptionStatus("cancelled")).toBe(false);

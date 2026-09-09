@@ -7,6 +7,7 @@ import { ReactionOverlay } from "./reactions/reaction-overlay";
 import { LiveCaption, CompactChip, VerdictCard } from "@/features/arena/captions";
 import { VerdictEvaluating } from "./verdict/verdict-reveal";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
+import { ErrorPanel } from "@/features/run-debate/ui/error-panel";
 import { deriveStageView, isBroadcastLiveStatus, shouldShowLiveCaptionStatus } from "./stage-state";
 import type { BroadcastStageProps } from "./broadcast-stage";
 import { useWebGLSupport } from "./3d";
@@ -52,6 +53,7 @@ export function ArenaHud(props: ArenaHudProps) {
   const view = deriveStageView(state);
 
   const showCancelled = state.status === "cancelled";
+  const showError = state.status === "error";
   const showJudge = state.status === "judging" || state.status === "finished";
   const showLiveCaption = shouldShowLiveCaptionStatus(state.status);
   const broadcastLive = isBroadcastLiveStatus(state.status);
@@ -90,7 +92,11 @@ export function ArenaHud(props: ArenaHudProps) {
       ) : null}
 
       {/* Floating reaction overlay (aria-hidden, decorative). */}
-      <ReactionOverlay reaction={view.reaction} muted={reactionsMuted} position="top-right" />
+      <ReactionOverlay
+        reaction={state.status === "error" || state.status === "cancelled" ? null : view.reaction}
+        muted={reactionsMuted}
+        position="top-right"
+      />
 
       {/* Dim the 3D scene so the captions stay the focal point. The
           overlay is invisible when no match is in flight. */}
@@ -107,7 +113,13 @@ export function ArenaHud(props: ArenaHudProps) {
           calmer panels; the verdict reveal now uses the new VerdictCard
           (which lives in the same caption chrome) instead of a
           full-screen terminal. */}
-      {showCancelled ? (
+      {showError ? (
+        onNewMatch ? (
+          <div className="arena-hud__terminal arena-hud__terminal--error">
+            <ErrorPanel state={state} onNewMatch={onNewMatch} />
+          </div>
+        ) : null
+      ) : showCancelled ? (
         onNewMatch ? (
           <div className="arena-hud__terminal arena-hud__terminal--cta">
             <CancelledPanel state={state} onNewMatch={onNewMatch} />

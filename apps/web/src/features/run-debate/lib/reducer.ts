@@ -366,7 +366,8 @@ export function isInMatch(state: DebateRuntimeState): boolean {
     state.status === "streaming" ||
     state.status === "judging" ||
     state.status === "finished" ||
-    state.status === "cancelled"
+    state.status === "cancelled" ||
+    state.status === "error"
   );
 }
 

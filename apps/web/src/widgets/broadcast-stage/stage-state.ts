@@ -62,9 +62,9 @@ export function isBroadcastLiveStatus(status: DebateRuntimeStatus): boolean {
   return status === "starting" || status === "streaming" || status === "judging";
 }
 
-/** A caption surface belongs to an active stream (or its recoverable error). */
+/** A caption surface belongs only to an active stream. Errors get one terminal panel. */
 export function shouldShowLiveCaptionStatus(status: DebateRuntimeStatus): boolean {
-  return status === "streaming" || status === "error";
+  return status === "streaming";
 }
 
 export function deriveStageView(state: DebateRuntimeState): StageView {
