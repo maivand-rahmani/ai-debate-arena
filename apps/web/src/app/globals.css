@@ -3334,6 +3334,42 @@ textarea { resize: none; }
   color: #d4a843;
   margin-bottom: 6px;
 }
+.verdict-card__criteria {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(184, 162, 133, 0.18);
+  border-radius: 10px;
+  background: rgba(184, 162, 133, 0.12);
+}
+.verdict-card__criteria-head,
+.verdict-card__criterion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(20, 17, 13, 0.72);
+}
+.verdict-card__criteria-head {
+  color: #d4a843;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.verdict-card__criteria-head > :not(:first-child),
+.verdict-card__criterion strong { text-align: right; }
+.verdict-card__criterion {
+  color: rgba(184, 162, 133, 0.9);
+  font-size: 12px;
+}
+.verdict-card__criterion strong {
+  color: rgba(244, 237, 225, 0.78);
+  font-family: 'Syne', ui-sans-serif, sans-serif;
+  font-size: 13px;
+}
+.verdict-card__criterion strong.is-leading { color: #d4a843; }
 .verdict-card__actions { display: flex; justify-content: flex-end; }
 
 @media (max-width: 700px) {

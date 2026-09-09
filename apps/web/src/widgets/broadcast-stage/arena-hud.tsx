@@ -131,6 +131,8 @@ export function ArenaHud(props: ArenaHudProps) {
             <VerdictCard
               verdict={verdict}
               topic={state.topic ?? topic}
+              sideAPosition={props.draftSideAPosition}
+              sideBPosition={props.draftSideBPosition}
               footer={footer ? { ...footer, matchId: state.matchId ?? footer.matchId } : undefined}
             />
           </div>

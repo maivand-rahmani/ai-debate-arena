@@ -6,6 +6,8 @@ import { MatchActions, type RejudgeStatus } from "@/features/run-debate/ui/match
 interface VerdictCardProps {
   readonly verdict: DebateStreamVerdict;
   readonly topic: string;
+  readonly sideAPosition?: "FOR" | "AGAINST";
+  readonly sideBPosition?: "FOR" | "AGAINST";
   readonly footer?: {
     readonly matchId?: string;
     readonly canRejudge: boolean;
@@ -24,15 +26,21 @@ interface VerdictCardProps {
  * wants the full-screen detail (re-judge flow, export, etc.) the
  * actions use the existing match-actions + criteria-view bits.
  */
-export function VerdictCard({ verdict, topic, footer }: VerdictCardProps) {
-  const total = Math.max(1, verdict.scoreA + verdict.scoreB);
-  const shareA = Math.round((verdict.scoreA / total) * 100);
-  const shareB = 100 - shareA;
+export function VerdictCard({
+  verdict,
+  topic,
+  sideAPosition = "FOR",
+  sideBPosition = "AGAINST",
+  footer,
+}: VerdictCardProps) {
   const winner = verdict.winner;
   const winnerLabel =
     winner === "DRAW" ? "Draw" : winner === "A" ? "The Challenger wins" : "The Advocate wins";
-  const tagline =
-    winner === "DRAW" ? "Tied" : winner === "A" ? "For the motion" : "Against the motion";
+  const winnerPosition = winner === "A" ? sideAPosition : sideBPosition;
+  const scoreMargin = Math.abs(verdict.scoreA - verdict.scoreB);
+  const tagline = winner === "DRAW"
+    ? `${scoreMargin}-point gap · scored as a draw`
+    : `${scoreMargin}-point margin · ${winnerPosition === "FOR" ? "for" : "against"} the motion`;
 
   return (
     <section className="verdict-card" aria-label="Verdict" aria-live="polite">
@@ -58,7 +66,7 @@ export function VerdictCard({ verdict, topic, footer }: VerdictCardProps) {
           tone="coral"
           identity="The Challenger"
           score={verdict.scoreA}
-          share={shareA}
+          outcome={winner === "DRAW" ? "Draw" : winner === "A" ? "Winner" : "Runner up"}
           isWinner={winner === "A"}
         />
         <span aria-hidden="true" className="verdict-card__divider">
@@ -68,10 +76,30 @@ export function VerdictCard({ verdict, topic, footer }: VerdictCardProps) {
           tone="violet"
           identity="The Advocate"
           score={verdict.scoreB}
-          share={shareB}
+          outcome={winner === "DRAW" ? "Draw" : winner === "B" ? "Winner" : "Runner up"}
           isWinner={winner === "B"}
         />
       </div>
+
+      <section className="verdict-card__criteria" aria-label="Judge scorecard">
+        <div className="verdict-card__criteria-head">
+          <span>Judge scorecard</span>
+          <span aria-label={`Challenger score ${verdict.scoreA}`}>A</span>
+          <span aria-label={`Advocate score ${verdict.scoreB}`}>B</span>
+        </div>
+        {CRITERIA.map((criterion) => {
+          const scoreA = verdict.criteria[criterion.a];
+          const scoreB = verdict.criteria[criterion.b];
+          const leader = scoreA === scoreB ? "tie" : scoreA > scoreB ? "a" : "b";
+          return (
+            <div key={criterion.label} className="verdict-card__criterion">
+              <span>{criterion.label}</span>
+              <strong className={leader === "a" ? "is-leading" : ""}>{scoreA}</strong>
+              <strong className={leader === "b" ? "is-leading" : ""}>{scoreB}</strong>
+            </div>
+          );
+        })}
+      </section>
 
       {verdict.reasoning ? (
         <p className="verdict-card__reasoning">
@@ -100,13 +128,13 @@ function ScoreCard({
   tone,
   identity,
   score,
-  share,
+  outcome,
   isWinner,
 }: {
   readonly tone: "coral" | "violet";
   readonly identity: string;
   readonly score: number;
-  readonly share: number;
+  readonly outcome: "Winner" | "Runner up" | "Draw";
   readonly isWinner: boolean;
 }) {
   return (
@@ -117,15 +145,26 @@ function ScoreCard({
     >
       <div className="verdict-card__score-head">
         <span>{identity}</span>
-        <span>{isWinner ? "Winner" : "Runner up"}</span>
+        <span>{outcome}</span>
       </div>
       <p className="verdict-card__score-value">
         {score}
         <span className="verdict-card__score-suffix">/ 100</span>
       </p>
       <div className="verdict-card__score-bar" aria-hidden="true">
-        <div className="verdict-card__score-bar-fill" style={{ width: `${share}%` }} />
+        <div className="verdict-card__score-bar-fill" style={{ width: `${clampScore(score)}%` }} />
       </div>
     </div>
   );
+}
+
+const CRITERIA = [
+  { label: "Argument quality", a: "argumentQualityA", b: "argumentQualityB" },
+  { label: "Rebuttal", a: "rebuttalA", b: "rebuttalB" },
+  { label: "Consistency", a: "consistencyA", b: "consistencyB" },
+  { label: "Relevance", a: "relevanceA", b: "relevanceB" },
+] as const;
+
+function clampScore(score: number): number {
+  return Math.min(100, Math.max(0, score));
 }

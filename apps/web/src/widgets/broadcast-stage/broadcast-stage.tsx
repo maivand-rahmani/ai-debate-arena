@@ -178,6 +178,8 @@ export function BroadcastStage({
             <VerdictCard
               verdict={verdict}
               topic={state.topic ?? topic}
+              sideAPosition={draftSideAPosition}
+              sideBPosition={draftSideBPosition}
               footer={footer ? { ...footer, matchId: state.matchId ?? footer.matchId } : undefined}
             />
           </div>

@@ -85,18 +85,27 @@ describe("VerdictCard", () => {
   it("renders the winner, scores, and reasoning", () => {
     const html = renderToStaticMarkup(<VerdictCard verdict={verdict} topic="Should AI be regulated?" />);
     expect(html).toContain("The Challenger wins");
-    expect(html).toContain("For the motion");
+    expect(html).toContain("8-point margin · for the motion");
     expect(html).toContain("82");
     expect(html).toContain("74");
     expect(html).toContain("A had stronger arguments");
     expect(html).toContain("Should AI be regulated?");
+    expect(html).toContain("Judge scorecard");
+    expect(html).toContain("Argument quality");
   });
 
   it("renders the draw branch when the verdict is a draw", () => {
     const draw: DebateStreamVerdict = { ...verdict, winner: "DRAW", scoreA: 80, scoreB: 80 };
     const html = renderToStaticMarkup(<VerdictCard verdict={draw} topic="Whatever" />);
     expect(html).toContain("Draw");
-    expect(html).toContain("Tied");
+    expect(html).toContain("0-point gap · scored as a draw");
+  });
+
+  it("uses the configured winning position instead of assuming A is for the motion", () => {
+    const html = renderToStaticMarkup(
+      <VerdictCard verdict={verdict} topic="Whatever" sideAPosition="AGAINST" sideBPosition="FOR" />,
+    );
+    expect(html).toContain("8-point margin · against the motion");
   });
 });
 
