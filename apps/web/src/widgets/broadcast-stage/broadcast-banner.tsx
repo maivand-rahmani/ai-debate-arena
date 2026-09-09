@@ -1,9 +1,11 @@
 "use client";
 
+import type { DebateRuntimeStatus } from "@/features/run-debate/lib/reducer";
+
 interface BroadcastBannerProps {
   readonly topic: string;
   readonly mode: "quick" | "standard" | "hardcore";
-  readonly inMatch: boolean;
+  readonly status: DebateRuntimeStatus;
   readonly onEndMatch?: () => void;
   readonly onOpenHistory?: () => void;
   readonly reactionsMuted: boolean;
@@ -20,7 +22,7 @@ interface BroadcastBannerProps {
 export function BroadcastBanner({
   topic,
   mode,
-  inMatch,
+  status,
   onEndMatch,
   onOpenHistory,
   reactionsMuted,
@@ -28,8 +30,9 @@ export function BroadcastBanner({
   className = "",
 }: BroadcastBannerProps) {
   const episode = "Tonight's motion";
+  const statusView = bannerStatus(status);
   return (
-    <header className={`broadcast-banner ${className}`} data-stage-banner={inMatch ? "live" : "idle"}>
+    <header className={`broadcast-banner ${className}`} data-stage-banner={statusView.tone}>
       <div className="broadcast-banner__brand">
         <span className="broadcast-banner__brand-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
@@ -46,9 +49,9 @@ export function BroadcastBanner({
       </div>
 
       <div className="broadcast-banner__actions" aria-label="Broadcast status">
-        <span className={`broadcast-banner__chip${inMatch ? " broadcast-banner__chip--live" : ""}`}>
+        <span className={`broadcast-banner__chip broadcast-banner__chip--${statusView.tone}`}>
           <span className="broadcast-banner__chip-dot" aria-hidden="true" />
-          {inMatch ? "On air" : "Studio idle"}
+          {statusView.label}
         </span>
         <span className="broadcast-banner__chip">
           {mode === "quick" ? "Quick mode" : mode}
@@ -82,7 +85,7 @@ export function BroadcastBanner({
           </button>
         ) : null}
 
-        {onEndMatch && inMatch ? (
+        {onEndMatch ? (
           <button
             type="button"
             onClick={onEndMatch}
@@ -94,4 +97,24 @@ export function BroadcastBanner({
       </div>
     </header>
   );
+}
+
+function bannerStatus(status: DebateRuntimeStatus): { readonly label: string; readonly tone: string } {
+  switch (status) {
+    case "starting":
+      return { label: "Preparing match", tone: "pending" };
+    case "streaming":
+      return { label: "On air", tone: "live" };
+    case "judging":
+      return { label: "Judge reviewing", tone: "judging" };
+    case "finished":
+      return { label: "Verdict ready", tone: "complete" };
+    case "cancelled":
+      return { label: "Match stopped", tone: "stopped" };
+    case "error":
+      return { label: "Match needs attention", tone: "error" };
+    case "idle":
+    default:
+      return { label: "Studio ready", tone: "idle" };
+  }
 }

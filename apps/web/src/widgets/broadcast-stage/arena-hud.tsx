@@ -4,7 +4,8 @@ import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
 
 import { BroadcastBanner } from "./broadcast-banner";
 import { ReactionOverlay } from "./reactions/reaction-overlay";
-import { LiveCaption, CompactChip, VerdictCard } from "@/features/arena/captions";
+import { LiveCaption, VerdictCard } from "@/features/arena/captions";
+import { MatchProgress } from "@/features/arena/match/match-progress";
 import { VerdictEvaluating } from "./verdict/verdict-reveal";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
 import { ErrorPanel } from "@/features/run-debate/ui/error-panel";
@@ -74,7 +75,7 @@ export function ArenaHud(props: ArenaHudProps) {
         <BroadcastBanner
           topic={topic}
           mode={state.mode}
-          inMatch={broadcastLive}
+          status={state.status}
           onEndMatch={broadcastLive ? onEndMatch : undefined}
           onOpenHistory={onOpenHistory}
           reactionsMuted={reactionsMuted}
@@ -82,12 +83,11 @@ export function ArenaHud(props: ArenaHudProps) {
         />
       </div>
 
-      {/* Compact round/status chip — sits in the top bar area. The
-          full-width floating RoundMarker was too dominant for the new
-          caption-first design. */}
+      {/* The five-step spine tells viewers where the match is, rather than
+          only naming the current speaker. */}
       {broadcastLive ? (
-        <div className="arena-hud__round arena-hud__round--compact">
-          <CompactChip state={state} />
+        <div className="arena-hud__round arena-hud__round--progress">
+          <MatchProgress state={state} />
         </div>
       ) : null}
 

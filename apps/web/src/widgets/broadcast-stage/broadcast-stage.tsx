@@ -10,7 +10,8 @@ import type { JudgePanelFooter } from "./verdict/verdict-reveal";
 import { VerdictEvaluating } from "./verdict/verdict-reveal";
 import { AgentDesk } from "./desks/agent-desk";
 import { JudgePlinth } from "./desks/judge-plinth";
-import { LiveCaption, CompactChip, VerdictCard } from "@/features/arena/captions";
+import { LiveCaption, VerdictCard } from "@/features/arena/captions";
+import { MatchProgress } from "@/features/arena/match/match-progress";
 import { StageBackdrop } from "./backdrop/stage-backdrop";
 import { ReactionOverlay } from "./reactions/reaction-overlay";
 import { deriveStageView, isBroadcastLiveStatus, shouldShowLiveCaptionStatus } from "./stage-state";
@@ -97,7 +98,7 @@ export function BroadcastStage({
       <BroadcastBanner
         topic={topic}
         mode={state.mode}
-        inMatch={broadcastLive}
+        status={state.status}
         onEndMatch={broadcastLive ? onEndMatch : undefined}
         onOpenHistory={onOpenHistory}
         reactionsMuted={reactionsMuted}
@@ -152,8 +153,8 @@ export function BroadcastStage({
       </div>
 
       {broadcastLive ? (
-        <div className="broadcast-stage__round--compact" aria-hidden="true">
-          <CompactChip state={state} />
+        <div className="broadcast-stage__round--progress">
+          <MatchProgress state={state} />
         </div>
       ) : null}
 

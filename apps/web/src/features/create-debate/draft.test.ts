@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyProviderChange, emptyDraft, type MatchDraft } from "./draft";
+import { applyProviderChange, emptyDraft, isDraftReady, isSameModelMatchup, type MatchDraft } from "./draft";
 import type { RedactedProvider } from "@/shared/api/providers";
 
 const alpha: RedactedProvider = {
@@ -59,5 +59,19 @@ describe("applyProviderChange", () => {
     const next = applyProviderChange(draft, "B", "beta", providers);
     expect(next.sideA.model).toBe("keep-me");
     expect(next.sideB.model).toBe("beta-default");
+  });
+});
+
+describe("same-model matchups", () => {
+  it("allows a same-model matchup as a baseline while keeping the positions opposed", () => {
+    const draft: MatchDraft = {
+      topic: "Should cities ban private cars?",
+      mode: "quick",
+      sideA: { providerId: "alpha", model: "alpha-default", position: "FOR" },
+      sideB: { providerId: "alpha", model: "alpha-default", position: "AGAINST" },
+    };
+
+    expect(isSameModelMatchup(draft)).toBe(true);
+    expect(isDraftReady(draft)).toBe(true);
   });
 });

@@ -329,6 +329,23 @@ textarea { resize: none; }
   border-color: rgba(201, 122, 93, 0.45);
   background: rgba(201, 122, 93, 0.08);
 }
+.broadcast-banner__chip--pending,
+.broadcast-banner__chip--judging {
+  color: #d4a843;
+  border-color: rgba(200, 155, 61, 0.45);
+  background: rgba(200, 155, 61, 0.08);
+}
+.broadcast-banner__chip--complete {
+  color: #b7d69f;
+  border-color: rgba(148, 184, 122, 0.45);
+  background: rgba(148, 184, 122, 0.08);
+}
+.broadcast-banner__chip--error,
+.broadcast-banner__chip--stopped {
+  color: #f0c5ad;
+  border-color: rgba(201, 122, 93, 0.45);
+  background: rgba(201, 122, 93, 0.08);
+}
 .broadcast-banner__chip-dot {
   width: 6px;
   height: 6px;
@@ -1462,6 +1479,17 @@ textarea { resize: none; }
 }
 .setup-form__contender--coral { border-color: rgba(201, 122, 93, 0.4); }
 .setup-form__contender--violet { border-color: rgba(140, 111, 143, 0.4); }
+.setup-form__baseline {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(200, 155, 61, 0.28);
+  border-radius: 10px;
+  background: rgba(200, 155, 61, 0.07);
+  color: rgba(244, 237, 225, 0.85);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.setup-form__baseline strong { color: #d4a843; }
 .setup-form__contender-head {
   display: flex;
   align-items: center;
@@ -3361,7 +3389,7 @@ textarea { resize: none; }
   color: rgba(184, 162, 133, 0.85);
 }
 
-.arena-hud__round--compact {
+.arena-hud__round--progress {
   position: absolute;
   top: 60px;
   left: 50%;
@@ -3369,13 +3397,83 @@ textarea { resize: none; }
   z-index: 3;
   pointer-events: auto;
 }
-.broadcast-stage__round--compact {
+.broadcast-stage__round--progress {
   position: absolute;
   top: 60px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
   pointer-events: auto;
+}
+
+/* Match progress replaces the old one-word live chip. It gives the show a
+   stable sport-like format while keeping the active step unmistakable. */
+.match-progress {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: min(660px, calc(100vw - 40px));
+  padding: 8px 12px;
+  border: 1px solid rgba(184, 162, 133, 0.28);
+  border-radius: 12px;
+  background: rgba(12, 10, 7, 0.76);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.match-progress__summary {
+  color: #d4a843;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.match-progress__steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.match-progress__step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: rgba(184, 162, 133, 0.68);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+.match-progress__marker {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 8px;
+}
+.match-progress__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match-progress__step--complete { color: #a9c890; }
+.match-progress__step--current { color: #f4ede1; }
+.match-progress__step--current .match-progress__marker {
+  border-color: #d4a843;
+  background: #d4a843;
+  color: #21190f;
+  box-shadow: 0 0 0 3px rgba(200, 155, 61, 0.16);
+}
+@media (max-width: 700px) {
+  .arena-hud__round--progress,
+  .broadcast-stage__round--progress { top: 56px; }
+  .match-progress { min-width: calc(100vw - 24px); padding: 7px 9px; }
+  .match-progress__step { grid-template-columns: auto; justify-items: center; }
+  .match-progress__label { display: none; }
 }
 
 .broadcast-stage__caption {

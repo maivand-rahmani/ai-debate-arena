@@ -46,6 +46,17 @@ export function providerFor(providers: readonly RedactedProvider[], id: string):
   return providers.find((provider) => provider.id === id);
 }
 
+/** A same-model matchup is a useful control case, not a validation error. */
+export function isSameModelMatchup(draft: MatchDraft): boolean {
+  return Boolean(
+    draft.sideA.providerId &&
+      draft.sideB.providerId &&
+      draft.sideA.providerId === draft.sideB.providerId &&
+      draft.sideA.model.trim() &&
+      draft.sideA.model === draft.sideB.model,
+  );
+}
+
 /**
  * When the user changes a side's position, auto-mirror the opposite side. The
  * caller can opt out by passing `mirror: false` (e.g. when re-syncing after a
@@ -113,9 +124,6 @@ export function validateDraft(draft: MatchDraft): readonly ValidationIssue[] {
     if (!agent.model.trim()) {
       issues.push({ field: `side${side}.model`, message: `Agent ${side} needs a model.` });
     }
-  }
-  if (draft.sideA.providerId && draft.sideB.providerId && draft.sideA.providerId === draft.sideB.providerId && draft.sideA.model === draft.sideB.model) {
-    issues.push({ field: "sameModel", message: "Two identical models rarely produce a debate. Pick a contrasting second voice." });
   }
   return issues;
 }

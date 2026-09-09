@@ -26,7 +26,7 @@ export function ErrorPanel({ state, onNewMatch }: ErrorPanelProps) {
             The debate could not finish
           </h2>
           <p className="max-w-xl text-sm leading-relaxed text-arena-300">
-            The provider stopped responding before the judge could publish a verdict.
+            The match stopped before a verdict could be published.
             {state.panels.length > 0 ? " The streamed transcript is preserved in history." : ""}
           </p>
           <p className="max-w-xl break-words text-sm leading-relaxed text-coral-100/90">

@@ -7,6 +7,7 @@ import {
   applyProviderChange,
   emptyDraft,
   isDraftReady,
+  isSameModelMatchup,
   MODE_OPTIONS,
   TOPIC_MAX_LENGTH,
   validateDraft,
@@ -109,6 +110,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
 
   const issues = validateDraft(effectiveDraft);
   const ready = isDraftReady(effectiveDraft) && !busy;
+  const sameModelMatchup = isSameModelMatchup(effectiveDraft);
 
   const updateTopic = (value: string) =>
     applyChange((current) => ({ ...current, topic: value.slice(0, TOPIC_MAX_LENGTH) }));
@@ -130,7 +132,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
       <ModalHeader
         eyebrow="New debate"
         title="Set the motion. Pick the contenders."
-        sub="Choose a topic and two contrasting models. The stage, lighting, and Judge power on automatically when you press Start."
+        sub="Choose a topic, the two positions, and the models. The stage and Judge power on when you press Start."
       />
       <ModalBody>
         <form
@@ -185,6 +187,12 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
               onPositionChange={updateBPosition}
             />
           </div>
+
+          {sameModelMatchup ? (
+            <p className="setup-form__baseline" role="status">
+              <strong>Baseline match.</strong> The same model will argue both sides with opposing positions. Start it for a clean reasoning control, or pick a second model for a head-to-head.
+            </p>
+          ) : null}
 
           <section className="setup-form__mode" aria-label="Match mode">
             <span className="setup-form__eyebrow">02 · Match mode</span>
