@@ -20,11 +20,15 @@ import { saveMatchRecord } from "@/shared/config/match-store";
  * `shared/api/llm/model.ts`, kept inline so the runner adapter owns the
  * whole web seam in one file.)
  */
-async function createWebModel(providerId: string, modelId?: string): Promise<LanguageModelV4> {
+async function createWebModel(
+  providerId: string,
+  modelId?: string,
+  sessionKey?: string,
+): Promise<LanguageModelV4> {
   try {
     const config = await getProvider(providerId);
     if (!config) throw new Error(`Provider not found: ${providerId}`);
-    return buildAiModel(config, modelId);
+    return buildAiModel(config, modelId, sessionKey === undefined ? undefined : { sessionKey });
   } catch (err) {
     throw new Error(toSafeErrorMessage(err));
   }
@@ -40,7 +44,7 @@ async function createWebModel(providerId: string, modelId?: string): Promise<Lan
 const ZERO_USAGE: ModelUsage = { promptTokens: 0, completionTokens: 0 };
 
 export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult> {
-  const model = await createWebModel(args.providerId, args.modelId);
+  const model = await createWebModel(args.providerId, args.modelId, args.sessionKey);
   // Quick mode is cost-first: cap reasoning effort on providers that honor it
   // (@ai-sdk/openai responses models). Unknown keys are ignored elsewhere.
   const providerOptions = { openai: { reasoningEffort: "low" } };

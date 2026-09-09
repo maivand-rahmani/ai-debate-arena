@@ -4,8 +4,12 @@ export const providerConfigSchema = z.object({
   id: z.string().trim().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/),
   name: z.string().trim().min(1).max(100),
   baseUrl: z.string().trim().url().refine((value) => {
-    const protocol = new URL(value).protocol;
-    return protocol === "https:" || protocol === "http:";
+    try {
+      const protocol = new URL(value).protocol;
+      return protocol === "https:" || protocol === "http:";
+    } catch {
+      return false;
+    }
   }, "baseUrl must use http or https"),
   model: z.string().trim().min(1).max(200),
   api: z.enum(["chat", "responses"]).default("chat"),
@@ -15,6 +19,17 @@ export const providerConfigSchema = z.object({
 export const providerStoreSchema = z.object({ providers: z.array(providerConfigSchema) });
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 export type ProviderStore = z.infer<typeof providerStoreSchema>;
+
+/**
+ * Partial update body for `PUT /api/providers/[id]`. Every field except the
+ * id is optional; `apiKey` may be omitted or sent as `""` to preserve the
+ * stored key (a non-empty value replaces it). Unknown keys are stripped.
+ */
+export const providerUpdateSchema = providerConfigSchema
+  .omit({ id: true })
+  .partial()
+  .extend({ apiKey: z.string().max(4096).optional() });
+export type ProviderUpdateInput = z.infer<typeof providerUpdateSchema>;
 export type RedactedProviderConfig = Omit<ProviderConfig, "apiKey"> & { apiKeyHint: string };
 
 export function validateProviderConfig(value: unknown): ProviderConfig {

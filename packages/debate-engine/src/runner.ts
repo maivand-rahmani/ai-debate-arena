@@ -174,6 +174,28 @@ export interface ModelCallArgs {
   readonly prompt: string;
   readonly maxOutputTokens: number;
   readonly abortSignal?: AbortSignal;
+  /**
+   * Stable per-conversation session key for providers that require one
+   * (OpenCode gateway). The engine always sets this: `<matchId>:agent-a`,
+   * `<matchId>:agent-b`, or `<matchId>:judge`. Retries and re-judges of the
+   * same stored match reuse the same key; different matches/slots differ.
+   */
+  readonly sessionKey?: string;
+}
+
+/**
+ * Model-construction slot identities for one debate match. These suffixes
+ * form the OpenCode per-conversation session keys (`<matchId>:<slot>`).
+ */
+export type DebateSlot = "agent-a" | "agent-b" | "judge";
+
+/**
+ * Pure derivation of the stable per-conversation session key for a match
+ * slot. Same match+slot always yields the same key; different matches or
+ * slots always differ. No network, no globals.
+ */
+export function sessionKeyForMatchSlot(matchId: string, slot: DebateSlot): string {
+  return `${matchId}:${slot}`;
 }
 
 /** Token usage for one model call, normalized to plain counters. */
@@ -250,6 +272,12 @@ export interface RunJudgeInput {
 export interface RunJudgeDeps {
   readonly callModel?: (args: ModelCallArgs) => Promise<ModelCallResult>;
   readonly abortSignal?: AbortSignal;
+  /**
+   * Stable session key for the judge conversation
+   * (`sessionKeyForMatchSlot(matchId, "judge")`). Re-judges of the same
+   * stored match must pass the same key as the original run.
+   */
+  readonly sessionKey?: string;
 }
 
 export interface RunJudgeResult {
@@ -282,6 +310,7 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
       prompt,
       maxOutputTokens,
       abortSignal: deps.abortSignal,
+      sessionKey: deps.sessionKey,
     });
     addUsage(total, result.usage);
     return result.text;
@@ -435,6 +464,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           prompt,
           maxOutputTokens: profile.agentMaxOutputTokens,
           abortSignal: deps.abortSignal,
+          sessionKey: sessionKeyForMatchSlot(matchId, side === "A" ? "agent-a" : "agent-b"),
         });
       } catch (error) {
         turnsMs.push(Date.now() - turnStartMs);
@@ -476,7 +506,11 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           model: judge.model,
           maxOutputTokens: profile.judgeMaxOutputTokens,
         },
-        { callModel, abortSignal: deps.abortSignal },
+        {
+          callModel,
+          abortSignal: deps.abortSignal,
+          sessionKey: sessionKeyForMatchSlot(matchId, "judge"),
+        },
       );
       parsedVerdict = judged.verdict;
       addUsage(usageTotal, judged.usage);

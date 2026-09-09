@@ -46,6 +46,62 @@ function readStatus(err: unknown): number | undefined {
   return undefined;
 }
 
+/** Stable machine-readable provider failure classes (safe to expose to clients). */
+export type SafeProviderErrorCode =
+  | "auth"
+  | "rate_limit"
+  | "timeout"
+  | "unreachable"
+  | "upstream"
+  | "unknown";
+
+export interface SafeProviderError {
+  readonly code: SafeProviderErrorCode;
+  readonly message: string;
+}
+
+/**
+ * Classifies a provider failure into a stable code. Mirrors the branch order
+ * of {@link toSafeErrorMessage} so code and message always agree.
+ */
+export function toSafeProviderErrorCode(err: unknown): SafeProviderErrorCode {
+  const status = readStatus(err);
+  const text = readText(err);
+  const code = readCode(err);
+  const name = readRecord(err)?.["name"];
+
+  if (status === 401 || status === 403 || /unauthorized|\bforbidden\b|invalid api key|incorrect api key/i.test(text)) {
+    return "auth";
+  }
+  if (status === 429 || /rate limit|too many requests/i.test(text)) {
+    return "rate_limit";
+  }
+  if (
+    TIMEOUT_CODES.has(code) ||
+    name === "AbortError" ||
+    /timed out|\btimeout\b|\babort/i.test(text)
+  ) {
+    return "timeout";
+  }
+  if (
+    UNREACHABLE_CODES.has(code) ||
+    /fetch failed|failed to fetch|ENOTFOUND|ECONNREFUSED|EAI_AGAIN|getaddrinfo|network unreachable|connection refused|unable to connect/i.test(
+      text,
+    )
+  ) {
+    return "unreachable";
+  }
+  if (status !== undefined) {
+    return "upstream";
+  }
+  return "unknown";
+}
+
+/** Pairs the stable error code with the sanitized human-readable message. */
+export function toSafeProviderError(err: unknown): SafeProviderError {
+  return { code: toSafeProviderErrorCode(err), message: toSafeErrorMessage(err) };
+}
+
 export function sanitizeErrorText(text: string): string {
   return text
     .replace(/(\w+:\/\/[^/\s:]+:)[^/\s@]+@/g, "$1<redacted>@")
