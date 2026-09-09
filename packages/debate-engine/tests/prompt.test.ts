@@ -99,5 +99,15 @@ describe("agent context limits (F9-15)", () => {
       expect(prompt).toContain(entry.content);
     }
   });
+
+  it("clips oversized judge context while preserving every turn boundary", () => {
+    const long = TURNS.map((entry) => ({ ...entry, content: `${entry.content} `.repeat(500) }));
+    const prompt = buildJudgePrompt("Topic", long, { maxTranscriptChars: 500 });
+    expect(prompt).toContain("[middle truncated]");
+    expect(prompt).toContain("[Debater A / OPENING_A]");
+    expect(prompt).toContain("[Debater B / OPENING_A]");
+    const transcript = prompt.split("Transcript:\n\n")[1]?.split("\n\nScore each side")[0] ?? "";
+    expect(transcript.length).toBeLessThanOrEqual(500);
+  });
 });
 

@@ -1,5 +1,6 @@
 import type { DebateTurn } from "../types";
 import { buildCriteriaFieldList, buildRubricPhrase, RUBRIC_VERSIONS, type RubricVersion } from "../rubric";
+import { JUDGE_MAX_CONTEXT_CHARS } from "../token-policy";
 
 export const JUDGE_SYSTEM_PROMPT = [
   "You are the final, impartial judge of a formal debate.",
@@ -11,6 +12,8 @@ export const JUDGE_SYSTEM_PROMPT = [
 export interface BuildJudgePromptOptions {
   /** Rubric generation to render. Defaults to the active rubric version. */
   readonly rubricVersion?: RubricVersion;
+  /** Maximum characters of transcript context sent to the judge. */
+  readonly maxTranscriptChars?: number;
 }
 
 export function buildJudgePrompt(
@@ -19,11 +22,10 @@ export function buildJudgePrompt(
   options?: BuildJudgePromptOptions,
 ): string {
   const rubricVersion = options?.rubricVersion ?? "2";
-  if (rubricVersion === "1") return buildLegacyJudgePrompt(topic, turns);
+  const maxTranscriptChars = options?.maxTranscriptChars ?? JUDGE_MAX_CONTEXT_CHARS;
+  if (rubricVersion === "1") return buildLegacyJudgePrompt(topic, turns, maxTranscriptChars);
   const rubric = RUBRIC_VERSIONS[rubricVersion] ?? RUBRIC_VERSIONS["2"];
-  const transcript = turns.length
-    ? turns.map((turn) => `[Debater ${turn.side} / ${turn.phase}]: ${turn.content}`).join("\n\n")
-    : "(no turns were recorded)";
+  const transcript = renderTranscript(turns, maxTranscriptChars);
 
   return [
     `Motion: "${topic}"`,
@@ -43,10 +45,8 @@ export function buildJudgePrompt(
 }
 
 /** Preserve the v1 prompt for historical evaluation and stored comparisons. */
-function buildLegacyJudgePrompt(topic: string, turns: readonly DebateTurn[]): string {
-  const transcript = turns.length
-    ? turns.map((turn) => `[${turn.side} / ${turn.phase}]: ${turn.content}`).join("\n\n")
-    : "(no turns were recorded)";
+function buildLegacyJudgePrompt(topic: string, turns: readonly DebateTurn[], maxTranscriptChars: number): string {
+  const transcript = renderTranscript(turns, maxTranscriptChars, (turn) => `[${turn.side} / ${turn.phase}]: `);
   return [
     `You are the judge of a formal debate on the topic: "${topic}".`,
     "Full transcript:",
@@ -59,4 +59,36 @@ function buildLegacyJudgePrompt(topic: string, turns: readonly DebateTurn[]): st
     "Respond with STRICT JSON only, no markdown, no extra text, matching this shape with concrete numbers, for example:",
     '{"winner":"A","scoreA":78,"scoreB":64,"criteria":{"argumentQualityA":80,"argumentQualityB":66,"rebuttalA":76,"rebuttalB":62,"consistencyA":79,"consistencyB":65,"relevanceA":78,"relevanceB":63},"reasoning":"..."}',
   ].join("\n\n");
+}
+
+function renderTranscript(
+  turns: readonly DebateTurn[],
+  maxChars: number,
+  prefixFor: (turn: DebateTurn) => string = (turn) => `[Debater ${turn.side} / ${turn.phase}]: `,
+): string {
+  if (turns.length === 0) return "(no turns were recorded)";
+  const cap = Math.max(1, Math.floor(maxChars));
+  const separatorChars = (turns.length - 1) * 2;
+  const prefixChars = turns.reduce((sum, turn) => sum + prefixFor(turn).length, 0);
+  const available = Math.max(0, cap - separatorChars - prefixChars);
+  const perTurn = Math.floor(available / turns.length);
+  let remainder = available - perTurn * turns.length;
+
+  return turns
+    .map((turn) => {
+      const budget = perTurn + (remainder-- > 0 ? 1 : 0);
+      return `${prefixFor(turn)}${clipTranscriptText(turn.content, budget)}`;
+    })
+    .join("\n\n");
+}
+
+function clipTranscriptText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  if (maxChars <= 1) return text.slice(0, maxChars);
+  const marker = " …[middle truncated]… ";
+  if (maxChars <= marker.length) return text.slice(0, maxChars);
+  const remaining = maxChars - marker.length;
+  const headChars = Math.ceil(remaining * 0.6);
+  const tailChars = remaining - headChars;
+  return `${text.slice(0, headChars)}${marker}${tailChars > 0 ? text.slice(-tailChars) : ""}`;
 }

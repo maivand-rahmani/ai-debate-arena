@@ -2,8 +2,10 @@ import type { MatchMode } from "@arena/types";
 
 export type { MatchMode };
 
-export const AGENT_MAX_OUTPUT_TOKENS = 2000;
-export const JUDGE_MAX_OUTPUT_TOKENS = 2000;
+export const AGENT_MAX_OUTPUT_TOKENS = 1200;
+export const JUDGE_MAX_OUTPUT_TOKENS = 1000;
+/** Maximum rendered transcript size sent to the judge in the active policy. */
+export const JUDGE_MAX_CONTEXT_CHARS = 24_000;
 
 export type TokenPolicyName = "Quick" | "Standard" | "Hardcore";
 

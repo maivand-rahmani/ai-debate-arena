@@ -19,7 +19,7 @@ import {
   type DebateVerdict,
 } from "./types";
 import { isDegenerateVerdict, normalizeVerdictWinner, parseDebateVerdict } from "./verdict";
-import { MATCH_PROFILES, type MatchProfile } from "./token-policy";
+import { JUDGE_MAX_CONTEXT_CHARS, MATCH_PROFILES, type MatchProfile } from "./token-policy";
 import { RUBRIC_VERSION, type RubricVersion } from "./rubric";
 import {
   CONTRACT_VERSION,
@@ -267,6 +267,8 @@ export interface RunJudgeInput {
   readonly providerId: string;
   readonly model: string;
   readonly maxOutputTokens?: number;
+  /** Maximum transcript characters included in the judge prompt. */
+  readonly maxContextChars?: number;
   /** Rubric generation for the judge prompt. Defaults to `"1"` (legacy prompt). */
   readonly rubricVersion?: RubricVersion;
 }
@@ -300,7 +302,10 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
   if (!callModel) throw new Error("callModel is required");
   const maxOutputTokens = input.maxOutputTokens ?? MATCH_PROFILES.quick.judgeMaxOutputTokens;
   const startMs = Date.now();
-  const judgePrompt = buildJudgePrompt(input.topic, input.turns, { rubricVersion: input.rubricVersion });
+  const judgePrompt = buildJudgePrompt(input.topic, input.turns, {
+    rubricVersion: input.rubricVersion,
+    maxTranscriptChars: input.maxContextChars,
+  });
   const hasTurns = input.turns.length > 0;
   const total: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
   const callJudge = async (prompt: string): Promise<string> => {
@@ -507,6 +512,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           providerId: judge.providerId,
           model: judge.model,
           maxOutputTokens: profile.judgeMaxOutputTokens,
+          maxContextChars: JUDGE_MAX_CONTEXT_CHARS,
         },
         {
           callModel,
