@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentSystemPrompt } from "../src/prompts";
-import { buildJudgePrompt } from "../src/prompts";
 import {
+  buildAgentSystemPrompt,
   buildDebatePrompt,
   buildPromptContext,
+  buildJudgePrompt,
   limitAgentHistory,
-} from "../src/prompt";
+} from "../src/prompts";
 import { createDebateState } from "../src/state";
 import { DebatePhase, type DebateConfig, type DebateTurn } from "../src/types";
 
@@ -73,7 +73,23 @@ describe("agent context limits (F9-15)", () => {
     const system = buildAgentSystemPrompt("B", "AGAINST", "My Topic");
     expect(system).toContain("My Topic");
     expect(system).toContain("AGAINST");
-    expect(system).toContain("debater B");
+    expect(system).toContain("Debater B");
+  });
+
+  it("makes rebuttals engage with the opponent instead of repeating an essay", () => {
+    const prompt = buildDebatePrompt({
+      topic: "Topic",
+      phase: DebatePhase.REBUTTAL_A,
+      agent: { id: "A", name: "A", position: "FOR" },
+      side: "A",
+      opponentSide: "B",
+      position: "FOR",
+      history: [turn("B", "The policy is too expensive.")],
+    });
+    expect(prompt).toContain("Opponent's arguments to address:");
+    expect(prompt).toContain("The policy is too expensive.");
+    expect(prompt).toContain("name or accurately paraphrase the opponent's claim");
+    expect(prompt).toContain("do not merely repeat your opening");
   });
 
   it("gives the judge the full transcript regardless of agent caps", () => {

@@ -62,7 +62,8 @@ failing cases.
 
 1. `packages/debate-engine/src/types.ts` — extend `DebatePhase` (and turn-phase union).
 2. `packages/debate-engine/src/state.ts` — add the `NEXT_PHASE` edge.
-3. `packages/debate-engine/src/prompts.ts` — add its one-line `PHASE_INSTRUCTIONS`.
+3. `packages/debate-engine/src/prompts/agent-prompt.ts` — add or update its
+   phase-specific instruction and bump `AGENT_PROMPT_VERSION` for wording changes.
 4. `packages/debate-engine/src/runner.ts` — extend `AGENT_PHASES`.
 5. `docs/debate-engine.md` — extend the stream contract (byte-identical rest).
 6. `apps/web/src/features/run-debate/lib` + `ui` — handle the new phase in reducer/panels.

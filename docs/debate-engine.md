@@ -42,11 +42,15 @@ non-Quick modes.
 
 ## Prompt strategy
 
-Short by design. System: debater identity + side + FOR/AGAINST stance + topic +
-"one focused argument, do not converse, respect token budget, plain text".
-User prompt: topic + phase + last-N turns sliced by `maxHistoryTurns`
-(`packages/debate-engine/src/prompt.ts`), so context stays bounded as history
-grows.
+The active prompt generation is version 2. The system prompt establishes a fixed
+side and position, asks for persuasion rather than a generic essay, prohibits
+invented evidence and opponent impersonation, and requires one self-contained
+speech. The user prompt includes the current stage, bounded transcript, a
+separate view of the opponent's arguments, and phase-specific instructions.
+Rebuttal turns must identify and answer an opponent claim before reinforcing the
+speaker's own case. Prompt context is built in
+`packages/debate-engine/src/prompts/context.ts` and rendered by the dedicated
+agent prompt module.
 
 ## Runner ports
 

@@ -4,8 +4,10 @@ import {
   buildDebatePrompt,
   buildPromptContext,
   JUDGE_PROMPT_VERSION,
-} from "./prompt";
-import { buildAgentSystemPrompt, buildJudgePrompt, JUDGE_SYSTEM_PROMPT } from "./prompts";
+  buildAgentSystemPrompt,
+  buildJudgePrompt,
+  JUDGE_SYSTEM_PROMPT,
+} from "./prompts";
 import { appendTurn, attachVerdict, createDebateState } from "./state";
 import {
   DebatePhase,
@@ -434,8 +436,8 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
   const config: DebateConfig = {
     topic: input.topic,
     agents: {
-      A: { id: "A", name: "Agent A" },
-      B: { id: "B", name: "Agent B" },
+      A: { id: "A", name: "Agent A", position: input.agentA.position },
+      B: { id: "B", name: "Agent B", position: input.agentB.position },
     },
     maxHistoryTurns: policy.maxHistoryTurns,
     maxContextCharsPerSide: profile.maxContextCharsPerSide,

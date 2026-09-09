@@ -9,7 +9,7 @@ ai-debate-arena/
     src/{app,features,widgets,shared}/
     scripts/                 judge-eval.mjs, provider-add.ts
   packages/debate-engine/    @arena/debate-engine — domain + runner (no React/Next)
-    src/                     types, state, prompt, prompts, rubric, verdict,
+    src/                     domain types/state, prompts, rubric, verdict,
                              contract, token-policy, runner, index
     tests/                   engine suite (incl. runner + judge regression)
   packages/ai/               @arena/ai — buildAiModel factory + safe errors

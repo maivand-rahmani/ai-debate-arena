@@ -229,7 +229,7 @@ describe("POST /api/matches/[id]/rejudge", () => {
     expect(stored?.transcript.map((turn) => turn.content)).toEqual(AGENT_TEXTS);
     expect(stored?.metrics.turnsMs).toHaveLength(4);
     expect(typeof stored?.metrics.judgeMs).toBe("number");
-    expect(stored?.promptVersions).toEqual({ agent: "1", judge: "1" });
+    expect(stored?.promptVersions).toEqual({ agent: "2", judge: "2" });
     expect(JSON.stringify(stored)).not.toMatch(/apiKey|baseUrl|sk-test/i);
   });
 

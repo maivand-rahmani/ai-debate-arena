@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_PROMPT_VERSION, JUDGE_PROMPT_VERSION } from "../src/prompt";
-import { buildDebatePrompt, buildPromptContext } from "../src/prompt";
-import { buildAgentSystemPrompt, buildJudgePrompt } from "../src/prompts";
+import {
+  AGENT_PROMPT_VERSION,
+  JUDGE_PROMPT_VERSION,
+  buildAgentSystemPrompt,
+  buildDebatePrompt,
+  buildJudgePrompt,
+  buildPromptContext,
+} from "../src/prompts";
 import {
   buildCriteriaFieldList,
   buildRubricPhrase,
@@ -50,13 +55,13 @@ const JUDGE_PROMPT_SNAPSHOT = [
 
 describe("prompt/rubric versioning", () => {
   it("pins prompt and rubric versions to 1", () => {
-    expect(AGENT_PROMPT_VERSION).toBe("1");
-    expect(JUDGE_PROMPT_VERSION).toBe("1");
-    expect(RUBRIC_VERSION).toBe("1");
+    expect(AGENT_PROMPT_VERSION).toBe("2");
+    expect(JUDGE_PROMPT_VERSION).toBe("2");
+    expect(RUBRIC_VERSION).toBe("2");
   });
 
   it("builds the judge prompt byte-identically from the rubric", () => {
-    expect(buildJudgePrompt("Should AI be regulated?", TURNS)).toBe(JUDGE_PROMPT_SNAPSHOT);
+    expect(buildJudgePrompt("Should AI be regulated?", TURNS, { rubricVersion: "1" })).toBe(JUDGE_PROMPT_SNAPSHOT);
   });
 
   it("exposes the rubric criteria behind the composed sentences", () => {
@@ -73,7 +78,7 @@ describe("prompt/rubric versioning", () => {
   });
 
   it("leaves the agent prompt builders untouched", () => {    const system = buildAgentSystemPrompt("A", "FOR", "Should AI be regulated?");
-    expect(system).toContain('debater A');
+    expect(system).toContain('Debater A');
     const state = createDebateState();
     const context = buildPromptContext(
       { topic: "T", agents: { A: { id: "A", name: "Agent A" }, B: { id: "B", name: "Agent B" } } },
@@ -86,7 +91,7 @@ describe("prompt/rubric versioning", () => {
 
 describe("versioned rubrics (F3-07/F9-07)", () => {
   it("exposes rubric generations 1 and 2 with default 1", () => {
-    expect(RUBRIC_VERSION).toBe("1");
+    expect(RUBRIC_VERSION).toBe("2");
     expect(Object.keys(RUBRIC_VERSIONS).sort()).toEqual(["1", "2"]);
     expect(RUBRIC_VERSIONS["1"].extraGuidance).toEqual([]);
     expect(RUBRIC_VERSIONS["2"].extraGuidance.length).toBeGreaterThan(0);
@@ -94,20 +99,21 @@ describe("versioned rubrics (F3-07/F9-07)", () => {
 
   it("builds the v1 prompt byte-identically, explicitly or by default", () => {
     const topic = "Should AI be regulated?";
-    expect(buildJudgePrompt(topic, TURNS)).toBe(JUDGE_PROMPT_SNAPSHOT);
     expect(buildJudgePrompt(topic, TURNS, { rubricVersion: "1" })).toBe(JUDGE_PROMPT_SNAPSHOT);
   });
 
-  it("renders v2 with band anchors, rebuttal emphasis, and the draw policy", () => {
-    const prompt = buildJudgePrompt("Should AI be regulated?", TURNS, { rubricVersion: "2" });
-    expect(prompt).toContain("90 or above means exceptional");
-    expect(prompt).toContain("70-89 means solid");
-    expect(prompt).toContain("50-69 means adequate");
-    expect(prompt).toContain("below 50 means weak");
-    expect(prompt).toContain("must score below 50 for rebuttal");
+  it("renders the active v2 prompt with band anchors, rebuttal emphasis, and the draw policy", () => {
+    const prompt = buildJudgePrompt("Should AI be regulated?", TURNS);
+    expect(prompt).toContain("90-100 is exceptional");
+    expect(prompt).toContain("70-89 is strong");
+    expect(prompt).toContain("50-69 is plausible");
+    expect(prompt).toContain("below 50 is weak");
+    expect(prompt).toContain("must score below 50 for rebuttal quality");
     expect(prompt).toContain("within 2 points of each other");
-    expect(prompt).toContain("never award A or B on a gap of 2 or less");
+    expect(prompt).toContain("The winner field must agree with the scores");
     expect(prompt).not.toBe(JUDGE_PROMPT_SNAPSHOT);
+    expect(prompt).toContain("Direct engagement with the opponent");
+    expect(prompt).toContain("The winner field must agree with the scores");
   });
 });
 

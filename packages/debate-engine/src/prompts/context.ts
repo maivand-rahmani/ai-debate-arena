@@ -1,14 +1,12 @@
-import type { DebateConfig, DebateState, DebateTurn, DebatePhase } from "./types";
-
-export { JUDGE_PROMPT_VERSION } from "./prompts";
-
-/** Bump on any agent wording change. */
-export const AGENT_PROMPT_VERSION = "1";
+import type { DebateConfig, DebatePhase, DebatePosition, DebateState, DebateTurn } from "../types";
 
 export interface DebatePromptContext {
   readonly topic: string;
   readonly phase: DebatePhase;
   readonly agent: DebateConfig["agents"]["A"];
+  readonly side?: "A" | "B";
+  readonly opponentSide?: "A" | "B";
+  readonly position?: DebatePosition;
   readonly history: readonly DebateTurn[];
 }
 
@@ -17,15 +15,11 @@ export interface AgentContextLimits {
   readonly maxContextCharsPerSide: number;
 }
 
-function formatHistoryTurn(turn: DebateTurn): string {
+/** Compact representation used for the history cap calculation. */
+export function formatHistoryTurn(turn: DebateTurn): string {
   return `${turn.side}: ${turn.content}`;
 }
 
-/**
- * Trim agent history to the newest turns within count + char caps, dropping
- * the OLDEST whole turns first (never mid-turn). The char cap measures the
- * rendered `"<side>: <content>"` lines that actually enter the prompt.
- */
 export function limitAgentHistory(
   turns: readonly DebateTurn[],
   limits: AgentContextLimits,
@@ -44,12 +38,17 @@ export function limitAgentHistory(
   return windowed.slice(drop);
 }
 
+function sideForPhase(phase: DebatePhase): "A" | "B" {
+  return phase.endsWith("_B") ? "B" : "A";
+}
+
 export function buildPromptContext(
   config: DebateConfig,
   state: DebateState,
   agentId: string,
 ): DebatePromptContext {
   const agent = config.agents.A.id === agentId ? config.agents.A : config.agents.B;
+  const side = sideForPhase(state.phase);
   const max = Math.max(0, config.maxHistoryTurns ?? 6);
   const windowed = state.turns.slice(-max);
   const cap = config.maxContextCharsPerSide;
@@ -60,21 +59,9 @@ export function buildPromptContext(
     topic: config.topic,
     phase: state.phase,
     agent,
+    side,
+    opponentSide: side === "A" ? "B" : "A",
+    position: agent.position ?? (side === "A" ? "FOR" : "AGAINST"),
     history,
   };
 }
-
-export function buildDebatePrompt(context: DebatePromptContext): string {
-  const history = context.history.length
-    ? context.history.map(formatHistoryTurn).join("\n\n")
-    : "(no previous turns)";
-  return [
-    `Topic: ${context.topic}`,
-    `Phase: ${context.phase}`,
-    "Previous turns:",
-    history,
-    "Respond with a concise, rigorous argument.",
-  ].join("\n\n");
-}
-
-export const buildPrompt = buildDebatePrompt;

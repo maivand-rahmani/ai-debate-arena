@@ -18,6 +18,7 @@ export interface Agent {
   readonly name: string;
   readonly model?: string;
   readonly systemPrompt?: string;
+  readonly position?: DebatePosition;
 }
 
 export interface DebateTurn {
