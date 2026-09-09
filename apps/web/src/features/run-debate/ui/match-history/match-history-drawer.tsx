@@ -1,15 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  fetchMatch,
-  fetchMatchList,
-  rejudgeMatch,
-  type MatchRecord,
-  type MatchSummary,
-  MatchesApiError,
-} from "@/shared/api/matches";
-import { MatchHistoryRow } from "./match-history-row";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { fetchMatchList, type MatchSummary, MatchesApiError } from "@/shared/api/matches";
+import { formatMatchDate, TERMINAL_LABEL, WINNER_LABEL } from "./format-helpers";
 
 interface MatchHistoryDrawerProps {
   readonly open: boolean;
@@ -17,13 +11,12 @@ interface MatchHistoryDrawerProps {
 }
 
 /**
- * Right-side slide-over that lists saved matches, fetches the full record on
- * row expansion, and exposes Export / Re-judge per row. Esc closes; the close
- * button is auto-focused on open so keyboard users land somewhere sensible.
+ * Right-side slide-over that lists saved matches as a launcher for
+ * the dedicated `/matches/[id]` page (F4-36). The drawer no longer
+ * inlines the transcript / verdict / re-judge actions — those live
+ * on the per-match page now so the drawer stays scannable.
  *
- * The drawer is a pure client component — it owns its loading + error states
- * and does not touch the live arena state. When `open` is false the component
- * unmounts entirely so reopening it resets to a fresh fetch.
+ * Esc closes; the close button receives focus on open.
  */
 export function MatchHistoryDrawer({ open, onClose }: MatchHistoryDrawerProps) {
   if (!open) return null;
@@ -47,7 +40,7 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
-        setError(toMessage(reason));
+        setError(reason instanceof MatchesApiError ? reason.message : "Could not load matches.");
         setStatus("error");
       });
     return () => {
@@ -55,7 +48,7 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  // Esc closes the drawer; auto-focus the close button on mount.
+  // Esc closes; auto-focus the close button.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -68,53 +61,26 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const handleLoadDetail = useCallback(async (matchId: string) => {
-    return fetchMatch(matchId);
-  }, []);
-
-  const handleRejudge = useCallback(
-    async (matchId: string) => {
-      const result = await rejudgeMatch(matchId);
-      // Patch the in-memory list so the row reflects the new winner/judgedAt
-      // without waiting for a full reload.
-      setList((current) =>
-        current.map((entry) =>
-          entry.id === matchId
-            ? { ...entry, winner: result.summary.winner, judgedAt: result.judgedAt }
-            : entry,
-        ),
-      );
-      return { judgedAt: result.judgedAt, winner: result.summary.winner };
-    },
-    [],
-  );
-
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Saved matches"
-      className="fixed inset-0 z-40 flex justify-end"
+      aria-label="Recent matches"
+      className="drawer-shell"
     >
       <button
         type="button"
-        aria-label="Close matches drawer"
+        aria-label="Close recent matches"
         onClick={onClose}
-        className="drawer-backdrop absolute inset-0 bg-arena-900/70 backdrop-blur-sm"
+        className="drawer-shell__backdrop"
       />
-      <aside className="drawer-panel relative flex h-full w-full max-w-[520px] flex-col border-l border-white/[0.08] bg-arena-800 shadow-2xl sm:max-w-[560px]">
-        <header className="flex items-start justify-between gap-3 border-b border-white/[0.06] px-6 py-5">
+      <aside className="drawer-shell__panel" aria-label="Recent matches">
+        <header className="drawer-shell__head">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-coral-200">
-              Match history
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-bold tracking-tight text-arena-50">
-              Saved matches
-            </h2>
-            <p className="mt-2 text-sm text-arena-300">
-              Every completed, errored or cancelled match is stored locally.
-              Open one to inspect the transcript, re-run the judge, or export
-              the record.
+            <p className="drawer-shell__eyebrow">Recent</p>
+            <h2 className="drawer-shell__title">Saved matches</h2>
+            <p className="drawer-shell__sub">
+              Pick a match to open the full transcript and verdict on its own page.
             </p>
           </div>
           <button
@@ -122,39 +88,33 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-arena-200 transition hover:border-white/25 hover:text-arena-50"
+            className="drawer-shell__close"
           >
             Close
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="drawer-shell__body">
           {status === "loading" ? (
-            <p className="text-sm text-arena-300">Loading matches…</p>
+            <p className="drawer-shell__status">Loading matches…</p>
           ) : status === "error" ? (
-            <EmptyState
-              title="Could not load matches"
-              body={error ?? "The matches endpoint is unreachable."}
-            />
-          ) : status === "ready" && list.length === 0 ? (
-            <EmptyState
-              title="No saved matches yet"
-              body="Run a match and it will appear here automatically."
-            />
+            <p className="drawer-shell__status" role="alert">
+              {error ?? "The matches endpoint is unreachable."}
+            </p>
+          ) : list.length === 0 ? (
+            <p className="drawer-shell__status">
+              No saved matches yet. Run a match and it will appear here.
+            </p>
           ) : (
-            <ul className="grid gap-3" aria-label="Saved matches">
+            <ul className="drawer-shell__list" aria-label="Saved matches">
               {list.map((summary) => (
-                <MatchHistoryRow
-                  key={summary.id}
-                  summary={summary}
-                  callbacks={{ onLoadDetail: handleLoadDetail, onRejudge: handleRejudge }}
-                />
+                <DrawerRow key={summary.id} summary={summary} />
               ))}
             </ul>
           )}
         </div>
 
-        <footer className="border-t border-white/[0.06] px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-arena-400">
+        <footer className="drawer-shell__foot">
           {status === "ready" ? `${list.length} saved` : status === "loading" ? "Loading…" : "—"}
         </footer>
       </aside>
@@ -162,24 +122,33 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
   );
 }
 
-function EmptyState({ title, body }: { title: string; body: string }) {
+function DrawerRow({ summary }: { summary: MatchSummary }) {
   return (
-    <div className="grid place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.02] px-6 py-10 text-center">
-      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-coral-200">
-        {title}
-      </p>
-      <p className="mt-3 max-w-sm text-sm leading-relaxed text-arena-300">{body}</p>
-    </div>
+    <li>
+      <Link
+        href={`/matches/${encodeURIComponent(summary.id)}`}
+        className="drawer-shell__row"
+      >
+        <span className="drawer-shell__row-text">
+          <span className="drawer-shell__row-topic">{summary.topic}</span>
+          <span className="drawer-shell__row-meta">
+            {formatMatchDate(summary.date)} · {summary.mode === "quick" ? "Quick" : summary.mode} · {TERMINAL_LABEL[summary.terminal]}
+          </span>
+        </span>
+        <span
+          className={`drawer-shell__row-badge drawer-shell__row-badge--${
+            summary.winner === "A" ? "a" : summary.winner === "B" ? "b" : "draw"
+          }`}
+        >
+          {summary.winner === null
+            ? "Pending"
+            : summary.winner === "DRAW"
+              ? WINNER_LABEL.DRAW
+              : summary.winner === "A"
+                ? WINNER_LABEL.A
+                : WINNER_LABEL.B}
+        </span>
+      </Link>
+    </li>
   );
-}
-
-function toMessage(reason: unknown): string {
-  if (reason instanceof MatchesApiError) return reason.message;
-  if (reason instanceof Error) return reason.message;
-  return typeof reason === "string" ? reason : "Could not load matches.";
-}
-
-/** Helper exported so the live arena can reuse the same fetchers for the live re-judge. */
-export async function loadMatchDetail(matchId: string): Promise<MatchRecord> {
-  return fetchMatch(matchId);
 }

@@ -3,12 +3,9 @@
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
 
 import { BroadcastBanner } from "./broadcast-banner";
-import { RoundMarker } from "./monitors/round-marker";
 import { ReactionOverlay } from "./reactions/reaction-overlay";
-import { SpeechLayer } from "./speech/speech-layer";
-import { VerdictEvaluating, VerdictReveal } from "./verdict/verdict-reveal";
-import { IdleSetup } from "./idle/idle-setup";
-import { BroadcastConsole } from "./broadcast-console";
+import { LiveCaption, CompactChip, VerdictCard } from "@/features/arena/captions";
+import { VerdictEvaluating } from "./verdict/verdict-reveal";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
 import { deriveStageView } from "./stage-state";
 import type { BroadcastStageProps } from "./broadcast-stage";
@@ -23,16 +20,19 @@ export type ArenaHudProps = BroadcastStageProps;
 
 /**
  * HTML HUD overlay rendered above the 3D canvas when WebGL is available.
- * Lifts the banner + round marker + reaction overlay + speech layer +
- * verdict / idle / cancelled panels out of the existing 2D stage so they
- * can sit transparently over the canvas while the desk row + cyclorama
- * + characters live in 3D. Logic mirrors {@link BroadcastStage}; only the
- * wrappers change (no StageBackdrop, no desks/plinths row).
+ * Lifts the banner + compact status chip + reaction overlay + single
+ * bottom-center live caption + verdict / cancelled panels out of
+ * the existing 2D stage so they can sit transparently over the canvas
+ * while the desk row + cyclorama + characters live in 3D.
+ *
+ * Idle setup lives in the SetupModal (opened from the idle hero) — this
+ * HUD never renders a setup form.
  *
  * Pointer-events discipline: the wrapper is `pointer-events: none` so the
- * canvas (OrbitControls etc.) can absorb clicks on empty regions. Interactive
- * children opt back into `pointer-events: auto` via the `arena-hud__pulse`
- * / `arena-hud__form` / `__cta` classes that target buttons and form fields.
+ * canvas (OrbitControls etc.) can absorb clicks on empty regions.
+ * Interactive children opt back into `pointer-events: auto` via the
+ * `arena-hud__top` / `arena-hud__round` / `arena-hud__terminal` classes
+ * that target buttons and links.
  */
 export function ArenaHud(props: ArenaHudProps) {
   const support = useWebGLSupport();
@@ -41,24 +41,11 @@ export function ArenaHud(props: ArenaHudProps) {
   const {
     topic,
     state,
-    agentA,
-    agentB,
-    // judgeProvider / judgeModel are intentionally not consumed in the HUD
-    // overlay itself — the 3D characters read the verdict state via their
-    // own lighting rig in Phase C. Kept on the prop surface for parity with
-    // BroadcastStage so the orchestrator can pass them through unchanged.
-    draftSideAModel,
-    draftSideBModel,
-    draftSideAPosition,
-    draftSideBPosition,
     footer,
     onNewMatch,
     inMatch,
     onEndMatch,
     onOpenHistory,
-    onStart,
-    busy = false,
-    errorMessage,
     reactionsMuted,
     onToggleMute,
   } = props;
@@ -70,8 +57,6 @@ export function ArenaHud(props: ArenaHudProps) {
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
   const verdict = state.verdict as DebateStreamVerdict | undefined;
-
-  const showSetup = !inMatch && Boolean(onStart);
 
   return (
     <div
@@ -94,30 +79,33 @@ export function ArenaHud(props: ArenaHudProps) {
         />
       </div>
 
-      {/* Round marker — centered below the banner */}
-      <div className="arena-hud__round">
-        <RoundMarker view={view} />
-      </div>
+      {/* Compact round/status chip — sits in the top bar area. The
+          full-width floating RoundMarker was too dominant for the new
+          caption-first design. */}
+      {inMatch ? (
+        <div className="arena-hud__round arena-hud__round--compact">
+          <CompactChip state={state} />
+        </div>
+      ) : null}
 
       {/* Floating reaction overlay (aria-hidden, decorative). */}
       <ReactionOverlay reaction={view.reaction} muted={reactionsMuted} position="top-right" />
 
-      {/* Speech teleprompters — anchored to the bottom edge. */}
+      {/* Dim the 3D scene so the captions stay the focal point. The
+          overlay is invisible when no match is in flight. */}
+      {inMatch ? <div className="arena-hud__scrim" aria-hidden="true" /> : null}
+
+      {/* Live caption — the new single bottom-center speech surface. */}
       {inMatch ? (
-        <div className="arena-hud__speech">
-          <SpeechLayer
-            state={state}
-            agentA={agentA}
-            agentB={agentB}
-            draftSideAModel={draftSideAModel}
-            draftSideBModel={draftSideBModel}
-            draftSideAPosition={draftSideAPosition}
-            draftSideBPosition={draftSideBPosition}
-          />
+        <div className="arena-hud__caption">
+          <LiveCaption state={state} />
         </div>
       ) : null}
 
-      {/* Terminal surfaces — full-bleed modal-style panel above the canvas. */}
+      {/* Terminal surfaces — the cancelled + judging states keep their
+          calmer panels; the verdict reveal now uses the new VerdictCard
+          (which lives in the same caption chrome) instead of a
+          full-screen terminal. */}
       {showCancelled ? (
         onNewMatch ? (
           <div className="arena-hud__terminal arena-hud__terminal--cta">
@@ -125,24 +113,19 @@ export function ArenaHud(props: ArenaHudProps) {
           </div>
         ) : null
       ) : showJudge ? (
-        <div className="arena-hud__terminal">
-          {judgeState === "revealed" && verdict ? (
-            <VerdictReveal verdict={verdict} reasoning={verdict.reasoning} footer={footer} />
-          ) : (
+        judgeState === "revealed" && verdict ? (
+          <div className="arena-hud__terminal arena-hud__terminal--verdict">
+            <VerdictCard
+              verdict={verdict}
+              topic={state.topic ?? topic}
+              footer={footer ? { ...footer, matchId: state.matchId ?? footer.matchId } : undefined}
+            />
+          </div>
+        ) : (
+          <div className="arena-hud__terminal arena-hud__terminal--judging">
             <VerdictEvaluating footer={footer} />
-          )}
-        </div>
-      ) : showSetup && onStart ? (
-        <div className="arena-hud__terminal arena-hud__terminal--form">
-          {/* 3D-aware console UI (idle desktop visual). The 2D fallback
-              BroadcastStage keeps using the original IdleSetup so users on
-              non-WebGL clients see the same form they had pre-Phase C. */}
-          {support.supported ? (
-            <BroadcastConsole onStart={onStart} busy={busy} errorMessage={errorMessage} />
-          ) : (
-            <IdleSetup onStart={onStart} busy={busy} errorMessage={errorMessage} />
-          )}
-        </div>
+          </div>
+        )
       ) : null}
     </div>
   );

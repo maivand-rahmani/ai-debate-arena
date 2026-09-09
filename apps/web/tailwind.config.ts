@@ -96,45 +96,13 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(10px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
-        "caret-blink": {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0" },
-        },
-        "vs-pulse": {
-          "0%, 100%": { opacity: "0.7", transform: "scale(1)" },
-          "50%": { opacity: "1", transform: "scale(1.04)" },
-        },
-        shimmer: {
-          "0%": { backgroundPosition: "-200% 0" },
-          "100%": { backgroundPosition: "200% 0" },
-        },
-        "verdict-reveal": {
-          from: { opacity: "0", transform: "translateY(12px) scale(0.985)" },
-          to: { opacity: "1", transform: "translateY(0) scale(1)" },
-        },
-        "score-rise": {
-          from: { opacity: "0", transform: "translateY(8px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
-        },
         pulse: {
           "50%": { opacity: ".45", transform: "scale(.8)" },
         },
         // v0.3 broadcast flourishes — all CSS-driven, no JS animation.
-        "spot-sweep": {
-          "0%, 100%": { opacity: ".55", transform: "translateX(-4%) skewX(-12deg)" },
-          "50%": { opacity: ".95", transform: "translateX(4%) skewX(-12deg)" },
-        },
         "mascot-bob": {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-3px)" },
-        },
-        "teleprompter-roll": {
-          from: { transform: "translateY(8%)", opacity: "0" },
-          to: { transform: "translateY(0)", opacity: "1" },
-        },
-        "banner-marquee": {
-          "0%": { transform: "translateX(-8%)" },
-          "100%": { transform: "translateX(108%)" },
         },
         "reaction-pop": {
           from: { opacity: "0", transform: "translateY(20px) scale(.9) rotate(-4deg)" },
@@ -143,17 +111,9 @@ const config: Config = {
       },
       animation: {
         "panel-enter": "panel-enter 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both",
-        "caret-blink": "caret-blink 1s steps(2) infinite",
-        "vs-pulse": "vs-pulse 2.6s ease-in-out infinite",
-        shimmer: "shimmer 1.6s linear infinite",
-        "verdict-reveal": "verdict-reveal 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both",
-        "score-rise": "score-rise 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both",
         pulse: "pulse 1.5s infinite",
-        "spot-sweep": "spot-sweep 4.6s ease-in-out infinite",
         "mascot-bob": "mascot-bob 3.4s ease-in-out infinite",
-        "teleprompter-roll": "teleprompter-roll 260ms ease-out both",
-        "banner-marquee": "banner-marquee 24s linear infinite",
-        "reaction-pop": "reaction-pop 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both",
+        "reaction-pop": "reaction-pop 360ms cubic-bezier(.2,.7,.2,1) both",
       },
     },
   },

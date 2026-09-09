@@ -7,20 +7,38 @@ interface ProvidersEmptyStateProps {
   readonly commandLabel?: string;
   readonly onCommand?: () => void;
   readonly onReload?: () => void;
+  /**
+   * Optional primary in-browser action — when provided, becomes the
+   * main call-to-action and the CLI command drops to a documented
+   * secondary line. Replaces the previous "run the CLI" dead-end with
+   * a button that opens the provider management modal.
+   */
+  readonly onManageProviders?: () => void;
+  readonly manageLabel?: string;
 }
 
 /**
- * Friendly fallback shown when no providers are configured. We avoid the
- * generic "empty list" copy and instead surface the exact CLI command the
- * user needs to run — keeping the experience calm even in a broken state.
+ * Friendly fallback shown when no providers are configured. Two modes:
+ *
+ *   - With `onManageProviders` set: the primary button opens the
+ *     in-browser provider manager and the CLI line is shown as a
+ *     documented secondary fallback.
+ *   - Without it (legacy / non-interactive contexts): the primary
+ *     button surfaces the CLI command via `onCommand` (defaults to a
+ *     reload-style "Run …" hint).
+ *
+ * The wording stays calm in both cases — no marketing language, no
+ * exclamation points.
  */
 export function ProvidersEmptyState({
   loading,
   title,
   body,
-  commandLabel = "Run npm run provider:add",
+  commandLabel,
   onCommand,
   onReload,
+  onManageProviders,
+  manageLabel = "Connect a provider",
 }: ProvidersEmptyStateProps) {
   if (loading) {
     return (
@@ -34,6 +52,12 @@ export function ProvidersEmptyState({
       </div>
     );
   }
+
+  const hasBrowserAction = typeof onManageProviders === "function";
+  const primaryHandler = hasBrowserAction ? onManageProviders : (onCommand ?? onReload);
+  const primaryLabel = hasBrowserAction
+    ? manageLabel
+    : (commandLabel ?? "Run npm run provider:add");
 
   return (
     <div className="topic-panel grid gap-6 text-center sm:text-left" role="status" aria-live="polite">
@@ -52,12 +76,12 @@ export function ProvidersEmptyState({
       <div className="flex flex-wrap items-center justify-center gap-3 sm:justify-start">
         <button
           type="button"
-          onClick={onCommand ?? onReload}
+          onClick={primaryHandler}
           className="start-button"
         >
-          <span>{commandLabel}</span>
+          <span>{primaryLabel}</span>
           <span aria-hidden="true" className="font-display text-base leading-none">
-            ↗
+            {hasBrowserAction ? "+" : "↗"}
           </span>
         </button>
         {onReload ? (
@@ -70,9 +94,19 @@ export function ProvidersEmptyState({
           </button>
         ) : null}
       </div>
-      <pre className="mx-auto w-full max-w-md overflow-x-auto rounded-lg border border-white/10 bg-arena-900/80 px-4 py-3 text-left text-[12px] leading-relaxed text-arena-100">
-        <code>npm run provider:add</code>
-      </pre>
+      {hasBrowserAction ? (
+        <p className="mx-auto w-full max-w-md text-[11px] leading-relaxed text-arena-300 sm:mx-0">
+          Prefer the terminal?{" "}
+          <code className="rounded border border-white/10 bg-arena-900/80 px-1.5 py-0.5 font-mono text-[11px] text-arena-100">
+            npm run provider:add
+          </code>{" "}
+          is still available for scripted setups.
+        </p>
+      ) : (
+        <pre className="mx-auto w-full max-w-md overflow-x-auto rounded-lg border border-white/10 bg-arena-900/80 px-4 py-3 text-left text-[12px] leading-relaxed text-arena-100">
+          <code>npm run provider:add</code>
+        </pre>
+      )}
     </div>
   );
 }

@@ -104,8 +104,8 @@ export default function ArenaCanvasClient({ signal, onFirstFrame }: ArenaCanvasC
 
 /**
  * Tiny probe that fires the parent's `onFirstFrame` callback exactly once
- * after the R3F render loop produces its first frame. Used to gate the
- * entry-hero intro reveal.
+ * after the R3F render loop produces its first frame. Optional; inert
+ * when no callback is provided.
  */
 function FirstFrameProbe({
   firedRef,

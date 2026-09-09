@@ -5,13 +5,11 @@ import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
 import type { RedactedProvider } from "@/shared/api/providers";
 import { BroadcastBanner } from "./broadcast-banner";
-import { IdleSetup } from "./idle/idle-setup";
 import type { JudgePanelFooter } from "./verdict/verdict-reveal";
-import { VerdictReveal, VerdictEvaluating } from "./verdict/verdict-reveal";
+import { VerdictEvaluating } from "./verdict/verdict-reveal";
 import { AgentDesk } from "./desks/agent-desk";
 import { JudgePlinth } from "./desks/judge-plinth";
-import { RoundMarker } from "./monitors/round-marker";
-import { SpeechLayer } from "./speech/speech-layer";
+import { LiveCaption, CompactChip, VerdictCard } from "@/features/arena/captions";
 import { StageBackdrop } from "./backdrop/stage-backdrop";
 import { ReactionOverlay } from "./reactions/reaction-overlay";
 import { deriveStageView } from "./stage-state";
@@ -36,9 +34,6 @@ export interface BroadcastStageProps {
   readonly inMatch: boolean;
   readonly onEndMatch?: () => void;
   readonly onOpenHistory?: () => void;
-  readonly onStart?: (draft: import("@/features/create-debate/draft").MatchDraft) => void;
-  readonly busy?: boolean;
-  readonly errorMessage?: string;
   readonly reactionsMuted: boolean;
   readonly onToggleMute?: () => void;
 }
@@ -46,14 +41,16 @@ export interface BroadcastStageProps {
 /**
  * The v0.3 broadcast composition. The Arena is the first impression and the
  * main interface: broadcast banner + cyclorama backdrop, two contender
- * desks, a central Judge plinth, the teleprompter speech layer, and either
- * an idle setup surface or a dramatic verdict reveal. State comes only
- * from {@link DebateRuntimeState}; the {@link deriveStageView} pure mapping
- * projects that state into data-attributes that the CSS module uses to
- * light up spotlights, shift the camera, animate mascots, and pop reactions.
+ * desks, a central Judge plinth, the bottom-center live caption + compact
+ * status chip, and either a cancelled panel or a dramatic verdict reveal.
+ * State comes only from {@link DebateRuntimeState}; the
+ * {@link deriveStageView} pure mapping projects that state into
+ * data-attributes that the CSS module uses to light up spotlights, shift
+ * the camera, animate mascots, and pop reactions.
  *
- * The hook / reducer / stream lifecycle is untouched: this widget only
- * changes presentation.
+ * Idle setup lives in the SetupModal (opened from the idle hero) — this
+ * stage never renders a setup form. The hook / reducer / stream lifecycle
+ * is untouched: this widget only changes presentation.
  */
 export function BroadcastStage({
   topic,
@@ -71,9 +68,6 @@ export function BroadcastStage({
   inMatch,
   onEndMatch,
   onOpenHistory,
-  onStart,
-  busy = false,
-  errorMessage,
   reactionsMuted,
   onToggleMute,
 }: BroadcastStageProps) {
@@ -88,8 +82,6 @@ export function BroadcastStage({
 
   const monitorModelA = draftSideAModel ?? state.panels.find((p) => p.side === "A")?.model;
   const monitorModelB = draftSideBModel ?? state.panels.find((p) => p.side === "B")?.model;
-
-  const showSetup = !inMatch && Boolean(onStart);
 
   return (
     <section
@@ -110,10 +102,6 @@ export function BroadcastStage({
       />
 
       <div className="broadcast-stage__composition">
-        <div className="broadcast-stage__header">
-          <RoundMarker view={view} />
-        </div>
-
         <div className="broadcast-stage__set" aria-hidden={showCancelled ? "true" : "false"}>
           <AgentDesk
             side="A"
@@ -157,27 +145,30 @@ export function BroadcastStage({
       </div>
 
       {inMatch ? (
-        <SpeechLayer
-          state={state}
-          agentA={agentA}
-          agentB={agentB}
-          draftSideAModel={draftSideAModel}
-          draftSideBModel={draftSideBModel}
-          draftSideAPosition={draftSideAPosition}
-          draftSideBPosition={draftSideBPosition}
-        />
+        <>
+          <div className="broadcast-stage__round--compact" aria-hidden="true">
+            <CompactChip state={state} />
+          </div>
+          <div className="broadcast-stage__caption">
+            <LiveCaption state={state} />
+          </div>
+        </>
       ) : null}
 
       {showCancelled ? (
         onNewMatch ? <CancelledPanel state={state} onNewMatch={onNewMatch} /> : null
       ) : showJudge ? (
         judgeState === "revealed" && verdict ? (
-          <VerdictReveal verdict={verdict} reasoning={verdict.reasoning} footer={footer} />
+          <div className="broadcast-stage__caption">
+            <VerdictCard
+              verdict={verdict}
+              topic={state.topic ?? topic}
+              footer={footer ? { ...footer, matchId: state.matchId ?? footer.matchId } : undefined}
+            />
+          </div>
         ) : (
           <VerdictEvaluating footer={footer} />
         )
-      ) : showSetup && onStart ? (
-        <IdleSetup onStart={onStart} busy={busy} errorMessage={errorMessage} />
       ) : null}
     </section>
   );

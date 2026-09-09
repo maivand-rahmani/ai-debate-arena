@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RedactedProvider } from "@/shared/api/providers";
 import type { DebateStreamRequest } from "@/shared/api/debate-stream";
 import {
   fetchMatch,
+  fetchMatchList,
   rejudgeMatch,
   MatchesApiError,
+  type MatchSummary,
 } from "@/shared/api/matches";
 import { useProviders } from "@/features/create-debate/use-providers";
 import type { MatchDraft } from "@/features/create-debate/draft";
@@ -15,12 +17,8 @@ import { isInMatch } from "@/features/run-debate/lib/reducer";
 import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match-history-drawer";
 import { exportJsonBlob } from "@/features/run-debate/ui/match-history/match-actions";
 import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
+import { IdleHero, RecentMatchesModal, SetupModal } from "@/features/arena/idle";
 import { ArenaFrame } from "@/widgets/broadcast-stage";
-import {
-  EntryHero,
-  IntroOverlayManager,
-  useHeroProgress,
-} from "@/widgets/entry-hero/entry-hero";
 
 /**
  * The arena is the first impression and main interface — there is no
@@ -33,27 +31,40 @@ export default function ArenaScreen() {
   const { providers } = useProviders();
   const { state, start, reset, cancel, dispatch } = useDebateStream();
   const [matchDraft, setMatchDraft] = useState<MatchDraft | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [rejudgeStatus, setRejudgeStatus] = useState<RejudgeStatus>("idle");
   const [rejudgeError, setRejudgeError] = useState<string | undefined>(undefined);
   const [reactionsMuted, setReactionsMuted] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [recentCount, setRecentCount] = useState(0);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const reducedMotion = useMemo(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   }, []);
-  const { progress: heroProgress, scrolledAtLeastOnce } =
-    useHeroProgress(reducedMotion);
-  const [introSettled, setIntroSettled] = useState(reducedMotion);
 
-  // IntroOverlayManager owns its own RAF loop. The canvas first-frame
-  // callback lands here; the manager reads the same ref so the two stay
-  // in sync without re-rendering the surrounding tree.
-  const markCanvasReadyRef = useRef<() => void>(() => {});
-  const handleCanvasFirstFrame = useCallback(() => {
-    markCanvasReadyRef.current();
-  }, []);
-  const stableOnSettledChange = useCallback((next: boolean) => {
-    setIntroSettled((prev) => (prev === next ? prev : next));
+  const openSetup = useCallback(() => setSetupOpen(true), []);
+  const closeSetup = useCallback(() => setSetupOpen(false), []);
+  const openRecent = useCallback(() => setRecentOpen(true), []);
+  const closeRecent = useCallback(() => setRecentOpen(false), []);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  // Count recent matches once on mount so the idle hero can hint at
+  // "Recent matches · N" without forcing the user to open the modal.
+  useEffect(() => {
+    let cancelled = false;
+    fetchMatchList()
+      .then((matches: readonly MatchSummary[]) => {
+        if (cancelled) return;
+        setRecentCount(matches.length);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRecentCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const inMatch = isInMatch(state);
@@ -86,8 +97,7 @@ export default function ArenaScreen() {
     cancel();
   }, [cancel, reset, state.status]);
 
-  const handleOpenHistory = useCallback(() => setHistoryOpen(true), []);
-  const handleCloseHistory = useCallback(() => setHistoryOpen(false), []);
+  const handleOpenHistory = useCallback(() => setDrawerOpen(true), []);
   const handleToggleMute = useCallback(() => setReactionsMuted((m) => !m), []);
 
   const handleExportJson = useCallback(async (matchId: string) => {
@@ -151,8 +161,7 @@ export default function ArenaScreen() {
     : undefined;
 
   return (
-    <main className="arena-entry-runway" style={{ background: "#0c0a07" }}>
-      <div className="arena-entry-sticky">
+    <main className="arena-home" style={{ background: "#0c0a07" }}>
         <ArenaFrame
           topic={topic}
           state={state}
@@ -169,28 +178,35 @@ export default function ArenaScreen() {
           inMatch={inMatch}
           onEndMatch={handleEndMatch}
           onOpenHistory={handleOpenHistory}
-          onStart={handleStart}
-          busy={state.status === "starting"}
-          errorMessage={state.status === "error" && !inMatch ? state.errorMessage : undefined}
           reactionsMuted={reactionsMuted}
           onToggleMute={handleToggleMute}
-          heroProgress={heroProgress}
-          onFirstFrame={handleCanvasFirstFrame}
         />
-        <EntryHero
-          progress={heroProgress}
-          reducedMotion={reducedMotion}
-          scrolled={scrolledAtLeastOnce}
-          introSettled={introSettled}
-        />
-        <IntroOverlayManager
-          reducedMotion={reducedMotion}
-          markCanvasReadyRef={markCanvasReadyRef}
-          onSettledChange={stableOnSettledChange}
-        />
-      </div>
+        {/* v0.3.1 idle: minimal hero with one CTA + a small
+            recent-matches link. Both open modals that sit on top of
+            the 3D stage instead of dumping the full setup form on
+            the landing page. */}
+        {!inMatch ? (
+          <IdleHero
+            onStart={openSetup}
+            onOpenHistory={openRecent}
+            recentCount={recentCount}
+            busy={state.status === "starting"}
+            reducedMotion={reducedMotion}
+          />
+        ) : null}
 
-      <MatchHistoryDrawer open={historyOpen} onClose={handleCloseHistory} />
+      <SetupModal
+        open={setupOpen}
+        onClose={closeSetup}
+        onStart={(draft) => {
+          closeSetup();
+          handleStart(draft);
+        }}
+        busy={state.status === "starting"}
+        errorMessage={state.status === "error" && !inMatch ? state.errorMessage : undefined}
+      />
+      <RecentMatchesModal open={recentOpen} onClose={closeRecent} />
+      <MatchHistoryDrawer open={drawerOpen} onClose={closeDrawer} />
     </main>
   );
 }

@@ -4,6 +4,29 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 
 ## [Unreleased]
 
+### v0.3.1 usability pass (2026-09-09)
+- Idle = minimal two-step hero (Start new debate / Recent matches); setup + recent matches now modal dialogs sharing one shell with the provider manager.
+- Live speech moved from thin side rails to ONE bottom-center broadcast caption (large high-contrast text, dimmed glass, scrim darkens the 3D scene; same surface in the 2D fallback; reduced-motion + mobile handled).
+- New /matches/[id] page: chat-style full transcript, verdict card, export/re-judge, dark backdrop; history drawer/recent list link to it.
+
+### v0.3 closeout (2026-09-09) — provider connect + OpenCode Go headers
+- **OpenCode gateway session headers (fixes hard breakage):** every model request to a
+  provider whose base URL is `opencode.ai` (Zen and Go) now carries `x-opencode-session`
+  with a stable per-conversation key (`<matchId>:agent-a|agent-b|judge`; re-judge reuses
+  the original judge key, connection probes use a fresh per-click key) plus a real
+  `ai-debate-arena/<version>` User-Agent. Required since the gateway began enforcing
+  `400 MissingSessionID` on 2026-09-05/06. Non-opencode providers are unaffected.
+- **Provider connect in the web UI:** providers can now be added, edited, deleted, and
+  connection-tested from the browser via a "Manage providers" modal (broadcast-styled,
+  focus-trapped, confirm-delete dialog, per-provider test idle/testing/ok(latency)/
+  failed(code) states, inline server validation issues). New endpoints:
+  `POST /api/providers`, `PUT/DELETE /api/providers/[id]`, `POST /api/providers/[id]/test`.
+  Responses stay redacted (`apiKeyHint` only); editing with an empty key preserves the
+  stored key; tests run only on explicit user click with a bounded 15s probe and safe
+  typed error codes. `npm run provider:add` CLI remains the documented fallback.
+- Evidence: 274 web + 8 @arena/ai + 108 engine tests, typecheck, lint, and production
+  build green; pending the user's live `opencode-go` smoke and UI walkthrough (V3C-03).
+
 ### Package-based architecture (no product changes)
 - npm workspaces (`apps/*`, `packages/*`): `@arena/web` (Next 16 app, FSD now
   apps/web-internal, `entities` layer retired), `@arena/debate-engine` (phase

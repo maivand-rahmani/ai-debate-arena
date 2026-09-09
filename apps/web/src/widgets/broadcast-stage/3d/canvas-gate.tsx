@@ -81,7 +81,7 @@ export interface CanvasGateProps {
   readonly canvasProps?: SceneSignal;
   /**
    * Fired once when the lazy canvas reports its first rendered frame.
-   * Add-on for the entry-hero intro sequence; absent in normal Arena use.
+   * Optional; omit it when nothing needs the signal.
    */
   readonly onFirstFrame?: () => void;
 }

@@ -7,6 +7,7 @@ const alpha: RedactedProvider = {
   name: "Alpha",
   baseUrl: "https://alpha.example/v1",
   model: "alpha-default",
+  api: "chat",
   apiKeyHint: "alph••••••••lpha",
 };
 
@@ -15,6 +16,7 @@ const beta: RedactedProvider = {
   name: "Beta",
   baseUrl: "https://beta.example/v1",
   model: "beta-default",
+  api: "chat",
   apiKeyHint: "beta••••••••eta",
 };
 
