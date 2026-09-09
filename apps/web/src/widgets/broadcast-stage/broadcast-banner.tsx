@@ -82,15 +82,13 @@ export function BroadcastBanner({
           </button>
         ) : null}
 
-        {onEndMatch ? (
+        {onEndMatch && inMatch ? (
           <button
             type="button"
             onClick={onEndMatch}
-            disabled={!inMatch}
-            aria-disabled={!inMatch}
             className="broadcast-banner__toggle"
           >
-            {inMatch ? "End match" : "About"}
+            End match
           </button>
         ) : null}
       </div>

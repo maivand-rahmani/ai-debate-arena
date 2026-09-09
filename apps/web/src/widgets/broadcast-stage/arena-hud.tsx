@@ -7,7 +7,7 @@ import { ReactionOverlay } from "./reactions/reaction-overlay";
 import { LiveCaption, CompactChip, VerdictCard } from "@/features/arena/captions";
 import { VerdictEvaluating } from "./verdict/verdict-reveal";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
-import { deriveStageView } from "./stage-state";
+import { deriveStageView, isBroadcastLiveStatus, shouldShowLiveCaptionStatus } from "./stage-state";
 import type { BroadcastStageProps } from "./broadcast-stage";
 import { useWebGLSupport } from "./3d";
 
@@ -43,7 +43,6 @@ export function ArenaHud(props: ArenaHudProps) {
     state,
     footer,
     onNewMatch,
-    inMatch,
     onEndMatch,
     onOpenHistory,
     reactionsMuted,
@@ -54,6 +53,8 @@ export function ArenaHud(props: ArenaHudProps) {
 
   const showCancelled = state.status === "cancelled";
   const showJudge = state.status === "judging" || state.status === "finished";
+  const showLiveCaption = shouldShowLiveCaptionStatus(state.status);
+  const broadcastLive = isBroadcastLiveStatus(state.status);
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
   const verdict = state.verdict as DebateStreamVerdict | undefined;
@@ -71,8 +72,8 @@ export function ArenaHud(props: ArenaHudProps) {
         <BroadcastBanner
           topic={topic}
           mode={state.mode}
-          inMatch={inMatch}
-          onEndMatch={onEndMatch}
+          inMatch={broadcastLive}
+          onEndMatch={broadcastLive ? onEndMatch : undefined}
           onOpenHistory={onOpenHistory}
           reactionsMuted={reactionsMuted}
           onToggleMute={onToggleMute}
@@ -82,7 +83,7 @@ export function ArenaHud(props: ArenaHudProps) {
       {/* Compact round/status chip — sits in the top bar area. The
           full-width floating RoundMarker was too dominant for the new
           caption-first design. */}
-      {inMatch ? (
+      {broadcastLive ? (
         <div className="arena-hud__round arena-hud__round--compact">
           <CompactChip state={state} />
         </div>
@@ -93,10 +94,10 @@ export function ArenaHud(props: ArenaHudProps) {
 
       {/* Dim the 3D scene so the captions stay the focal point. The
           overlay is invisible when no match is in flight. */}
-      {inMatch ? <div className="arena-hud__scrim" aria-hidden="true" /> : null}
+      {broadcastLive ? <div className="arena-hud__scrim" aria-hidden="true" /> : null}
 
       {/* Live caption — the new single bottom-center speech surface. */}
-      {inMatch ? (
+      {showLiveCaption ? (
         <div className="arena-hud__caption">
           <LiveCaption state={state} />
         </div>

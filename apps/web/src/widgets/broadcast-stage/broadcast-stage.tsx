@@ -12,7 +12,7 @@ import { JudgePlinth } from "./desks/judge-plinth";
 import { LiveCaption, CompactChip, VerdictCard } from "@/features/arena/captions";
 import { StageBackdrop } from "./backdrop/stage-backdrop";
 import { ReactionOverlay } from "./reactions/reaction-overlay";
-import { deriveStageView } from "./stage-state";
+import { deriveStageView, isBroadcastLiveStatus, shouldShowLiveCaptionStatus } from "./stage-state";
 
 export type { JudgePanelFooter } from "./verdict/verdict-reveal";
 
@@ -65,7 +65,6 @@ export function BroadcastStage({
   draftSideBPosition,
   footer,
   onNewMatch,
-  inMatch,
   onEndMatch,
   onOpenHistory,
   reactionsMuted,
@@ -75,6 +74,8 @@ export function BroadcastStage({
 
   const showCancelled = state.status === "cancelled";
   const showJudge = state.status === "judging" || state.status === "finished";
+  const showLiveCaption = shouldShowLiveCaptionStatus(state.status);
+  const broadcastLive = isBroadcastLiveStatus(state.status);
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
 
@@ -94,8 +95,8 @@ export function BroadcastStage({
       <BroadcastBanner
         topic={topic}
         mode={state.mode}
-        inMatch={inMatch}
-        onEndMatch={onEndMatch}
+        inMatch={broadcastLive}
+        onEndMatch={broadcastLive ? onEndMatch : undefined}
         onOpenHistory={onOpenHistory}
         reactionsMuted={reactionsMuted}
         onToggleMute={onToggleMute}
@@ -144,15 +145,16 @@ export function BroadcastStage({
         <ReactionOverlay reaction={view.reaction} muted={reactionsMuted} position="top-right" />
       </div>
 
-      {inMatch ? (
-        <>
-          <div className="broadcast-stage__round--compact" aria-hidden="true">
-            <CompactChip state={state} />
-          </div>
-          <div className="broadcast-stage__caption">
-            <LiveCaption state={state} />
-          </div>
-        </>
+      {broadcastLive ? (
+        <div className="broadcast-stage__round--compact" aria-hidden="true">
+          <CompactChip state={state} />
+        </div>
+      ) : null}
+
+      {showLiveCaption ? (
+        <div className="broadcast-stage__caption">
+          <LiveCaption state={state} />
+        </div>
       ) : null}
 
       {showCancelled ? (

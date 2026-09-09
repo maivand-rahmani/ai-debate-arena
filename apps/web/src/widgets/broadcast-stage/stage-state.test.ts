@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { initialRuntimeState, type DebateRuntimeState } from "@/features/run-debate/lib/reducer";
+import {
+  initialRuntimeState,
+  type DebateRuntimeState,
+  type DebateRuntimeStatus,
+} from "@/features/run-debate/lib/reducer";
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
-import { deriveStageView } from "./stage-state";
+import {
+  deriveStageView,
+  isBroadcastLiveStatus,
+  shouldShowLiveCaptionStatus,
+} from "./stage-state";
 
 const baseState: DebateRuntimeState = initialRuntimeState;
 
@@ -30,6 +38,23 @@ const verdict: DebateStreamVerdict = {
   },
   reasoning: "A had stronger arguments",
 };
+
+describe("stage surface status rules", () => {
+  it("keeps broadcast controls live only before terminal states", () => {
+    const liveStatuses: DebateRuntimeStatus[] = ["starting", "streaming", "judging"];
+    const nonLiveStatuses: DebateRuntimeStatus[] = ["idle", "finished", "cancelled", "error"];
+    expect(liveStatuses.every(isBroadcastLiveStatus)).toBe(true);
+    expect(nonLiveStatuses.some(isBroadcastLiveStatus)).toBe(false);
+  });
+
+  it("shows live captions for streamed text and recoverable errors only", () => {
+    expect(shouldShowLiveCaptionStatus("streaming")).toBe(true);
+    expect(shouldShowLiveCaptionStatus("error")).toBe(true);
+    expect(shouldShowLiveCaptionStatus("judging")).toBe(false);
+    expect(shouldShowLiveCaptionStatus("finished")).toBe(false);
+    expect(shouldShowLiveCaptionStatus("cancelled")).toBe(false);
+  });
+});
 
 describe("deriveStageView — mode mapping", () => {
   it("is idle for the initial state", () => {

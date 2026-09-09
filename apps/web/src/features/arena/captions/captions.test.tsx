@@ -66,6 +66,18 @@ describe("LiveCaption", () => {
     expect(html).toContain("live-caption--violet");
     expect(html).toContain("The Advocate");
   });
+
+  it("explains that the caption is waiting when the first token has not arrived", () => {
+    const state: DebateRuntimeState = {
+      ...initialRuntimeState,
+      status: "streaming",
+      currentPhase: "OPENING_A",
+      currentSide: "A",
+    };
+    const html = renderToStaticMarkup(<LiveCaption state={state} />);
+    expect(html).toContain("Waiting for the first words");
+    expect(html).not.toContain(">…<");
+  });
 });
 
 describe("VerdictCard", () => {

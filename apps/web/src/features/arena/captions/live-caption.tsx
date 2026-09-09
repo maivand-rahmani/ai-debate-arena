@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
 import { deriveCaptionView, type CaptionView } from "./caption-view";
 
@@ -28,6 +29,16 @@ export function LiveCaption({ state }: LiveCaptionProps) {
 
 function CaptionPanel({ view }: { view: CaptionView }) {
   const status = statusLabel(view);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // The body is intentionally bounded so a long response does not cover the
+  // whole arena. Keep the newest streamed tokens in view as they arrive.
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    body.scrollTop = body.scrollHeight;
+  }, [view.kind?.kind, view.phaseLabel, view.text]);
+
   return (
     <section
       className={`live-caption live-caption--${view.tone}`}
@@ -44,7 +55,7 @@ function CaptionPanel({ view }: { view: CaptionView }) {
           {status}
         </span>
       </header>
-      <div className="live-caption__body" aria-live={view.isLive ? "polite" : "off"}>
+      <div ref={bodyRef} className="live-caption__body" aria-live={view.isLive ? "polite" : "off"}>
         {view.text ? (
           <p className="live-caption__text">
             {view.text}
@@ -78,7 +89,7 @@ function statusLabel(view: CaptionView): string {
 function idleMessage(view: CaptionView): string {
   if (!view.kind) return "";
   if (view.kind.kind === "speaker" && !view.isLive) return "Listening for the first words…";
-  if (view.kind.kind === "speaker" && view.isLive) return "…";
+  if (view.kind.kind === "speaker" && view.isLive) return "Waiting for the first words…";
   if (view.kind.kind === "judge-evaluating") return "Listening to the closing arguments…";
   if (view.kind.kind === "verdict") return "The judge has reached a verdict.";
   if (view.kind.kind === "cancelled") return "The match ended before a verdict.";

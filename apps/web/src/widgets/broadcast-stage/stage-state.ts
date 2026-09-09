@@ -19,7 +19,7 @@
  */
 
 import type { DebateSide } from "@arena/debate-engine";
-import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
+import type { DebateRuntimeState, DebateRuntimeStatus } from "@/features/run-debate/lib/reducer";
 import { deriveMoods, type MoodView } from "./mood";
 import { deriveReaction, type ReactionView } from "./reaction";
 
@@ -55,6 +55,16 @@ export interface StageView {
   readonly judgeActivity: StageSideActivity;
   readonly moods: MoodView;
   readonly reaction: ReactionView | null;
+}
+
+/** The broadcast controls stay live only while the match can still advance. */
+export function isBroadcastLiveStatus(status: DebateRuntimeStatus): boolean {
+  return status === "starting" || status === "streaming" || status === "judging";
+}
+
+/** A caption surface belongs to an active stream (or its recoverable error). */
+export function shouldShowLiveCaptionStatus(status: DebateRuntimeStatus): boolean {
+  return status === "streaming" || status === "error";
 }
 
 export function deriveStageView(state: DebateRuntimeState): StageView {
