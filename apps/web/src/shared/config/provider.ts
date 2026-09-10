@@ -25,10 +25,16 @@ export type ProviderStore = z.infer<typeof providerStoreSchema>;
  * id is optional; `apiKey` may be omitted or sent as `""` to preserve the
  * stored key (a non-empty value replaces it). Unknown keys are stripped.
  */
-export const providerUpdateSchema = providerConfigSchema
-  .omit({ id: true })
-  .partial()
-  .extend({ apiKey: z.string().max(4096).optional() });
+// Do not derive this from a `.partial()` of the create schema: Zod materializes
+// defaults even for omitted fields, so updating a model used to overwrite
+// `api: "responses"` with the create default of `"chat"`.
+export const providerUpdateSchema = z.object({
+  name: providerConfigSchema.shape.name.optional(),
+  baseUrl: providerConfigSchema.shape.baseUrl.optional(),
+  model: providerConfigSchema.shape.model.optional(),
+  api: z.enum(["chat", "responses"]).optional(),
+  apiKey: z.string().max(4096).optional(),
+});
 export type ProviderUpdateInput = z.infer<typeof providerUpdateSchema>;
 export type RedactedProviderConfig = Omit<ProviderConfig, "apiKey"> & { apiKeyHint: string };
 

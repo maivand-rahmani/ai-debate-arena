@@ -167,6 +167,28 @@ describe("PUT /api/providers/[id]", () => {
     expect(body.apiKeyHint).toBe(hintBefore);
   });
 
+  it("preserves the API mode when updating only the model", async () => {
+    await createProvider(
+      jsonRequest("http://localhost/api/providers", "POST", {
+        ...validBody(),
+        api: "responses",
+      }),
+    );
+
+    const res = await updateProvider(
+      jsonRequest("http://localhost/api/providers/mock-provider", "PUT", {
+        model: "muse-spark-1.2-contributor",
+      }),
+      params("mock-provider"),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      model: "muse-spark-1.2-contributor",
+      api: "responses",
+    });
+  });
+
   it("preserves the stored key when apiKey is an empty string", async () => {
     const created = JSON.parse(
       await (await createProvider(jsonRequest("http://localhost/api/providers", "POST", validBody()))).text(),
