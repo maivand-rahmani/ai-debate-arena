@@ -12,8 +12,10 @@ export interface MatchPlaybackSnapshot {
   readonly focusedPanel: SpeechPanel | null;
   readonly focusedIndex: number;
   readonly unseenTurns: number;
+  /** Index to reveal next: a response, or the judge after the final response. */
+  readonly nextIndex: number | null;
   readonly canAdvance: boolean;
-  /** Judge/verdict waits until the viewer has seen every completed turn. */
+  /** Judge/verdict waits until the viewer explicitly continues after the final response. */
   readonly holdTerminal: boolean;
 }
 
@@ -32,11 +34,14 @@ export function deriveMatchPlayback(state: DebateRuntimeState, requestedIndex: n
   const focusedIndex = panels.length === 0 ? 0 : Math.min(Math.max(0, requestedIndex), panels.length - 1);
   const focusedPanel = panels[focusedIndex] ?? null;
   const unseenTurns = focusedPanel ? panels.length - focusedIndex - 1 : 0;
-  const canAdvance = unseenTurns > 0;
+  // `panels.length` is a deliberate sentinel: after the final speech it means
+  // the viewer has explicitly elected to move on to the judge.
   const holdTerminal =
     (state.status === "judging" || state.status === "finished") &&
     panels.length > 0 &&
-    focusedIndex < panels.length - 1;
+    requestedIndex < panels.length;
+  const nextIndex = unseenTurns > 0 ? focusedIndex + 1 : holdTerminal ? panels.length : null;
+  const canAdvance = nextIndex !== null;
 
-  return { focusedPanel, focusedIndex, unseenTurns, canAdvance, holdTerminal };
+  return { focusedPanel, focusedIndex, unseenTurns, nextIndex, canAdvance, holdTerminal };
 }

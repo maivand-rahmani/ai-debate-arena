@@ -431,7 +431,7 @@ describe("runDebate stream contract v1 + persistence", () => {
     expect(record.verdict?.winner).toBe("A");
     expect(record.metrics.turnsMs).toHaveLength(4);
     expect(record.metrics.totalMs).toBeGreaterThanOrEqual(0);
-    expect(record.policy).toMatchObject({ mode: "quick", agentMaxOutputTokens: 2000 });
+    expect(record.policy).toMatchObject({ mode: "quick", agentMaxOutputTokens: 3000 });
     expect(record.promptVersions).toEqual({ agent: "2", judge: "2" });
     expect(record.rubricVersion).toBe("2");
     expect(JSON.stringify(record)).not.toMatch(/apiKey|baseUrl|sk-/i);

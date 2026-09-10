@@ -22,9 +22,19 @@ describe("deriveMatchPlayback", () => {
     expect(playback.holdTerminal).toBe(true);
   });
 
-  it("releases the verdict once the last speech is in view", () => {
+  it("keeps the final speech on screen until the viewer continues to the judge", () => {
     const playback = deriveMatchPlayback(state, 3);
     expect(playback.focusedPanel?.id).toBe("B:REBUTTAL_B");
+    expect(playback.unseenTurns).toBe(0);
+    expect(playback.nextIndex).toBe(4);
+    expect(playback.canAdvance).toBe(true);
+    expect(playback.holdTerminal).toBe(true);
+  });
+
+  it("reveals the verdict only after the final continue action", () => {
+    const playback = deriveMatchPlayback(state, 4);
+    expect(playback.focusedPanel?.id).toBe("B:REBUTTAL_B");
+    expect(playback.nextIndex).toBeNull();
     expect(playback.canAdvance).toBe(false);
     expect(playback.holdTerminal).toBe(false);
   });

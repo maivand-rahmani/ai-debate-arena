@@ -13,14 +13,19 @@ export function PlaybackControls({ state, playback }: PlaybackControlsProps) {
   if (!playback.focusedPanel?.sealed) return null;
 
   if (playback.canAdvance) {
-    const waitingLabel = playback.unseenTurns === 1 ? "1 response ready" : `${playback.unseenTurns} responses ready`;
+    const isLastResponse = playback.unseenTurns === 0;
+    const waitingLabel = isLastResponse
+      ? "Last response is ready · the judge works in the background"
+      : playback.unseenTurns === 1
+        ? "1 response ready · the models continue in the background"
+        : `${playback.unseenTurns} responses ready · the models continue in the background`;
     return (
       <div className="playback-controls" aria-live="polite">
         <span className="playback-controls__status">
-          {waitingLabel} · the models continue in the background
+          {waitingLabel}
         </span>
         <button type="button" className="playback-controls__next" onClick={playback.advance}>
-          <span>Next response</span>
+          <span>{isLastResponse ? "Continue to judge" : "Next response"}</span>
           <kbd>Esc</kbd>
           <span aria-hidden="true">→</span>
         </button>

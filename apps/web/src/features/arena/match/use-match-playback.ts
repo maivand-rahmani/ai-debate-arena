@@ -21,8 +21,8 @@ export function useMatchPlayback(state: DebateRuntimeState): MatchPlayback {
   }, [state.status]);
 
   const advance = useCallback(() => {
-    setRequestedIndex((index) => (snapshot.canAdvance ? index + 1 : index));
-  }, [snapshot.canAdvance]);
+    setRequestedIndex((index) => snapshot.nextIndex ?? index);
+  }, [snapshot.nextIndex]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

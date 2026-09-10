@@ -5,8 +5,8 @@ export type { MatchMode };
 // Reasoning-capable models need room for both internal work and a visible
 // answer. These are the pre-refactor Quick budgets that supported complete
 // replies and structured verdicts reliably.
-export const AGENT_MAX_OUTPUT_TOKENS = 2000;
-export const JUDGE_MAX_OUTPUT_TOKENS = 2000;
+export const AGENT_MAX_OUTPUT_TOKENS = 3000;
+export const JUDGE_MAX_OUTPUT_TOKENS = 4000;
 /** Maximum rendered transcript size sent to the judge in the active policy. */
 export const JUDGE_MAX_CONTEXT_CHARS = 24_000;
 
@@ -38,8 +38,8 @@ export const MATCH_PROFILES: Readonly<Record<MatchMode, MatchProfile>> = {
     mode: "standard",
     enabled: false,
     rounds: 4,
-    agentMaxOutputTokens: 2000,
-    judgeMaxOutputTokens: 2000,
+    agentMaxOutputTokens: 3500,
+    judgeMaxOutputTokens: 4500,
     historyTurns: 10,
     maxContextCharsPerSide: 24000,
   },
@@ -47,8 +47,8 @@ export const MATCH_PROFILES: Readonly<Record<MatchMode, MatchProfile>> = {
     mode: "hardcore",
     enabled: false,
     rounds: 4,
-    agentMaxOutputTokens: 3000,
-    judgeMaxOutputTokens: 2000,
+    agentMaxOutputTokens: 5000,
+    judgeMaxOutputTokens: 6000,
     historyTurns: 16,
     maxContextCharsPerSide: 48000,
   },
@@ -100,4 +100,4 @@ export function getTokenPolicy(name: TokenPolicyName = "Quick"): TokenPolicy {
 }
 
 /* Match lifecycle: bounded wall-clock for a streamed match (client abort or timeout). */
-export const MATCH_TIMEOUT_MS = 180_000;
+export const MATCH_TIMEOUT_MS = 300_000;
