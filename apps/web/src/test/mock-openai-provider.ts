@@ -25,6 +25,8 @@ export type MockReply =
       readonly chunkDelayMs?: number;
       /** Delay before the first byte of the response in ms. */
       readonly delayMs?: number;
+      /** Return a normal JSON completion even when the client requests a stream. */
+      readonly nonStreaming?: boolean;
     }
   | {
       readonly kind: "error";
@@ -153,7 +155,7 @@ export async function startMockOpenAIProvider(): Promise<MockOpenAIProvider> {
       return;
     }
 
-    if (ctx.stream === true) {
+    if (ctx.stream === true && !reply.nonStreaming) {
       await sendStreaming(res, reply);
     } else {
       res.writeHead(200, { "content-type": "application/json" });

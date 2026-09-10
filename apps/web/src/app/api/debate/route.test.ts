@@ -190,6 +190,28 @@ describe("POST /api/debate", () => {
     expect(JSON.stringify(record)).not.toMatch(/apiKey|baseUrl|sk-test/i);
   });
 
+  it("completes agent turns when a provider ignores streaming requests", async () => {
+    mock.enqueue(
+      ...AGENT_TEXTS.flatMap((text) => [
+        { kind: "text", text, nonStreaming: true } as const,
+        { kind: "text", text } as const,
+      ]),
+      { kind: "text", text: VALID_VERDICT_JSON },
+      { kind: "text", text: VALID_VERDICT_JSON },
+    );
+
+    const events = await readNdjson(await postDebate(validBody()));
+    const turns = events.filter((event) => event.type === "turn");
+
+    expect(count(events, "error")).toBe(0);
+    expect(count(events, "done")).toBe(1);
+    expect(turns.map((event) => event.type === "turn" ? event.turn.content : null)).toEqual(AGENT_TEXTS);
+    expect(count(events, "token")).toBe(0);
+    expect(mock.requests.slice(0, 8).map((request) => request.stream)).toEqual([
+      true, null, true, null, true, null, true, null,
+    ]);
+  });
+
   it("rejects an empty topic with a 400 {error} shape (F6-07)", async () => {
     const res = await postDebate({ ...validBody(), topic: "   " });
     const body = await readErrorBody(res);

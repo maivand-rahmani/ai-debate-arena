@@ -95,23 +95,73 @@ export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult
       return { text, chunks: [], usage: { ...total } };
     }
   }
-  const result = streamText({
+  return callAgentWithStreamingFallback(model, args);
+}
+
+async function callAgentWithStreamingFallback(
+  model: LanguageModelV4,
+  args: ModelCallArgs,
+): Promise<ModelCallResult> {
+  try {
+    const streamed = streamText({
+      model,
+      system: args.system,
+      prompt: args.prompt,
+      maxOutputTokens: args.maxOutputTokens,
+      abortSignal: args.abortSignal,
+    });
+    const chunks: string[] = [];
+    let streamError: unknown;
+    for await (const part of streamed.stream) {
+      if (part.type === "text-delta") chunks.push(part.text);
+      if (part.type === "error") streamError = part.error;
+    }
+    if (streamError) throw streamError;
+    const text = (await streamed.text) || chunks.join("");
+    if (text.trim()) {
+      let usage: ModelUsage = ZERO_USAGE;
+      try {
+        usage = toModelUsage(await streamed.usage);
+      } catch {
+        // Usage is optional and must never discard a valid reply.
+      }
+      return { text, chunks, usage };
+    }
+    console.warn("[arena:agent] streaming response was empty; using non-streaming fallback", {
+      providerId: args.providerId,
+      modelId: args.modelId,
+    });
+  } catch (error) {
+    if (args.abortSignal?.aborted) throw error;
+    if (!shouldFallbackToNonStreaming(error)) throw error;
+    console.warn("[arena:agent] streaming response failed; using non-streaming fallback", {
+      providerId: args.providerId,
+      modelId: args.modelId,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const completed = await generateText({
     model,
     system: args.system,
     prompt: args.prompt,
     maxOutputTokens: args.maxOutputTokens,
     abortSignal: args.abortSignal,
   });
-  const chunks: string[] = [];
-  for await (const chunk of result.textStream) chunks.push(chunk);
-  const text = await result.text;
-  let usage: ModelUsage = ZERO_USAGE;
-  try {
-    usage = toModelUsage(await result.usage);
-  } catch {
-    usage = ZERO_USAGE;
+  if (!completed.text.trim()) {
+    throw new Error("Provider returned an empty response. Choose a model that supports text generation.");
   }
-  return { text, chunks, usage };
+  return {
+    text: completed.text,
+    chunks: [],
+    usage: toModelUsage(completed.usage),
+  };
+}
+
+function shouldFallbackToNonStreaming(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.name === "AI_InvalidResponseDataError"
+    || /no output generated|stream ended without a finish/i.test(error.message);
 }
 
 function addUsage(into: { promptTokens: number; completionTokens: number }, usage: ModelUsage | undefined): void {
