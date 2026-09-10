@@ -16,15 +16,15 @@ describe("token policy", () => {
     expect(ACTIVE_TOKEN_POLICY.name).toBe("Quick");
     expect(ACTIVE_TOKEN_POLICY.agentMaxOutputTokens).toBe(AGENT_MAX_OUTPUT_TOKENS);
     expect(ACTIVE_TOKEN_POLICY.judgeMaxOutputTokens).toBe(JUDGE_MAX_OUTPUT_TOKENS);
-    expect(AGENT_MAX_OUTPUT_TOKENS).toBe(1200);
-    expect(JUDGE_MAX_OUTPUT_TOKENS).toBe(1000);
+    expect(AGENT_MAX_OUTPUT_TOKENS).toBe(2000);
+    expect(JUDGE_MAX_OUTPUT_TOKENS).toBe(2000);
     expect(JUDGE_MAX_CONTEXT_CHARS).toBe(24_000);
   });
 
-  it("keeps the Quick judge compact while leaving agents room for a complete speech", () => {
-    expect(TOKEN_POLICIES.Quick.judgeMaxOutputTokens).toBe(1000);
-    expect(TOKEN_POLICIES.Quick.agentMaxOutputTokens).toBe(1200);
-    expect(getTokenPolicy("Quick").judgeMaxOutputTokens).toBe(1000);
+  it("leaves both the Quick judge and agents room for complete visible answers", () => {
+    expect(TOKEN_POLICIES.Quick.judgeMaxOutputTokens).toBe(2000);
+    expect(TOKEN_POLICIES.Quick.agentMaxOutputTokens).toBe(2000);
+    expect(getTokenPolicy("Quick").judgeMaxOutputTokens).toBe(2000);
   });
 
   it("defines rounds, context, and history budgets per policy", () => {
@@ -52,8 +52,8 @@ describe("match profiles", () => {
       mode: "quick",
       enabled: true,
       rounds: 4,
-      agentMaxOutputTokens: 1200,
-      judgeMaxOutputTokens: 1000,
+      agentMaxOutputTokens: 2000,
+      judgeMaxOutputTokens: 2000,
       historyTurns: 6,
       maxContextCharsPerSide: 12000,
     });

@@ -81,6 +81,8 @@ export type ProviderTestResult =
 
 /** Hard timeout for a single probe call (`POST /api/providers/[id]/test`). */
 export const PROVIDER_TEST_TIMEOUT_MS = 15_000;
+/** Enough room for reasoning models to produce the visible probe reply. */
+export const PROVIDER_TEST_MAX_OUTPUT_TOKENS = 256;
 
 /**
  * Performs ONE minimal non-streaming model call against the stored provider
@@ -97,12 +99,15 @@ export async function testProvider(id: string): Promise<ProviderTestResult | und
   const startedAt = Date.now();
   try {
     const model = await buildAiModel(config, undefined, { sessionKey: `probe-${randomUUID()}` });
-    await generateText({
+    const result = await generateText({
       model,
       prompt: "Reply with exactly: ok",
-      maxOutputTokens: 16,
+      maxOutputTokens: PROVIDER_TEST_MAX_OUTPUT_TOKENS,
       abortSignal: AbortSignal.timeout(PROVIDER_TEST_TIMEOUT_MS),
     });
+    if (!result.text.trim()) {
+      throw new Error(`Provider returned an empty response (finish reason: ${result.finishReason})`);
+    }
     return { ok: true, latencyMs: Date.now() - startedAt };
   } catch (error) {
     const safe = toSafeProviderError(error);

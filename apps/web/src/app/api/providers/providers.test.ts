@@ -302,6 +302,22 @@ describe("POST /api/providers/[id]/test", () => {
     expect((body.error.message as string).length).toBeGreaterThan(0);
   });
 
+  it("reports a failed probe when the provider returns an empty response", async () => {
+    await createProvider(jsonRequest("http://localhost/api/providers", "POST", validBody()));
+    mock.enqueue({ kind: "text", text: "" });
+
+    const res = await testProvider(
+      new Request("http://localhost/api/providers/mock-provider/test", { method: "POST" }),
+      params("mock-provider"),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining("empty") },
+    });
+  });
+
   it("returns 404 for an unknown id without touching any provider", async () => {
     const res = await testProvider(
       new Request("http://localhost/api/providers/nope/test", { method: "POST" }),
