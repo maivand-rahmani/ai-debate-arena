@@ -38,16 +38,13 @@ async function createWebModel(
  * Web `callModel` dep for the engine runner: verbatim body of the former
  * `defaultCallModel` in `features/run-debate/server/debate-runner.ts`
  * (agent `streamText` path, judge `generateText` + `Output.object` +
- * plain-text fallback + retry logic), with dynamic imports replaced by the
+ * streaming JSON fallback + retry logic), with dynamic imports replaced by the
  * static imports above. Every log/error string is unchanged.
  */
 const ZERO_USAGE: ModelUsage = { promptTokens: 0, completionTokens: 0 };
 
 export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult> {
   const model = await createWebModel(args.providerId, args.modelId, args.sessionKey);
-  // Quick mode is cost-first: cap reasoning effort on providers that honor it
-  // (@ai-sdk/openai responses models). Unknown keys are ignored elsewhere.
-  const providerOptions = { openai: { reasoningEffort: "low" } };
   if (args.kind === "judge") {
     const total: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
     try {
@@ -57,7 +54,6 @@ export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult
         prompt: args.prompt,
         maxOutputTokens: args.maxOutputTokens,
         abortSignal: args.abortSignal,
-        providerOptions,
         output: Output.object({ schema: debateVerdictSchema }),
       });
       addUsage(total, toModelUsage(structured.usage));
@@ -69,10 +65,16 @@ export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult
         throw new Error("Judge structured output was empty");
       }
       return { text: JSON.stringify(structuredOutput), chunks: [], usage: { ...total } };
-    } catch {
-      // Provider/model rejected structured output or returned nothing usable;
-      // fall back to deterministic plain JSON so the existing parser applies.
-      const fallback = await generateText({
+    } catch (error) {
+      // Some OpenAI-compatible Responses gateways resolve non-streaming calls
+      // with empty text while their streaming endpoint works normally. Use the
+      // proven streaming transport for the plain-JSON fallback.
+      console.warn("[arena:judge] structured output unavailable; using streaming JSON fallback", {
+        providerId: args.providerId,
+        modelId: args.modelId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      const fallback = streamText({
         model,
         system: args.system,
         prompt:
@@ -81,10 +83,16 @@ export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult
         maxOutputTokens: args.maxOutputTokens,
         abortSignal: args.abortSignal,
         temperature: 0,
-        providerOptions,
       });
-      addUsage(total, toModelUsage(fallback.usage));
-      return { text: fallback.text, chunks: [], usage: { ...total } };
+      const chunks: string[] = [];
+      for await (const chunk of fallback.textStream) chunks.push(chunk);
+      const text = await fallback.text;
+      try {
+        addUsage(total, toModelUsage(await fallback.usage));
+      } catch {
+        // Usage is optional and must never turn a valid judge result into an error.
+      }
+      return { text, chunks: [], usage: { ...total } };
     }
   }
   const result = streamText({
@@ -93,7 +101,6 @@ export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult
     prompt: args.prompt,
     maxOutputTokens: args.maxOutputTokens,
     abortSignal: args.abortSignal,
-    providerOptions,
   });
   const chunks: string[] = [];
   for await (const chunk of result.textStream) chunks.push(chunk);

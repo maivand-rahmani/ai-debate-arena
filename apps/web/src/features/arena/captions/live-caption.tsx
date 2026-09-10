@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
+import type { DebateRuntimeState, SpeechPanel } from "@/features/run-debate/lib/reducer";
 import { deriveCaptionView, type CaptionView } from "./caption-view";
 
 interface LiveCaptionProps {
   readonly state: DebateRuntimeState;
+  /** A spectator-selected speech that should remain on screen while later turns generate. */
+  readonly focusedPanel?: SpeechPanel | null;
   /**
    * Optional status row that the caption sits above (typically the
    * compact round/status chip from the broadcast header). Rendered
@@ -21,8 +23,8 @@ interface LiveCaptionProps {
  * speaker / judge / verdict / cancelled / error. Designed to stay
  * readable when the 3D scene is dimmed behind it.
  */
-export function LiveCaption({ state }: LiveCaptionProps) {
-  const view = deriveCaptionView(state);
+export function LiveCaption({ state, focusedPanel }: LiveCaptionProps) {
+  const view = deriveCaptionView(state, focusedPanel);
   if (!view.visible) return null;
   return <CaptionPanel view={view} />;
 }

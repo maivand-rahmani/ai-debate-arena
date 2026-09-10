@@ -1,9 +1,11 @@
 "use client";
 
-import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
+import type { DebateRuntimeState, SpeechPhase } from "@/features/run-debate/lib/reducer";
 
 interface MatchProgressProps {
   readonly state: DebateRuntimeState;
+  /** The phase currently being watched, which can lag behind generation. */
+  readonly viewingPhase?: SpeechPhase;
 }
 
 type ProgressState = "upcoming" | "current" | "complete";
@@ -26,18 +28,19 @@ const STEPS: readonly ProgressStep[] = [
  * runtime phases, so it never implies that a turn or verdict exists before
  * the stream reports it.
  */
-export function MatchProgress({ state }: MatchProgressProps) {
-  const activeIndex = progressIndex(state);
-  const completed = state.status === "finished";
+export function MatchProgress({ state, viewingPhase }: MatchProgressProps) {
+  const activeIndex = viewingPhase ? STEPS.findIndex((step) => step.phase === viewingPhase) : progressIndex(state);
+  const resolvedIndex = activeIndex === -1 ? progressIndex(state) : activeIndex;
+  const completed = state.status === "finished" && viewingPhase === undefined;
 
   return (
     <nav className="match-progress" aria-label="Match progress">
       <span className="match-progress__summary" aria-live="polite">
-        {progressSummary(state, activeIndex, completed)}
+        {progressSummary(state, resolvedIndex, completed, viewingPhase !== undefined)}
       </span>
       <ol className="match-progress__steps">
         {STEPS.map((step, index) => {
-          const progress = stepState(index, activeIndex, completed);
+          const progress = stepState(index, resolvedIndex, completed);
           return (
             <li
               key={step.phase}
@@ -69,8 +72,9 @@ function stepState(index: number, activeIndex: number, completed: boolean): Prog
   return index === activeIndex ? "current" : "upcoming";
 }
 
-function progressSummary(state: DebateRuntimeState, activeIndex: number, completed: boolean): string {
+function progressSummary(state: DebateRuntimeState, activeIndex: number, completed: boolean, viewerControlled: boolean): string {
   if (completed) return "Match complete · verdict ready";
+  if (viewerControlled) return `Viewing step ${activeIndex + 1} of ${STEPS.length} · ${STEPS[activeIndex].label}`;
   if (state.status === "starting") return "Preparing the opening round";
   return `Step ${activeIndex + 1} of ${STEPS.length} · ${STEPS[activeIndex].label}`;
 }

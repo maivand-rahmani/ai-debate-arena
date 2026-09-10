@@ -6,6 +6,7 @@ import { BroadcastBanner } from "./broadcast-banner";
 import { ReactionOverlay } from "./reactions/reaction-overlay";
 import { LiveCaption, VerdictCard } from "@/features/arena/captions";
 import { MatchProgress } from "@/features/arena/match/match-progress";
+import { PlaybackControls } from "@/features/arena/match/playback-controls";
 import { VerdictEvaluating } from "./verdict/verdict-reveal";
 import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
 import { ErrorPanel } from "@/features/run-debate/ui/error-panel";
@@ -49,14 +50,16 @@ export function ArenaHud(props: ArenaHudProps) {
     onOpenHistory,
     reactionsMuted,
     onToggleMute,
+    playback,
   } = props;
 
   const view = deriveStageView(state);
 
   const showCancelled = state.status === "cancelled";
   const showError = state.status === "error";
-  const showJudge = state.status === "judging" || state.status === "finished";
+  const showJudge = !playback?.holdTerminal && (state.status === "judging" || state.status === "finished");
   const showLiveCaption = shouldShowLiveCaptionStatus(state.status);
+  const showPlaybackCaption = showLiveCaption || playback?.holdTerminal;
   const broadcastLive = isBroadcastLiveStatus(state.status);
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
@@ -87,7 +90,7 @@ export function ArenaHud(props: ArenaHudProps) {
           only naming the current speaker. */}
       {broadcastLive ? (
         <div className="arena-hud__round arena-hud__round--progress">
-          <MatchProgress state={state} />
+          <MatchProgress state={state} viewingPhase={playback?.focusedPanel?.phase} />
         </div>
       ) : null}
 
@@ -103,9 +106,10 @@ export function ArenaHud(props: ArenaHudProps) {
       {broadcastLive ? <div className="arena-hud__scrim" aria-hidden="true" /> : null}
 
       {/* Live caption — the new single bottom-center speech surface. */}
-      {showLiveCaption ? (
+      {showPlaybackCaption ? (
         <div className="arena-hud__caption">
-          <LiveCaption state={state} />
+          <LiveCaption state={state} focusedPanel={playback?.focusedPanel} />
+          {playback ? <PlaybackControls state={state} playback={playback} /> : null}
         </div>
       ) : null}
 

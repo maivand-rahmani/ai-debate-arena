@@ -335,6 +335,7 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
   if (parsed.success && verdict !== null && !isDegenerateVerdict(verdict, hasTurns)) {
     return { verdict, judgeMs: Date.now() - startMs, usage: { ...total } };
   }
+  reportInvalidJudgeOutput("initial", judgeText, parsed.success ? "degenerate zero-score verdict" : parsed.error.issues);
   // Single retry: previous output was unparsable or degenerate zeros.
   const retryPrompt =
     `${judgePrompt}\n\nPrevious output was invalid (unparsable, or a degenerate DRAW with scores of 0 ` +
@@ -347,13 +348,36 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
   }
   const retryParsed = parseDebateVerdict(retryText);
   if (!retryParsed.success) {
+    reportInvalidJudgeOutput("retry", retryText, retryParsed.error.issues);
     throw new Error("Judge returned invalid verdict");
   }
   verdict = normalizeVerdictWinner(retryParsed.data);
   if (verdict === null || isDegenerateVerdict(verdict, hasTurns)) {
+    reportInvalidJudgeOutput("retry", retryText, "degenerate zero-score verdict");
     throw new Error("Judge returned invalid verdict");
   }
   return { verdict, judgeMs: Date.now() - startMs, usage: { ...total } };
+}
+
+/**
+ * Gives the server enough evidence to diagnose non-conforming judge models
+ * without logging a whole debate transcript or any provider credentials.
+ */
+function reportInvalidJudgeOutput(
+  attempt: "initial" | "retry",
+  text: string,
+  reason: string | readonly { readonly path: readonly PropertyKey[]; readonly message: string }[],
+): void {
+  const summary = Array.isArray(reason)
+    ? reason.slice(0, 4).map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`).join("; ")
+    : reason;
+  const preview = text.replace(/\s+/g, " ").trim().slice(0, 240);
+  console.warn("[arena:judge] invalid verdict output", {
+    attempt,
+    chars: text.length,
+    reason: summary,
+    preview,
+  });
 }
 
 function toStreamTurn(turn: DebateTurn): DebateStreamTurn {

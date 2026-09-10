@@ -12,6 +12,8 @@ import { AgentDesk } from "./desks/agent-desk";
 import { JudgePlinth } from "./desks/judge-plinth";
 import { LiveCaption, VerdictCard } from "@/features/arena/captions";
 import { MatchProgress } from "@/features/arena/match/match-progress";
+import { PlaybackControls } from "@/features/arena/match/playback-controls";
+import type { MatchPlayback } from "@/features/arena/match/use-match-playback";
 import { StageBackdrop } from "./backdrop/stage-backdrop";
 import { ReactionOverlay } from "./reactions/reaction-overlay";
 import { deriveStageView, isBroadcastLiveStatus, shouldShowLiveCaptionStatus } from "./stage-state";
@@ -38,6 +40,8 @@ export interface BroadcastStageProps {
   readonly onOpenHistory?: () => void;
   readonly reactionsMuted: boolean;
   readonly onToggleMute?: () => void;
+  /** Spectator-controlled presentation; generation keeps running independently. */
+  readonly playback?: MatchPlayback;
 }
 
 /**
@@ -71,13 +75,15 @@ export function BroadcastStage({
   onOpenHistory,
   reactionsMuted,
   onToggleMute,
+  playback,
 }: BroadcastStageProps) {
   const view = deriveStageView(state);
 
   const showCancelled = state.status === "cancelled";
   const showError = state.status === "error";
-  const showJudge = state.status === "judging" || state.status === "finished";
+  const showJudge = !playback?.holdTerminal && (state.status === "judging" || state.status === "finished");
   const showLiveCaption = shouldShowLiveCaptionStatus(state.status);
+  const showPlaybackCaption = showLiveCaption || playback?.holdTerminal;
   const broadcastLive = isBroadcastLiveStatus(state.status);
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
@@ -154,13 +160,14 @@ export function BroadcastStage({
 
       {broadcastLive ? (
         <div className="broadcast-stage__round--progress">
-          <MatchProgress state={state} />
+          <MatchProgress state={state} viewingPhase={playback?.focusedPanel?.phase} />
         </div>
       ) : null}
 
-      {showLiveCaption ? (
+      {showPlaybackCaption ? (
         <div className="broadcast-stage__caption">
-          <LiveCaption state={state} />
+          <LiveCaption state={state} focusedPanel={playback?.focusedPanel} />
+          {playback ? <PlaybackControls state={state} playback={playback} /> : null}
         </div>
       ) : null}
 

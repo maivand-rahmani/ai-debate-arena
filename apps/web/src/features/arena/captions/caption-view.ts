@@ -80,7 +80,25 @@ function lastPanel(state: DebateRuntimeState): SpeechPanel | null {
   return sorted[sorted.length - 1] ?? null;
 }
 
-export function deriveCaptionView(state: DebateRuntimeState): CaptionView {
+export function deriveCaptionView(state: DebateRuntimeState, focusedPanel?: SpeechPanel | null): CaptionView {
+  // A viewer-selected sealed turn takes precedence over the network's current
+  // phase. The engine still streams ahead; only the presentation is held.
+  if (focusedPanel) {
+    const isCurrent =
+      state.status === "streaming" &&
+      state.currentSide === focusedPanel.side &&
+      state.currentPhase === focusedPanel.phase;
+    return {
+      kind: { kind: "speaker", side: focusedPanel.side, phase: focusedPanel.phase, sealed: focusedPanel.sealed },
+      speakerLabel: SPEAKER_LABEL[focusedPanel.side],
+      phaseLabel: PHASE_LABEL[focusedPanel.phase],
+      text: focusedPanel.content,
+      tone: focusedPanel.side === "A" ? "coral" : "violet",
+      isLive: isCurrent && !focusedPanel.sealed,
+      visible: true,
+    };
+  }
+
   // ---- Live streaming: show the active panel for whichever side the
   //      server is currently streaming. If tokens have started but the
   //      sealed `turn` event hasn't arrived, we still surface the

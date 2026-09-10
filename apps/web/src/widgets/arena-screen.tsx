@@ -18,6 +18,7 @@ import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match
 import { exportJsonBlob } from "@/features/run-debate/ui/match-history/match-actions";
 import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
 import { IdleHero, RecentMatchesModal, SetupModal } from "@/features/arena/idle";
+import { useMatchPlayback } from "@/features/arena/match/use-match-playback";
 import { ArenaFrame } from "@/widgets/broadcast-stage";
 
 /**
@@ -68,6 +69,7 @@ export default function ArenaScreen() {
   }, []);
 
   const inMatch = isInMatch(state);
+  const playback = useMatchPlayback(state);
 
   const handleStart = useCallback(
     (draft: MatchDraft) => {
@@ -180,6 +182,7 @@ export default function ArenaScreen() {
           onOpenHistory={handleOpenHistory}
           reactionsMuted={reactionsMuted}
           onToggleMute={handleToggleMute}
+          playback={playback}
         />
         {/* v0.3.1 idle: minimal hero with one CTA + a small
             recent-matches link. Both open modals that sit on top of
