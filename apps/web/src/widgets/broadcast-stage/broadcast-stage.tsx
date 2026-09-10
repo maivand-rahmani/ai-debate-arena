@@ -187,6 +187,7 @@ export function BroadcastStage({
               topic={state.topic ?? topic}
               sideAPosition={draftSideAPosition}
               sideBPosition={draftSideBPosition}
+              onNewMatch={onNewMatch}
               footer={footer ? { ...footer, matchId: state.matchId ?? footer.matchId } : undefined}
             />
           </div>

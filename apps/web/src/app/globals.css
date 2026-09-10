@@ -3372,7 +3372,23 @@ textarea { resize: none; }
   font-size: 13px;
 }
 .verdict-card__criterion strong.is-leading { color: #d4a843; }
-.verdict-card__actions { display: flex; justify-content: flex-end; }
+.verdict-card__actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.verdict-card__new-match {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(236, 211, 159, 0.7);
+  border-radius: 7px;
+  background: linear-gradient(135deg, #f5ead2, #cdb581);
+  color: #1a130a;
+  padding: 9px 13px;
+  font: 700 10px/1 var(--font-mono, monospace);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.verdict-card__new-match:hover { filter: brightness(1.08); }
+.verdict-card__new-match:focus-visible { outline: 2px solid #f5ead2; outline-offset: 3px; }
 
 @media (max-width: 700px) {
   .verdict-card {

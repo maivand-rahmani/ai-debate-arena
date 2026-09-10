@@ -107,6 +107,13 @@ describe("VerdictCard", () => {
     );
     expect(html).toContain("8-point margin · against the motion");
   });
+
+  it("offers a clear route to start another debate after the verdict", () => {
+    const html = renderToStaticMarkup(
+      <VerdictCard verdict={verdict} topic="Whatever" onNewMatch={() => undefined} />,
+    );
+    expect(html).toContain("New debate");
+  });
 });
 
 describe("ErrorPanel", () => {

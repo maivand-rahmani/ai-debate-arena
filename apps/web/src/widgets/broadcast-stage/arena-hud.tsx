@@ -137,6 +137,7 @@ export function ArenaHud(props: ArenaHudProps) {
               topic={state.topic ?? topic}
               sideAPosition={props.draftSideAPosition}
               sideBPosition={props.draftSideBPosition}
+              onNewMatch={onNewMatch}
               footer={footer ? { ...footer, matchId: state.matchId ?? footer.matchId } : undefined}
             />
           </div>

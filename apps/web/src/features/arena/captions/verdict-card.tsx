@@ -8,6 +8,8 @@ interface VerdictCardProps {
   readonly topic: string;
   readonly sideAPosition?: "FOR" | "AGAINST";
   readonly sideBPosition?: "FOR" | "AGAINST";
+  /** Returns the viewer to the arena's start screen to begin another match. */
+  readonly onNewMatch?: () => void;
   readonly footer?: {
     readonly matchId?: string;
     readonly canRejudge: boolean;
@@ -31,6 +33,7 @@ export function VerdictCard({
   topic,
   sideAPosition = "FOR",
   sideBPosition = "AGAINST",
+  onNewMatch,
   footer,
 }: VerdictCardProps) {
   const winner = verdict.winner;
@@ -108,16 +111,24 @@ export function VerdictCard({
         </p>
       ) : null}
 
-      {footer?.matchId ? (
+      {onNewMatch || footer?.matchId ? (
         <div className="verdict-card__actions">
-          <MatchActions
-            matchId={footer.matchId}
-            rejudgeStatus={footer.rejudgeStatus}
-            rejudgeError={footer.rejudgeError}
-            canRejudge={footer.canRejudge}
-            onExportJson={footer.onExportJson}
-            onRejudge={footer.onRejudge}
-          />
+          {onNewMatch ? (
+            <button type="button" className="verdict-card__new-match" onClick={onNewMatch}>
+              New debate
+              <span aria-hidden="true">→</span>
+            </button>
+          ) : null}
+          {footer?.matchId ? (
+            <MatchActions
+              matchId={footer.matchId}
+              rejudgeStatus={footer.rejudgeStatus}
+              rejudgeError={footer.rejudgeError}
+              canRejudge={footer.canRejudge}
+              onExportJson={footer.onExportJson}
+              onRejudge={footer.onRejudge}
+            />
+          ) : null}
         </div>
       ) : null}
     </section>
