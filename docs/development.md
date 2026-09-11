@@ -19,8 +19,7 @@ npm run build      # builds @arena/web
 Per-workspace runs (same commands, scoped):
 
 ```bash
-npm -w @arena/web run dev            # Next dev server (loopback 127.0.0.1)
-npm -w @arena/web run start          # Next production server (loopback 127.0.0.1, after build)
+npm -w @arena/web run dev            # Next development server
 npm -w @arena/web run test           # web suite only
 npm -w @arena/debate-engine run test # engine suite only
 npm -w @arena/ai run typecheck       # single-package check

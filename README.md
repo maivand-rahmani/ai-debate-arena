@@ -22,7 +22,7 @@ later. See `TODO.md`.
 ```bash
 npm install
 npm run provider:add   # id, display name, base URL, API type, default model, API key
-npm run dev            # binds to http://127.0.0.1:3000 (loopback only)
+npm run dev            # open http://localhost:3000
 ```
 
 `provider:add` writes `~/.ai-debate-arena/providers.json` (override via
@@ -41,8 +41,7 @@ printed or committed. Add a second provider, or reuse one for both sides.
 
 | Command                | What it does                             |
 | ---------------------- | ---------------------------------------- |
-| `npm run dev`          | Local dev server (loopback `127.0.0.1`)  |
-| `npm start`            | Production server after `build` (loopback `127.0.0.1`) |
+| `npm run dev`          | Local development server                       |
 | `npm run build`        | Production build                         |
 | `npm run lint`         | ESLint over the repo                     |
 | `npm run typecheck`    | `tsc --noEmit`                           |

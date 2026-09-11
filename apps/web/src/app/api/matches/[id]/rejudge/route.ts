@@ -34,10 +34,8 @@ export async function POST(request: Request, context: RejudgeRouteContext): Prom
     return Response.json({ error: "Match not found" }, { status: 404 });
   }
 
-  // Hardening (P0-5): the whole re-judge read-modify-write runs under the
-  // same per-record lock as challenges, so a concurrent re-judge/challenge
-  // cannot interleave writes and lose updates. Challenge history is carried
-  // through untouched via the record spread below.
+  // Keep the whole re-judge read-modify-write under one per-record lock so
+  // concurrent re-judge requests cannot interleave and lose updates.
   try {
     return await withRecordLock(matchRecordPath(id), async () => {
       return await rejudgeLocked(request, id);
@@ -79,9 +77,6 @@ async function rejudgeLocked(request: Request, id: string): Promise<Response> {
         providerId: judgeRef.providerId,
         model: judgeRef.model,
         maxOutputTokens: record.policy.judgeMaxOutputTokens,
-        // F10-06: re-judges see the same stored evidence the original run
-        // had. Legacy records without evidence stay valid (undefined).
-        evidence: record.evidence ?? undefined,
       },
       { callModel: webCallModel, abortSignal: signal, sessionKey: sessionKeyForMatchSlot(id, "judge") },
     );
