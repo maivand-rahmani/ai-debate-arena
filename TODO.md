@@ -524,43 +524,43 @@ Dependencies: v0.3 Arena redesign, F9-01 through F9-27, especially F2-18, F3-13,
 
 ### Evidence domain
 
-- [ ] [P0] F10-01 Define Claim, EvidenceItem, Provenance, Challenge, ChallengeResponse, ProofResult, and EvidenceStatus domain types.
-- [ ] [P0] F10-02 Define evidence event schemas and version them independently from provider response formats.
-- [ ] [P0] F10-03 Add claim/evidence references to transcripts and verdicts without making evidence mandatory for old matches.
-- [ ] [P0] F10-04 Define explicit statuses such as supported, contradicted, insufficient, unverified, and unavailable.
-- [ ] [P1] F10-05 Add provenance fields for source type, user/provider origin, timestamp, content hash, and extraction method.
+- [x] [P0] F10-01 Define Claim, EvidenceItem, Provenance, Challenge, ChallengeResponse, ProofResult, and EvidenceStatus domain types. (2026-09-11: dependency-free canonical types and bounded runtime schemas added.)
+- [x] [P0] F10-02 Define evidence event schemas and version them independently from provider response formats. (2026-09-11: v1 evidence event envelope and discriminated lifecycle bodies added.)
+- [x] [P0] F10-03 Add claim/evidence references to transcripts and verdicts without making evidence mandatory for old matches. (2026-09-11: optional references added; legacy records remain valid.)
+- [x] [P0] F10-04 Define explicit statuses such as supported, contradicted, insufficient, unverified, and unavailable. (2026-09-11: status vocabulary enforced by runtime schemas.)
+- [x] [P1] F10-05 Add provenance fields for source type, user/provider origin, timestamp, content hash, and extraction method. (2026-09-11: required bounded provenance fields added.)
 
 ### User-supplied evidence first
 
-- [ ] [P0] F10-06 Support a bounded user-supplied evidence packet using pasted text or approved local files.
-- [ ] [P0] F10-07 Enforce evidence size, type, count, and context limits before content reaches an agent or judge.
-- [ ] [P0] F10-08 Render evidence as untrusted content and isolate it from system/developer instructions.
-- [ ] [P1] F10-09 Add optional source adapters behind an explicit user action and capability flag; web search is not automatic.
-- [ ] [P1] F10-10 Cache source metadata and content hashes for repeatable inspection without silently claiming freshness.
+- [x] [P0] F10-06 Support a bounded user-supplied evidence packet using pasted text or approved local files. (2026-09-11: pasted text and plain-text/Markdown local files supported; server owns normalization.)
+- [x] [P0] F10-07 Enforce evidence size, type, count, and context limits before content reaches an agent or judge. (2026-09-11: strict UTF-8 item/packet limits, request-body cap, and pre-call rejection added.)
+- [x] [P0] F10-08 Render evidence as untrusted content and isolate it from system/developer instructions. (2026-09-11: bounded JSON rendering and adversarial prompt tests added.)
+- [x] [P1] F10-09 Add optional source adapters behind an explicit user action and capability flag; web search is not automatic. (2026-09-11: consent-gated HTTPS adapter, SSRF defenses, one-shot snapshot route/UI, safe failures, idempotency, and 16 route tests added; no automatic refresh.)
+- [x] [P1] F10-10 Cache source metadata and content hashes for repeatable inspection without silently claiming freshness. (2026-09-11: immutable hash-pinned source snapshots, freshness predicates, consent/audit contracts, and legacy normalization added; no automatic refresh.)
 
 ### Challenge mechanics
 
-- [ ] [P0] F10-11 Implement bounded challenge requests with ownership, remaining budget, target claim, and termination rule.
-- [ ] [P0] F10-12 Let the challenged agent respond with evidence or an explicit inability to prove the claim.
-- [ ] [P0] F10-13 Let the judge adjudicate challenge outcomes and attach the decision to the relevant claim and events.
-- [ ] [P0] F10-14 Preserve a valid terminal verdict when a challenge, evidence source, or proof adapter fails.
-- [ ] [P1] F10-15 Add UI for requesting, answering, and resolving a challenge.
+- [x] [P0] F10-11 Implement bounded challenge requests with ownership, remaining budget, target claim, and termination rule. (2026-09-11: post-match requests are strict, idempotent, finite-budget, and concurrency-locked.)
+- [x] [P0] F10-12 Let the challenged agent respond with evidence or an explicit inability to prove the claim. (2026-09-11: bounded answer/unable response contract with citation enforcement added.)
+- [x] [P0] F10-13 Let the judge adjudicate challenge outcomes and attach the decision to the relevant claim and events. (2026-09-11: model-assessed adjudication and versioned lifecycle events persisted.)
+- [x] [P0] F10-14 Preserve a valid terminal verdict when a challenge, evidence source, or proof adapter fails. (2026-09-11: challenge/provider/judge failures become terminal challenge outcomes without changing the original verdict.)
+- [x] [P1] F10-15 Add UI for requesting, answering, and resolving a challenge. (2026-09-11: completed-match detail UI supports target selection, evidence references, submission, and outcome display.)
 
 ### Safe proof and sandbox boundary
 
-- [ ] [P0] F10-16 Define a SandboxAdapter port with declared capabilities, input/output schemas, limits, and denial reasons.
-- [ ] [P0] F10-17 Make network access, filesystem access, process execution, and secrets explicit capabilities; default all to denied.
-- [ ] [P1] F10-18 Implement one narrow deterministic proof/evaluator adapter with time, memory, output, and cleanup limits.
-- [ ] [P1] F10-19 Add process isolation and temporary-resource cleanup appropriate to the supported local runtime.
-- [ ] [P1] F10-20 Keep Docker or a remote sandbox as an optional adapter, not a hard dependency for the local core.
+- [x] [P0] F10-16 Define a SandboxAdapter port with declared capabilities, input/output schemas, limits, and denial reasons. (2026-09-11: versioned strict contracts and safe denial/result semantics added; no runtime host yet.)
+- [x] [P0] F10-17 Make network access, filesystem access, process execution, and secrets explicit capabilities; default all to denied. (2026-09-11: capability-free deterministic adapter and deny-by-default validation added.)
+- [x] [P1] F10-18 Implement one narrow deterministic proof/evaluator adapter with time, memory, output, and cleanup limits. (2026-09-11: pure SHA-256 content-integrity proof adapter and bounded result contracts added.)
+- [x] [P1] F10-19 Add process isolation and temporary-resource cleanup appropriate to the supported local runtime. (2026-09-11: fail-closed Windows Job Object worker host in @arena/sandbox-host with behavioral containment preflight, host-enforced watchdog/output-cap, verified cleanup receipts; non-Windows/FFI-missing stays unavailable.)
+- [x] [P1] F10-20 Keep Docker or a remote sandbox as an optional adapter, not a hard dependency for the local core. (2026-09-11: no Docker dependency in the local core — pure in-process proof adapter plus the fail-closed Windows sandbox host; Docker remains a reserved deferred placeholder in `infrastructure/docker/README.md`. Evidence: `docs/security/v0.4-acceptance-evidence.md`.)
 - [ ] [P2] F10-21 Add more proof adapters only after the first adapter has security and reliability evidence.
 
 ### v0.4 milestone and exit
 
-- [ ] [P0] F10-22 Demonstrate a normal evidence-free Quick match still works unchanged.
-- [ ] [P0] F10-23 Demonstrate a challenge with a bounded evidence packet, visible provenance, and judge adjudication.
-- [ ] [P0] F10-24 Demonstrate sandbox denial, timeout, malformed output, and cleanup without hanging the match.
-- [ ] [P0] F10-25 Complete the threat-model review and pass the v0.4 release gate.
+- [x] [P0] F10-22 Demonstrate a normal evidence-free Quick match still works unchanged. (2026-09-11: evidence-free runs stay legacy-shaped with byte-identical prompts and legacy records/requests remain valid — runner, prompt-evidence, evidence-contract, and debate-route tests. Evidence: `docs/security/v0.4-acceptance-evidence.md`.)
+- [x] [P0] F10-23 Demonstrate a challenge with a bounded evidence packet, visible provenance, and judge adjudication. (2026-09-11: challenges route test runs the completed challenge end-to-end with a stored bounded evidence packet, hash-pinned provenance, and judge adjudication while preserving the original verdict. Evidence: `docs/security/v0.4-acceptance-evidence.md`.)
+- [x] [P0] F10-24 Demonstrate sandbox denial, timeout, malformed output, and cleanup without hanging the match. (2026-09-11: real Windows tests prove denial-before-spawn, watchdog kill, output-cap kill, malformed-output classification, cancellation, whole-tree termination, and no orphan process/temp dir. Evidence: `docs/security/v0.4-acceptance-evidence.md`.)
+- [x] [P0] F10-25 Complete the threat-model review and pass the v0.4 release gate. (2026-09-11: owner acknowledgment recorded in `docs/security/v0.4-threat-model.md`; automated acceptance evidence and residual local-only deployment constraints recorded in `docs/security/v0.4-acceptance-evidence.md`.)
 
 ## PHASE 11 — Persistence, Credits, and Ratings (v0.5)
 

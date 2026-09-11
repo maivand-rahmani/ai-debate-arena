@@ -15,7 +15,7 @@ npm workspaces monorepo: `@arena/web` (the Next app) + `@arena/debate-engine`, `
 ```bash
 npm install
 npm run provider:add   # id, display name, base URL, API type, default model, API key
-npm run dev            # open http://localhost:3000
+npm run dev            # binds to http://127.0.0.1:3000 (loopback only)
 ```
 
 `provider:add` writes `~/.ai-debate-arena/providers.json` (override via
@@ -34,7 +34,8 @@ printed or committed. Add a second provider, or reuse one for both sides.
 
 | Command                | What it does                             |
 | ---------------------- | ---------------------------------------- |
-| `npm run dev`          | Local dev server                         |
+| `npm run dev`          | Local dev server (loopback `127.0.0.1`)  |
+| `npm start`            | Production server after `build` (loopback `127.0.0.1`) |
 | `npm run build`        | Production build                         |
 | `npm run lint`         | ESLint over the repo                     |
 | `npm run typecheck`    | `tsc --noEmit`                           |
@@ -56,6 +57,17 @@ printed or committed. Add a second provider, or reuse one for both sides.
 ## Security
 
 API keys live server-only in the `0600` JSON store; the UI only ever sees redacted `apiKeyHint`s.
+
+**Local-only assumption.** The dev and production startup commands (`npm run
+dev`, `npm start`) bind to `127.0.0.1` on purpose. The Next API has **no
+authentication, no CSRF protection, and no origin checks**: it trusts whoever
+can reach it. That is safe only while the server is reachable solely from your
+own machine. Exposing the server on `0.0.0.0` or a LAN address is
+**not supported** and must not be attempted until authentication, CSRF, and a
+device-pairing flow exist. See `docs/security/v0.4-threat-model.md` for the
+full threat model, residual risks, and what is deliberately not implemented
+yet (no external source host, no process sandbox; model adjudication is not
+truth and local consent is not authentication).
 
 ## Why these dependencies
 

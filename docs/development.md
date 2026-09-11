@@ -16,11 +16,31 @@ npm run build      # builds @arena/web
 Per-workspace runs (same commands, scoped):
 
 ```bash
-npm -w @arena/web run dev            # Next dev server
+npm -w @arena/web run dev            # Next dev server (loopback 127.0.0.1)
+npm -w @arena/web run start          # Next production server (loopback 127.0.0.1, after build)
 npm -w @arena/web run test           # web suite only
 npm -w @arena/debate-engine run test # engine suite only
 npm -w @arena/ai run typecheck       # single-package check
 ```
+
+## Local-only security assumption
+
+The documented dev and production startup commands bind the Next server to
+`127.0.0.1` by default (`apps/web` scripts `dev` and `start`; the root `npm
+run dev` / `npm start` delegate to them). This is a security property, not a
+convenience: the match APIs (`/api/*`) have no authentication, no CSRF
+protection, and no origin checks, so the app is only safe while reachable from
+the user's own machine. It is asserted by
+`src/shared/config/startup.test.ts`.
+
+Do not override the binding (`next dev -H 0.0.0.0`, `HOSTNAME` tricks, reverse
+proxies, or container port mappings that expose the container listener) in any
+documented or supported flow. Non-loopback deployment is **unsupported** until
+authentication, CSRF protection, and a pairing flow exist. The full analysis —
+assets, trust boundaries, prompt injection, provider SSRF/exfiltration,
+source consent/replay, sandbox capabilities, storage/locking, mitigations,
+and remaining residual risks — lives in
+[`security/v0.4-threat-model.md`](security/v0.4-threat-model.md).
 
 ## Latest verification
 
