@@ -29,7 +29,9 @@ state; each side keeps its fixed `FOR`/`AGAINST` position.
 Standard will not be a longer fixed turn list. The runner will host two
 independent, match-long agent sessions: one for A and one for B. Each retains
 its model, side, objective, private working context, tool and skill loadout,
-and current match resources between moves.
+and current match resources between moves. The engine remains platform-neutral;
+the locally running Next.js/Node.js server supplies the actual local and
+internet tool implementations through injected ports.
 
 When scheduled, an agent observes the public match state and chooses its own
 next action. It may execute zero or more tools, receive each result into the
@@ -60,7 +62,8 @@ judge JSON emits `Judge returned invalid verdict` then `done`.
 The active Quick match has a seven-minute lifecycle bound. The existing
 Standard and Hardcore rows are disabled legacy placeholders; the new Standard
 agent format will replace its fixed-round placeholder, while Extreme remains
-undefined until the owner explicitly starts that work.
+a future local mode whose container-backed and other expanded capabilities stay
+undefined until Standard is complete and the owner explicitly starts that work.
 
 ## Prompt strategy
 

@@ -14,11 +14,24 @@ The interesting thing on screen is not infrastructure. It is watching two capabl
 
 ## The three modes
 
-- **Quick** is the current six-turn debate. Keep it fast, predictable, and simple. New agentic mechanics must not be forced into Quick.
-- **Standard** is the product direction for v0.4 through v0.6. Web search, code execution, skills, evidence, stakes, live challenges, variable match length, replay, and model comparison all belong here.
-- **Extreme** is reserved for later ideas. Do not design, document, or implement it until the owner explicitly starts that discussion.
+- **Quick** is the current six-turn debate and the first-look experience intended for the public website. Keep it fast, predictable, simple, and usable without running the project locally. New agentic mechanics must not be forced into Quick.
+- **Standard** is the product direction for v0.4 through v0.6. It is the same web product run locally on the user's computer, where its local Node.js server can give the two agents web search, code execution, skills, evidence, stakes, live challenges, variable match length, replay, model comparison, and other local tools.
+- **Extreme** is a future expansion of the locally run web product. It may add container-backed execution such as Docker and much broader agent capabilities, but its exact game and architecture remain intentionally undefined until Standard is complete and the owner starts that work.
 
 Versions describe the growth of Standard Mode; they are not additional modes.
+
+## Product delivery model
+
+AI Debate Arena remains a web product built from one shared codebase. Do not turn it into an Electron, Tauri, or other native desktop application.
+
+- The planned public website runs Quick. It also presents Standard and Extreme as previews of the full local experience. Selecting either unavailable mode opens a clear promotional panel with an explanation and a link to the project's GitHub/local setup.
+- Standard runs through the same browser UI on `localhost`, backed by the Next.js/Node.js server running on the user's computer.
+- The browser page requests agent actions through local server routes. The local server—not the browser tab itself—runs code, reads user-selected workspaces, invokes command-line tools, accesses local runtimes, and returns results to the match stream.
+- The same Standard match may combine local tools with internet tools and remote or local model providers.
+- Windows and macOS share the UI, agent workflow, game rules, tool protocol, and nearly all server code. Use portable Node.js APIs by default and add small platform adapters only for real differences such as paths, executable discovery, or OS-specific process behavior.
+- Development may use `npm run dev`; the later user-facing local start/install flow must remain a web-server workflow rather than a desktop-app packaging project.
+
+The public site is the funnel: play Quick immediately, discover the full agent arena, then follow the Standard or future Extreme call to action to run it locally.
 
 ## What a player is in Standard
 
@@ -45,7 +58,7 @@ This should remain a thin product abstraction built for the playable Standard ma
 5. Add only the minimum operational checks needed to make the current feature run reliably. Product capability comes first; hardening comes later.
 6. Do not infer owner approval. A release, design, or direction is accepted only when the owner explicitly says so after seeing it.
 7. Keep documentation short and current. Delete superseded plans instead of preserving a maze of stale phases and checkboxes.
-8. Preserve Quick as the stable baseline, put new gameplay into Standard, and leave Extreme untouched.
+8. Preserve Quick as the stable public baseline, put new gameplay into locally run Standard, and do not implement Extreme beyond its approved future-facing product promise.
 
 ## Testing policy
 
@@ -92,7 +105,7 @@ Exact starting resources, action costs, stake sizes, and ending thresholds must 
 
 ### Product promise
 
-Standard Mode becomes playable. During a live move, each contender can decide to use tools before delivering its argument. Tool activity and results are visible in the arena and become evidence the opponent and judge can inspect. Quick remains unchanged.
+Standard Mode becomes playable through the locally run web product. During a live move, each contender can decide to use local and internet tools before delivering its argument. Tool activity and results are visible in the arena and become evidence the opponent and judge can inspect. Public Quick remains unchanged.
 
 ### First playable slice
 
@@ -152,7 +165,7 @@ Persistent wallets, accounting systems, database migrations, and real-money mech
 
 ### Product promise
 
-Standard becomes a meaningful model-comparison game: different models can use rich tool loadouts, and the product shows how they reason, research, execute, manage resources, and compete. Quick remains the fast baseline; Extreme remains untouched.
+Standard becomes a meaningful model-comparison game: different models can use rich tool loadouts, and the product shows how they reason, research, execute, manage resources, and compete. Quick remains the fast public baseline; Extreme remains a future local mode rather than current implementation work.
 
 ### Playable slice
 
@@ -173,19 +186,19 @@ Standard becomes a meaningful model-comparison game: different models can use ri
 
 ## After v0.6 — Standard UI/UX pass
 
-Once Standard's complete game loop works, give it a dedicated usability and presentation pass before discussing Extreme.
+Once Standard's complete game loop works, give it a dedicated usability and presentation pass before building Extreme.
 
 - [ ] Make the mode selector clearly explain Quick versus Standard.
 - [ ] Design a variable-length match timeline instead of pretending every match has the same rounds.
 - [ ] Make tools, evidence, remaining resources, readiness, stakes, challenges, and knockouts readable at a glance.
 - [ ] Add satisfying research, stake, challenge, proof, win, loss, and closing moments to the broadcast presentation.
 - [ ] Playtest the full Standard experience with the owner and iterate on pacing.
-- [ ] Do not begin Extreme until Standard functionality and this UI/UX pass are explicitly approved.
+- [ ] Do not begin implementing Extreme until Standard functionality and this UI/UX pass are explicitly approved.
 
 ## Later, only when explicitly requested
 
 - Production security hardening and threat modeling.
-- Authentication, accounts, permissions, and public hosting.
+- Expansion of public hosting beyond the Quick first-look experience, including accounts and permissions.
 - Databases, migrations, backup/restore systems, and distributed workers.
 - Permanent wallets, complex rating economies, or real-money wagering.
 - Compliance, abuse-reporting, and enterprise administration.

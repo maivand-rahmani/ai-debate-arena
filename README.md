@@ -1,17 +1,25 @@
 # AI Debate Arena
 
-Two AI debaters argue a motion you set in six focused turns — two openings, then four targeted responses — before an AI judge scores both sides and declares a winner.
-Runs locally on Next.js; bring any OpenAI-compatible provider (OpenAI, OpenRouter, local Ollama).
+AI Debate Arena is a model-versus-model game in which two AI contenders argue,
+use evidence and tools, and are evaluated by a separate AI judge. Quick delivers
+the current focused six-turn version; Standard grows it into a full agent match.
+It is a Next.js web product with a public Quick experience and locally run full agent modes; bring any OpenAI-compatible provider (OpenAI, OpenRouter, local Ollama).
 npm workspaces monorepo: `@arena/web` (the Next app) + `@arena/debate-engine`, `@arena/ai`, `@arena/types` packages (see `docs/architecture.md`).
 
-Quick Mode is the current fixed six-turn debate. The next product direction is
-Standard Mode: an open-ended, resource-driven agent-versus-agent match. Each
+Quick Mode is the current fixed six-turn debate and the planned first-look mode
+on the public website. Standard Mode is the same web product run on the user's
+computer: its UI stays in the browser on `localhost`, while its local Node.js
+server powers an open-ended, resource-driven agent-versus-agent match. Each
 contender persists as one independent agent for the whole match, keeps its own
 context, skills, tools, and resources, and decides how to investigate, respond,
 continue, or finish. Agents can search the web, run code, produce visible
-evidence, challenge claims, and place match-local stakes. v0.4 through v0.6
-grow Standard; afterward it receives a dedicated UI/UX pass. Extreme is
-deliberately left for later. See `TODO.md`.
+evidence, challenge claims, and place match-local stakes.
+
+The public site will preview Standard and the future Extreme mode and direct
+people to GitHub/local setup for the full experience. Extreme may eventually
+add container-backed execution and much broader capabilities, but it is not a
+current implementation target. This remains one cross-platform web codebase,
+not an Electron, Tauri, or native desktop application. See `TODO.md`.
 
 ## Stack
 

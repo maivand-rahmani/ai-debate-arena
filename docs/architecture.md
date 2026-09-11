@@ -100,6 +100,33 @@ ReadableStream NDJSON  ←  runDebate() generator (@arena/debate-engine/runner)
 Client reducer appends tokens → turns → verdict; abort() cancels fetch.
 ```
 
+## Deployment shapes
+
+There is one Next.js web product with two runtime shapes, not separate web and
+desktop applications.
+
+```text
+Public website
+  browser → hosted Next.js server → Quick match
+  Standard / Extreme selection → preview + GitHub/local-run call to action
+
+Local full product
+  browser on localhost → local Next.js/Node.js server
+                       → Standard agents and match orchestrator
+                       → local tools, local runtimes, internet tools, providers
+```
+
+The browser renderer remains a normal web client. It asks server routes to run
+agent actions; the Node.js server process running on the user's computer owns
+filesystem, process, repository, runtime, and other local integrations. Results
+return through the same ordered stream used by the match UI.
+
+The shared engine, agent workflow, event protocol, UI, and tool contracts must
+remain portable across Windows and macOS. Most implementations should use
+cross-platform Node.js APIs directly. Add a thin platform helper only when an
+actual difference exists in paths, executable discovery, or process behavior.
+Do not add Electron, Tauri, or another native desktop wrapper.
+
 ## Judge path
 
 After the selected format's agent turns (six in Quick) the runner emits `judge-start`, calls `generateText`
@@ -116,7 +143,9 @@ re-exported from `@arena/types` where identical. Credentials and
 
 ## Next product extension
 
-Quick keeps its fixed six-turn format. Standard is an agent-versus-agent game.
+Quick keeps its fixed six-turn format and is the public website's playable
+first look. Standard is an agent-versus-agent game run through the local web
+server and browser UI.
 The match orchestrator creates two lightweight, independent agent sessions and
 keeps them alive for the full match. Each session owns its selected model,
 fixed side and objective, private working context, available skills and tools,
@@ -140,4 +169,6 @@ Standard ends when both contenders are ready, resources force a finish, or a
 decisive challenge creates a knockout; a generous emergency ceiling only
 prevents broken infinite matches. Start with `web_search`, `fetch_url`, and
 `run_code`. Stakes and challenges are match actions built on the same event
-stream after the tool-enabled match is fun. Extreme has no architecture yet.
+stream after the tool-enabled match is fun. Extreme may later extend this local
+web-server model with container-backed execution such as Docker, but it has no
+detailed architecture until Standard is complete.
