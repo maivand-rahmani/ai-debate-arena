@@ -1,7 +1,6 @@
 import { findMatchTurn, type MatchTurnSpec } from "@arena/types";
 import { type DebatePosition, type DebateSide, type DebateTurn } from "../types";
 import type { DebatePromptContext } from "./context";
-import { evidenceBlockLines } from "./evidence-block";
 
 export function instructionForTurn(turn: MatchTurnSpec | undefined): string {
   if (turn?.role === "opening") {
@@ -46,10 +45,6 @@ export function buildDebatePrompt(context: DebatePromptContext): string {
   const opponentSummary = opponentTurns.length
     ? opponentTurns.map(formatTurnForPrompt).join("\n\n")
     : "(the opponent has not spoken yet)";
-  // Untrusted user evidence (F10-06..08): rendered as delimited data before
-  // the task instructions; empty when there is no evidence, keeping
-  // evidence-free prompts byte-for-byte unchanged.
-  const evidenceLines = evidenceBlockLines(context.evidence);
 
   return [
     `Motion: "${context.topic}"`,
@@ -59,7 +54,6 @@ export function buildDebatePrompt(context: DebatePromptContext): string {
     history,
     "Opponent's arguments to address:",
     opponentSummary,
-    ...evidenceLines,
     "Your task:",
     phaseInstruction,
     "Write 180 to 300 words. Make the response specific to the transcript. In a response, name or accurately paraphrase the opponent's claim before answering it; do not merely repeat your opening. End with the consequence for the motion.",

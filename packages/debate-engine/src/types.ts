@@ -1,5 +1,5 @@
 import type { TokenPolicyName } from "./token-policy";
-import type { DebateSide, EvidenceBundle } from "@arena/types";
+import type { DebateSide } from "@arena/types";
 
 export enum DebatePhase {
   CREATED = "CREATED",
@@ -52,12 +52,6 @@ export interface DebateVerdict {
   readonly scoreB: number;
   readonly criteria: DebateCriteria;
   readonly reasoning: string;
-  /**
-   * v0.4 additive (F10-03): optional claim/evidence references the verdict
-   * rests on. Absent on legacy verdicts; never required.
-   */
-  readonly claimIds?: readonly string[];
-  readonly evidenceIds?: readonly string[];
 }
 
 export interface DebateConfig {
@@ -66,12 +60,6 @@ export interface DebateConfig {
   readonly tokenPolicy?: TokenPolicyName;
   readonly maxHistoryTurns?: number;
   readonly maxContextCharsPerSide?: number;
-  /**
-   * v0.4 additive (F10-06): canonical, server-normalized user evidence.
-   * Rendered only into user prompts as untrusted data — never into system
-   * prompts. Absent for evidence-free matches.
-   */
-  readonly evidence?: EvidenceBundle;
 }
 
 export interface DebateState {

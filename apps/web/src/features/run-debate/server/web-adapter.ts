@@ -45,23 +45,6 @@ const ZERO_USAGE: ModelUsage = { promptTokens: 0, completionTokens: 0 };
 
 export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult> {
   const model = await createWebModel(args.providerId, args.modelId, args.sessionKey);
-  // Hardening (P1-8): the bounded challenge path requires exactly ONE
-  // provider request — no streaming fallback, no structured-output retry.
-  // Normal debate calls leave `singleAttempt` undefined and keep the
-  // existing fallback behavior below, byte-for-byte.
-  if (args.singleAttempt === true) {
-    const completed = await generateText({
-      model,
-      system: args.system,
-      prompt: args.prompt,
-      maxOutputTokens: args.maxOutputTokens,
-      abortSignal: args.abortSignal,
-    });
-    if (!completed.text.trim()) {
-      throw new Error("Provider returned an empty response. Choose a model that supports text generation.");
-    }
-    return { text: completed.text, chunks: [], usage: toModelUsage(completed.usage) };
-  }
   if (args.kind === "judge") {
     const total: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
     try {

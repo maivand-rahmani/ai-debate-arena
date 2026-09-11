@@ -7,7 +7,6 @@
 
 import type { RedactedProvider } from "@/shared/api/providers";
 import type { MatchMode } from "@arena/types";
-import { emptyEvidencePacket, type EvidencePacket } from "./evidence-packet";
 
 export type { MatchMode };
 
@@ -18,8 +17,6 @@ export interface MatchDraft {
   readonly mode: MatchMode;
   readonly sideA: AgentDraft;
   readonly sideB: AgentDraft;
-  /** Optional UI packet; the submitter may serialize it for the v0.4 API. */
-  readonly evidence?: EvidencePacket;
 }
 
 export interface AgentDraft {
@@ -42,7 +39,6 @@ export function emptyDraft(): MatchDraft {
     mode: "quick",
     sideA: { providerId: "", model: "", position: "FOR" },
     sideB: { providerId: "", model: "", position: "AGAINST" },
-    evidence: emptyEvidencePacket(),
   };
 }
 

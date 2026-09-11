@@ -1,17 +1,5 @@
 import { z } from "zod";
 import { debateVerdictSchema } from "./verdict";
-import {
-  evidenceExtensionsSchema,
-  turnEvidenceRefsSchema,
-  userEvidencePacketInputSchema,
-  sourceAccessAuditSchema,
-  SOURCE_AUDITS_MAX,
-} from "./evidence-contract";
-import {
-  CHALLENGE_LIMITS,
-  matchChallengeSchema,
-} from "./challenge-contract";
-import { evidenceEventSchema } from "./evidence-contract";
 
 /** Version of every contract in this module. Bump on any shape change. */
 export const CONTRACT_VERSION = 1;
@@ -31,26 +19,20 @@ export const matchConfigSchema = z.object({
   mode: matchModeSchema,
   agentA: matchAgentSchema,
   agentB: matchAgentSchema,
-  // v0.4 additive (F10-06): optional user-supplied evidence packet. Strict
-  // subtree: unknown/forbidden client fields are rejected, never stripped.
-  evidence: userEvidencePacketInputSchema.optional(),
 });
 export type MatchConfig = z.infer<typeof matchConfigSchema>;
 
-export const transcriptTurnSchema = z
-  .object({
-    id: z.string().min(1),
-    agentId: z.string().min(1),
-    side: z.enum(["A", "B"]),
-    // Format-owned turn ids are deliberately open-ended; historical phase ids
-    // remain valid so local match history stays readable after new formats land.
-    phase: z.string().min(1),
-    content: z.string(),
-    model: z.string(),
-    createdAt: z.string(),
-  })
-  // v0.4 additive: optional claim/evidence references (absent on legacy turns).
-  .extend(turnEvidenceRefsSchema.shape);
+export const transcriptTurnSchema = z.object({
+  id: z.string().min(1),
+  agentId: z.string().min(1),
+  side: z.enum(["A", "B"]),
+  // Format-owned turn ids are deliberately open-ended; historical phase ids
+  // remain valid so local match history stays readable after new formats land.
+  phase: z.string().min(1),
+  content: z.string(),
+  model: z.string(),
+  createdAt: z.string(),
+});
 export type TranscriptTurn = z.infer<typeof transcriptTurnSchema>;
 
 export const transcriptSchema = z.array(transcriptTurnSchema);
@@ -75,10 +57,6 @@ export const matchSideSchema = z.object({
   providerName: z.string().min(1),
   modelId: z.string().min(1),
   position: z.enum(["FOR", "AGAINST"]),
-  // v0.4 additive: secret-free provider id so post-match challenges can call
-  // the challenged side. Optional — legacy records lack it and stay valid
-  // (challenges against them are rejected with 409, never guessed).
-  providerId: z.string().trim().min(1).max(64).optional(),
 });
 export type MatchSideRecord = z.infer<typeof matchSideSchema>;
 
@@ -122,16 +100,5 @@ export const matchRecordSchema = z.object({
     judgeMs: z.number().optional(),
     usage: tokenUsageSchema.optional(),
   }),
-  // v0.4 additive evidence/capability snapshots: absent (or null) on legacy
-  // records, which normalize to empty evidence + all capabilities disabled.
-  evidence: evidenceExtensionsSchema.shape.evidence,
-  capabilities: evidenceExtensionsSchema.shape.capabilities,
-  // v0.4 additive bounded post-match challenges + their lifecycle evidence
-  // events. Absent on legacy records; new records start with empty arrays.
-  challenges: z.array(matchChallengeSchema).max(CHALLENGE_LIMITS.maxPerMatch).optional(),
-  evidenceEvents: z.array(evidenceEventSchema).max(CHALLENGE_LIMITS.maxEvidenceEvents).optional(),
-  // v0.4 additive F10-09/F10-10 source access audits. Absent on legacy
-  // records; new records may initialize an empty array.
-  sourceAudits: z.array(sourceAccessAuditSchema).max(SOURCE_AUDITS_MAX).optional(),
 });
 export type MatchRecord = z.infer<typeof matchRecordSchema>;

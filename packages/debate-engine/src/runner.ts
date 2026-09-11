@@ -33,7 +33,6 @@ import type {
   DebateStreamTerminal,
   DebateStreamTurn,
   DebateStreamVerdict,
-  EvidenceBundle,
 } from "@arena/types";
 import { getMatchFormat } from "@arena/types";
 
@@ -150,8 +149,6 @@ function toSafeErrorMessage(err: unknown): string {
   return clean || "Model request failed.";
 }
 
-export { toSafeErrorMessage };
-
 export interface RunnerAgentInput {
   readonly providerId: string;
   readonly model: string;
@@ -164,23 +161,12 @@ export interface RunDebateInput {
   readonly agentA: RunnerAgentInput;
   readonly agentB: RunnerAgentInput;
   readonly judge?: { readonly providerId: string; readonly model: string };
-  /**
-   * v0.4 additive (F10-06): server-normalized canonical evidence bundle.
-   * Rendered into every agent and judge user prompt as untrusted data and
-   * persisted on the match record. Absent for evidence-free matches.
-   */
-  readonly evidence?: EvidenceBundle;
 }
 
 export interface RunnerSideInput {
   readonly providerName: string;
   readonly modelId: string;
   readonly position: DebatePosition;
-  /**
-   * v0.4 additive: secret-free provider id persisted so post-match
-   * challenges can call the challenged side. Optional for legacy callers.
-   */
-  readonly providerId?: string;
 }
 
 export interface ModelCallArgs {
@@ -198,13 +184,6 @@ export interface ModelCallArgs {
    * same stored match reuse the same key; different matches/slots differ.
    */
   readonly sessionKey?: string;
-  /**
-   * Hardening (P1-8): when true, the adapter must issue exactly ONE provider
-   * request — no streaming fallback, no structured-output retry. Used by the
-   * bounded challenge path; normal debate calls leave it undefined and keep
-   * their existing fallback behavior.
-   */
-  readonly singleAttempt?: boolean;
 }
 
 /**
@@ -286,11 +265,6 @@ export interface RunJudgeInput {
   readonly maxContextChars?: number;
   /** Rubric generation for the judge prompt. Defaults to `"1"` (legacy prompt). */
   readonly rubricVersion?: RubricVersion;
-  /**
-   * v0.4 additive (F10-06): stored evidence bundle rendered into the judge
-   * prompt as untrusted data. Absent for legacy records.
-   */
-  readonly evidence?: EvidenceBundle;
 }
 
 export interface RunJudgeDeps {
@@ -325,7 +299,6 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
   const judgePrompt = buildJudgePrompt(input.topic, input.turns, {
     rubricVersion: input.rubricVersion,
     maxTranscriptChars: input.maxContextChars,
-    evidence: input.evidence,
   });
   const hasTurns = input.turns.length > 0;
   const total: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
@@ -438,11 +411,6 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
 
   const isCancelled = (): boolean => deps.abortSignal?.aborted ?? false;
 
-  // Empty bundles count as no evidence: the record stays legacy-shaped and
-  // prompts stay byte-identical to the evidence-free path.
-  const evidence =
-    input.evidence && input.evidence.items.length > 0 ? input.evidence : undefined;
-
   async function persist(): Promise<void> {
     if (saved) return;
     saved = true;
@@ -465,16 +433,6 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       verdict,
       terminal,
       terminalReason,
-      // Canonical evidence snapshot (F10-06): undefined (dropped by JSON)
-      // for evidence-free matches, preserving legacy record shapes.
-      evidence,
-      // v0.4 challenge snapshot: new matches start with empty collections so
-      // the challenge route can rely on `record.challenges ?? []`.
-      challenges: [],
-      evidenceEvents: [],
-      // v0.4 F10-09/F10-10: new matches start with an empty source-audit
-      // trail. Evidence-free prompt/record compatibility is unchanged.
-      sourceAudits: [],
       metrics: {
         turnsMs: [...turnsMs],
         totalMs: Date.now() - startMs,
@@ -506,7 +464,6 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     },
     maxHistoryTurns: policy.maxHistoryTurns,
     maxContextCharsPerSide: profile.maxContextCharsPerSide,
-    evidence,
   };
 
   let state: DebateState = createDebateState();
@@ -577,7 +534,6 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           model: judge.model,
           maxOutputTokens: profile.judgeMaxOutputTokens,
           maxContextChars: JUDGE_MAX_CONTEXT_CHARS,
-          evidence,
         },
         {
           callModel,
