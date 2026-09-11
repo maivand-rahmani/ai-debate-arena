@@ -50,6 +50,27 @@ Enforcement:
 - `ssr-boundary.test.ts` keeps three/rapier markers out of server output;
   Three.js/R3F/Rapier stay confined to `widgets/broadcast-stage/3d/`.
 
+## 3D presentation boundary
+
+The current visual system and the rules for extending it live in
+[`docs/arena-visual-system.md`](arena-visual-system.md). The 3D widget is a
+presentation boundary, not a second debate state machine:
+
+- `scene-signal.ts` projects debate state into serializable visual intent;
+- camera, lighting, pose, verdict, and prop directors consume that signal;
+- `scene-layout.ts` owns shared spatial relationships and physics-clearance
+  measurements;
+- procedural meshes are the active fallback while local GLBs are unavailable;
+- `arena-assets.ts` owns stable asset IDs/URLs/anchors and the client-only
+  loader owns future GLB replacement;
+- captions, HUD, verdict semantics, cancellation, and the 2D fallback stay
+  outside the visual asset layer.
+
+The scene's current art direction is premium stylized broadcast game art:
+walnut/cream architecture, terracotta/plum contenders, honey Judge, detailed
+player-facing workstations, a framed banner, and a patterned stage floor. Do
+not describe or implement it as the old primitive-only blockout.
+
 ## Feature-Sliced Design (apps/web-internal)
 
 FSD now describes `apps/web/src` only (`app` composes routes; `pages` is a

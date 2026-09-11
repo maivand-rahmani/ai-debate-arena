@@ -6,17 +6,8 @@ import { ARENA_LAYOUT } from "./scene-layout";
 import type { ContenderMood } from "@/widgets/broadcast-stage/mood";
 import type { ReactionBurst } from "./character-poses";
 
-/**
- * Contender A (Terracotta — "The Challenger").
- *
- * Angular silhouette: square jaw, sharp wedge hair, terracotta suit
- * jacket, terracotta tie. Seated behind desk A.
- */
-export function CharacterContenderA({
-  phaseOffset,
-  mood,
-  verdictBoost,
-}: {
+/** Contender A: an angular, warm-toned Challenger. */
+export function CharacterContenderA({ phaseOffset, mood, verdictBoost }: {
   readonly phaseOffset: number;
   readonly mood?: ContenderMood | undefined;
   readonly verdictBoost?: ReactionBurst | undefined;
@@ -25,7 +16,7 @@ export function CharacterContenderA({
     position: ARENA_LAYOUT.characters.A.position,
     headOffset: ARENA_LAYOUT.characters.A.headOffset,
     capsuleHalfHeight: 0.45,
-    scale: 1.0,
+    scale: 1,
     phaseOffset,
     suitColor: PALETTE.terracotta,
     suitDeepColor: PALETTE.terracottaDeep,
@@ -36,91 +27,119 @@ export function CharacterContenderA({
   return <SeatedCharacter {...props} />;
 }
 
-function ContenderAVisual(refs: CharacterAnchorRefs) {
-  const { headRef, mouthRef, leftBrowRef, rightBrowRef } = refs;
-  // Local coords; Y=0 at seat, Y≈1.4 at top of head.
+function ContenderAVisual({ headRef, mouthRef, leftBrowRef, rightBrowRef }: CharacterAnchorRefs) {
   return (
     <group>
-      {/* Torso — angular suit jacket */}
-      <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.62, 0.55, 0.35]} />
-        <meshStandardMaterial
-          color={PALETTE.terracotta}
-          roughness={0.65}
-          metalness={0.05}
-        />
+      {/* Tailored torso with jacket, shirt bib, lapels and tie. */}
+      <mesh position={[0, 0.54, 0.02]} scale={[1.08, 1, 0.78]} castShadow receiveShadow>
+        <sphereGeometry args={[0.34, 12, 8]} />
+        <meshStandardMaterial color={PALETTE.terracotta} roughness={0.7} />
       </mesh>
-      {/* Lapel block (deeper tone for contrast) */}
-      <mesh position={[0, 0.6, 0.18]} rotation-x={0.05}>
-        <boxGeometry args={[0.5, 0.5, 0.04]} />
-        <meshStandardMaterial color={PALETTE.terracottaDeep} roughness={0.6} />
+      <mesh position={[0, 0.43, 0.17]} scale={[0.72, 0.62, 0.28]} castShadow>
+        <sphereGeometry args={[0.34, 12, 8]} />
+        <meshStandardMaterial color={PALETTE.terracottaDeep} roughness={0.75} />
       </mesh>
-      {/* Collar / white shirt strip */}
-      <mesh position={[0, 0.83, 0.155]}>
-        <boxGeometry args={[0.18, 0.08, 0.04]} />
-        <meshStandardMaterial color={PALETTE.cream} roughness={0.5} />
+      <mesh position={[0, 0.72, 0.24]} scale={[0.42, 0.72, 0.12]}>
+        <sphereGeometry args={[0.22, 10, 6]} />
+        <meshStandardMaterial color={PALETTE.cream} roughness={0.55} />
       </mesh>
-      {/* Tie — long wedge, terracotta accent */}
-      <mesh position={[0, 0.65, 0.2]}>
-        <coneGeometry args={[0.05, 0.4, 4]} />
-        <meshStandardMaterial
-          color={PALETTE.terracottaDeep}
-          roughness={0.4}
-          metalness={0.1}
-        />
+      <mesh position={[-0.13, 0.68, 0.275]} rotation-z={-0.34} rotation-y={-0.12}>
+        <boxGeometry args={[0.09, 0.38, 0.035]} />
+        <meshStandardMaterial color={PALETTE.terracottaLight} roughness={0.55} />
       </mesh>
-
-      {/* Arms — cuffs resting on desk */}
-      <mesh position={[-0.32, 0.45, 0.18]} rotation-z={-0.1} castShadow>
-        <boxGeometry args={[0.1, 0.3, 0.1]} />
-        <meshStandardMaterial color={PALETTE.terracotta} roughness={0.65} />
+      <mesh position={[0.13, 0.68, 0.275]} rotation-z={0.34} rotation-y={0.12}>
+        <boxGeometry args={[0.09, 0.38, 0.035]} />
+        <meshStandardMaterial color={PALETTE.terracottaLight} roughness={0.55} />
       </mesh>
-      <mesh position={[0.32, 0.45, 0.18]} rotation-z={0.1} castShadow>
-        <boxGeometry args={[0.1, 0.3, 0.1]} />
-        <meshStandardMaterial color={PALETTE.terracotta} roughness={0.65} />
+      <mesh position={[0, 0.64, 0.31]}>
+        <coneGeometry args={[0.065, 0.3, 5]} />
+        <meshStandardMaterial color={PALETTE.walnutDeep} roughness={0.45} metalness={0.12} />
+      </mesh>
+      <mesh position={[0, 0.79, 0.29]}>
+        <boxGeometry args={[0.06, 0.06, 0.04]} />
+        <meshStandardMaterial color={PALETTE.taupe} roughness={0.35} metalness={0.6} />
       </mesh>
 
-      {/* Neck */}
-      <mesh position={[0, 0.92, 0]} castShadow>
-        <boxGeometry args={[0.16, 0.14, 0.16]} />
-        <meshStandardMaterial color={PALETTE.taupe} roughness={0.7} />
+      {/* Sleeves point toward the desk; cuffs and palms establish a seated pose. */}
+      <mesh position={[-0.31, 0.53, 0.13]} rotation={[0.72, 0, -0.18]} castShadow>
+        <capsuleGeometry args={[0.09, 0.25, 5, 10]} />
+        <meshStandardMaterial color={PALETTE.terracotta} roughness={0.72} />
+      </mesh>
+      <mesh position={[0.31, 0.53, 0.13]} rotation={[0.72, 0, 0.18]} castShadow>
+        <capsuleGeometry args={[0.09, 0.25, 5, 10]} />
+        <meshStandardMaterial color={PALETTE.terracotta} roughness={0.72} />
+      </mesh>
+      <mesh position={[-0.29, 0.39, 0.29]} rotation={[0.72, 0, -0.18]}>
+        <capsuleGeometry args={[0.052, 0.12, 4, 8]} />
+        <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.58} />
+      </mesh>
+      <mesh position={[0.29, 0.39, 0.29]} rotation={[0.72, 0, 0.18]}>
+        <capsuleGeometry args={[0.052, 0.12, 4, 8]} />
+        <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.58} />
+      </mesh>
+      <mesh position={[-0.28, 0.32, 0.34]} scale={[1, 0.8, 0.78]} castShadow>
+        <sphereGeometry args={[0.085, 10, 7]} />
+        <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.65} />
+      </mesh>
+      <mesh position={[0.28, 0.32, 0.34]} scale={[1, 0.8, 0.78]} castShadow>
+        <sphereGeometry args={[0.085, 10, 7]} />
+        <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.65} />
+      </mesh>
+      <mesh position={[0, 0.91, 0]}>
+        <cylinderGeometry args={[0.095, 0.11, 0.18, 10]} />
+        <meshStandardMaterial color={PALETTE.taupe} roughness={0.72} />
       </mesh>
 
-      {/* Head — angular jaw, square cuboid head, sharp wedge hair */}
       <group ref={headRef}>
-        <mesh position={[0, 1.18, 0]} castShadow>
-          <boxGeometry args={[0.4, 0.42, 0.4]} />
-          <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.55} />
+        {/* Angular face, ears, swept hair and sideburns. */}
+        <mesh position={[0, 1.19, 0.015]} scale={[0.83, 1, 0.82]} castShadow receiveShadow>
+          <sphereGeometry args={[0.27, 16, 12]} />
+          <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.58} />
         </mesh>
-        <mesh position={[0.05, 1.42, 0]} rotation-z={-0.05} castShadow>
-          <coneGeometry args={[0.18, 0.3, 4]} />
+        <mesh position={[0, 1.08, 0.03]} scale={[0.75, 0.54, 0.76]}>
+          <sphereGeometry args={[0.24, 12, 8]} />
+          <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.6} />
+        </mesh>
+        <mesh position={[-0.245, 1.19, 0]} scale={[0.5, 0.8, 0.72]}>
+          <sphereGeometry args={[0.075, 10, 7]} />
+          <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.62} />
+        </mesh>
+        <mesh position={[0.245, 1.19, 0]} scale={[0.5, 0.8, 0.72]}>
+          <sphereGeometry args={[0.075, 10, 7]} />
+          <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.62} />
+        </mesh>
+        <mesh position={[0.02, 1.4, -0.015]} scale={[1.02, 0.55, 0.9]} castShadow>
+          <sphereGeometry args={[0.27, 14, 8]} />
+          <meshStandardMaterial color={PALETTE.walnutDeep} roughness={0.48} />
+        </mesh>
+        <mesh position={[0.18, 1.48, 0.015]} rotation-z={-0.25} castShadow>
+          <coneGeometry args={[0.12, 0.27, 5]} />
+          <meshStandardMaterial color={PALETTE.walnutDeep} roughness={0.45} />
+        </mesh>
+        <mesh position={[-0.21, 1.3, 0.05]} scale={[0.42, 0.9, 0.6]}>
+          <sphereGeometry args={[0.09, 8, 6]} />
           <meshStandardMaterial color={PALETTE.walnutDeep} roughness={0.5} />
         </mesh>
-        {/* Eye ridges */}
-        <mesh position={[-0.075, 1.22, 0.205]}>
-          <boxGeometry args={[0.06, 0.04, 0.02]} />
-          <meshStandardMaterial color={PALETTE.walnutDeep} />
+        <mesh position={[0.21, 1.3, 0.05]} scale={[0.42, 0.9, 0.6]}>
+          <sphereGeometry args={[0.09, 8, 6]} />
+          <meshStandardMaterial color={PALETTE.walnutDeep} roughness={0.5} />
         </mesh>
-        <mesh position={[0.075, 1.22, 0.205]}>
-          <boxGeometry args={[0.06, 0.04, 0.02]} />
-          <meshStandardMaterial color={PALETTE.walnutDeep} />
+        {/* Eyes, pupils, nose, animated brows and animated mouth. */}
+        <mesh position={[-0.095, 1.22, 0.245]} scale={[1, 0.8, 0.55]}>
+          <sphereGeometry args={[0.043, 10, 7]} />
+          <meshStandardMaterial color={PALETTE.cream} roughness={0.35} />
         </mesh>
-        {/* Brows (animated for idle sway) */}
-        <mesh ref={leftBrowRef} position={[-0.075, 1.28, 0.205]}>
-          <boxGeometry args={[0.08, 0.02, 0.02]} />
-          <meshStandardMaterial color={PALETTE.walnutDeep} />
+        <mesh position={[0.095, 1.22, 0.245]} scale={[1, 0.8, 0.55]}>
+          <sphereGeometry args={[0.043, 10, 7]} />
+          <meshStandardMaterial color={PALETTE.cream} roughness={0.35} />
         </mesh>
-        <mesh ref={rightBrowRef} position={[0.075, 1.28, 0.205]}>
-          <boxGeometry args={[0.08, 0.02, 0.02]} />
-          <meshStandardMaterial color={PALETTE.walnutDeep} />
-        </mesh>
+        <mesh position={[-0.095, 1.22, 0.267]}><sphereGeometry args={[0.018, 8, 6]} /><meshStandardMaterial color={PALETTE.walnutDeep} /></mesh>
+        <mesh position={[0.095, 1.22, 0.267]}><sphereGeometry args={[0.018, 8, 6]} /><meshStandardMaterial color={PALETTE.walnutDeep} /></mesh>
+        <mesh position={[0, 1.155, 0.255]} rotation-x={-0.18}><coneGeometry args={[0.035, 0.11, 6]} /><meshStandardMaterial color={PALETTE.taupeMid} roughness={0.65} /></mesh>
+        <mesh ref={leftBrowRef} position={[-0.095, 1.28, 0.25]} rotation-z={-0.08}><capsuleGeometry args={[0.014, 0.075, 4, 7]} /><meshStandardMaterial color={PALETTE.walnutDeep} /></mesh>
+        <mesh ref={rightBrowRef} position={[0.095, 1.28, 0.25]} rotation-z={0.08}><capsuleGeometry args={[0.014, 0.075, 4, 7]} /><meshStandardMaterial color={PALETTE.walnutDeep} /></mesh>
+        <mesh ref={mouthRef} position={[0, 1.085, 0.255]} scale={[1, 0.65, 0.5]}><torusGeometry args={[0.052, 0.012, 6, 12, Math.PI]} /><meshStandardMaterial color={PALETTE.walnutDeep} /></mesh>
       </group>
-
-      {/* Mouth (animated for blink) */}
-      <mesh ref={mouthRef} position={[0, 1.08, 0.205]}>
-        <boxGeometry args={[0.16, 0.04, 0.02]} />
-        <meshStandardMaterial color={PALETTE.walnutDeep} />
-      </mesh>
     </group>
   );
 }

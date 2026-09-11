@@ -2,7 +2,7 @@
 
 > The single working backlog for AI Debate Arena from v0.1 through v0.6.
 >
-> Status snapshot: 2026-09-09 — the v0.3 close was amended: the v0.3 closeout lane below must pass before v0.4 starts.  
+> Status snapshot: 2026-09-11 — the v0.3 close was amended: the v0.3 closeout lane below must pass before v0.4 starts.
 > Baseline: the original PHASE 0–8 backlog and the current project context.
 
 This file is written for both the product owner and an autonomous coding agent. It is intentionally ordered: close v0.1 before starting v0.2, and do not pull a future feature into an earlier release merely because it is interesting.
@@ -29,6 +29,38 @@ This file is written for both the product owner and an autonomous coding agent. 
 Task IDs are stable references for commits, agent handoffs, and release notes. Dependencies use those IDs.
 
 ## Current status
+
+### Current implementation snapshot — 2026-09-11
+
+The active Quick runtime is now format-driven and committed in `be053f4` and
+`cc6b992`:
+
+- Quick is the only enabled format and has six alternating turns: A opening,
+  B opening, A response, B response, A response, B response; the judge runs
+  only after the sixth turn.
+- `packages/types/src/match-format.ts` owns ordered turn metadata. The runner,
+  stream, reducer, captions, progress UI, history, and camera signals consume
+  that metadata instead of assuming a fixed four-phase flow.
+- The viewer can read each completed speech and advance with the on-screen
+  Next response action or Escape. Model generation continues in the background;
+  the judge waits for the viewer to continue after the last speech.
+- Quick policy is six turns, 3,000 output tokens per debater, 4,000 judge
+  tokens, 18,000 judge context characters, and an 8-turn history window.
+- Judge generation has structured-output, schema-free streaming, and plain
+  Responses fallbacks. Empty provider output still becomes a clear failure;
+  the system never fabricates a verdict.
+- Camera signals now carry the active `MatchTurnSpec`, so future camera
+  choreography can use stable turn metadata rather than hard-coded phase names.
+- Repository verification passed: web 435 tests, engine 110 tests, all touched
+  workspace typechecks, and the production Next build. A live smoke match
+  generated all six Quick turns and showed the selected speech in the viewer.
+- F4-43 remains open because this Codex sandbox cannot persist match records to
+  `C:\Users\PC\.ai-debate-arena`; that final provider-backed persistence check
+  must be repeated from the user's own terminal.
+
+The current working tree also contains separate, uncommitted designer work in
+the 3D arena files and `apps/web/next.config.ts`. Do not mix or discard those
+changes while working on the engine or documentation.
 
 The inherited baseline says that the core local arena is already assembled:
 
@@ -274,7 +306,7 @@ Milestone: a match feels like a funny, cinematic sports broadcast with two AI co
 - [x] [P1] F4-22 Add simple character emotions and reactions tied to match events and phases; do not make an extra AI call only to decide an emotion. (2026-09-05: `character-poses.ts` pure mood→pose tables applied through named anchors in the character `useFrame` — deterministic, zero extra AI calls (oracle gate C grep-confirmed).)
 - [x] [P1] F4-23 Add a small curated meme-reaction library such as “Agent is cooking”, “Judge is not impressed”, and “Argument.exe stopped responding”, with mute and reduced-motion support. (2026-09-05: 7 curated reactions via `deriveReaction`, ReactionOverlay with mute toggle; reduced-motion suppresses bursts.)
 - [x] [P1] F4-24 Provide a responsive layout and a lightweight non-WebGL fallback that preserves the same match information. (2026-09-05: full-viewport canvas world; CanvasGate probe + error boundary render the complete 2D BroadcastStage when WebGL is unavailable — SSR probe shows fallback markup with zero three/rapier leakage; HUD hides itself without WebGL so the 2D stage carries all surfaces.)
-- [x] [P1] F4-25 Keep the first 3D pass lightweight: limited assets and animations, no physics, no free-roam world, and no complex character-rigging pipeline. (SUPERSEDED 2026-09-05 by explicit user direction: a REAL 3D game-like arena WITH physics and a controllable spectator camera. Implemented accordingly: pinned three/fiber/drei/rapier, procedural primitive geometry (zero asset pipeline), no rigging — animation is ref-writes in useFrame; camera is constrained orbit, not free-roam. The "no physics" clause replaced; all other spirit kept.)
+- [x] [P1] F4-25 Keep the first 3D pass lightweight: limited assets and animations, no physics, no free-roam world, and no complex character-rigging pipeline. (SUPERSEDED 2026-09-05 by explicit user direction: a REAL 3D game-like arena WITH physics and a controllable spectator camera. Implemented accordingly: pinned three/fiber/drei/rapier, detailed procedural stand-ins with a local GLB manifest/client loader boundary, no rigging — animation is ref-writes in useFrame; camera is constrained orbit, not free-roam. The "no physics" clause replaced; all other spirit kept. Current visual contracts live in `docs/arena-visual-system.md`.)
 - [x] [P0] F4-26 Review the working v0.3 Arena with the user before moving to v0.4; record the accepted direction and the remaining visual polish. (ACCEPTED 2026-09-05 via user “finish v0.3”: full-viewport arena, close player seating with computer stations, and a complete Judge chair/lower body are the accepted v0.3 direction.)
 
 NOTE (2026-09-05, 3D stack): three/@react-three/fiber 9 caps React <19.3 — fiber/drei/rapier/three must bump together when 19.3 lands.
@@ -295,7 +327,7 @@ Owner feedback: the idle page shows too much at once; during a live match the sp
 - [x] [P0] F4-35 Cinematic caption readability: during a match, live speech renders as ONE bottom-center broadcast-caption surface (large ~20-24px high-contrast text on a dimmed/blurred glass panel), speaker identity and phase obvious; round/status chip stays compact; judge speech and the verdict reveal get the same treatment; the 3D scene stays visible but visually secondary. Reduced-motion and mobile supported; non-WebGL fallback keeps identical information.
 - [x] [P0] F4-36 Per-match detail page `/matches/[id]`: full transcript as a large chat-style thread with speaker identity, phases, and rounds; verdict card with criteria and scores; export and re-judge actions; blurred/dimmed static backdrop (no live 3D cost on this page); clear unknown-id error state. The history drawer becomes a simple recent-matches list linking to these pages.
 - [x] [P0] F4-37 Pass verification: (2026-09-09 automated: 302 web + 8 ai + 108 engine tests / typecheck / lint / build green; /matches/[id] route registered. REMAINING: owner manual walkthrough + sign-off.) focused tests for the new surfaces, full typecheck/lint/build/test batch, and the owner's manual walkthrough (idle hero → setup modal → live captions → history → match page). v0.4 stays blocked until this passes.
-- [ ] [P1] F4-38 Record the accepted v0.3.1 visual direction in the arena UI docs so v0.4 evidence/challenge UX builds on the caption + detail-page patterns.
+- [x] [P1] F4-38 Record the accepted v0.3.1 visual direction in the arena UI docs so v0.4 evidence/challenge UX builds on the caption + detail-page patterns. (2026-09-11: current 3D visual system, workstation foundation, asset boundary, camera/lighting/layout contracts, and agent change guide documented in `docs/arena-visual-system.md`.)
 
 ### Quick format foundation — owner directive 2026-09-11
 
@@ -622,8 +654,8 @@ The release gates are the definition of a version, not a suggestion. A version i
 - [ ] Fresh install succeeds from the documented prerequisites.
 - [ ] provider:add stores configuration locally with restrictive permissions and redacts API keys.
 - [ ] The browser can list/select providers and models without receiving credentials.
-- [ ] A Quick match runs through all intended phases with visible streaming status.
-- [ ] Agent A and Agent B receive the correct topic, position, rules, history, and round.
+- [ ] A Quick match runs through all format-owned turns with visible streaming status.
+- [ ] Agent A and Agent B receive the correct topic, position, rules, history, and turn metadata.
 - [ ] Output, rounds, context, and judge limits are enforced.
 - [ ] The judge returns a validated structured verdict or a clear failure state.
 - [ ] Invalid input, missing provider, provider timeout/failure, malformed judge output, cancel, and disconnect are recoverable.

@@ -59,24 +59,3 @@ export const PALETTE = {
   woodShadow: "#3f2618",
   woodHighlight: "#b78057",
 } as const satisfies Record<string, string>;
-
-export type PaletteKey = keyof typeof PALETTE;
-
-/**
- * Type-safe palette key list — useful for typed maps over the palette (e.g.
- * the lighting rig storing per-light colors).
- */
-export const PALETTE_KEYS: readonly PaletteKey[] = Object.freeze(
-  Object.keys(PALETTE) as PaletteKey[],
-);
-
-/**
- * The cyclorama back-wall signage copy. Hoisted to a constant so it can be
- * reused by the CanvasTexture on the wall panels without re-creating strings
- * per mesh. Two flavors: the wide title strip and a smaller "On Air" placard.
- */
-export const SIGNAGE_TEXT = {
-  titleWide: "AI DEBATE ARENA",
-  subtitle: "TONIGHT'S MOTION",
-  onAir: "ON AIR",
-} as const;

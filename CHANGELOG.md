@@ -4,6 +4,20 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 
 ## [Unreleased]
 
+### 3D visual foundation (2026-09-11)
+- Updated the broadcast stage to the current premium stylized game-art
+  direction: dimensional walnut/cream studio architecture, terracotta/plum
+  contender stations, a larger honey Judge platform, framed aligned signage,
+  and a patterned stage floor with seams, inlays, medallion, and fascia.
+- Moved monitor stations forward to create a deliberate player working gap and
+  rotated the glass toward the seated players. Added keyboard/control surface,
+  mouse, webcam, rear vents/VESA detail, desk grommet, power adapter, and
+  separate routed power/signal cables.
+- Added the stable local GLB manifest/client loader boundary and asset intake
+  contract. Procedural stand-ins remain the default until final local GLBs are
+  supplied; the 2D/WebGL fallback and all debate/HUD/verdict contracts remain
+  intact. See `docs/arena-visual-system.md`.
+
 ### Quick format foundation (2026-09-11)
 - Quick now runs six alternating, focused turns: two openings followed by two response exchanges. Prompts require 180–300 visible words, one decisive argument for an opening, and one named opponent claim plus a focused counterclaim for a response.
 - `MatchFormat`/`MatchTurnSpec` make speaking order shared data across the engine, stream, reducer, captions, history, progress timeline, and broadcast stage. New modes can change their turn count and order without a project-wide phase rewrite.
@@ -51,7 +65,12 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 
 ### Real-time 3D world (replaces the v0.3-first-pass CSS stage)
 - The app surface is now a full-viewport WebGL arena built with pinned `@react-three/fiber@9` + `three@0.185` + `@react-three/drei@10` + `@react-three/rapier@2`, loaded behind an SSR-safe `CanvasGate` (dynamic `ssr:false`, WebGL capability probe via `useSyncExternalStore`, error boundary — server output contains zero three/rapier markers; enforced by `ssr-boundary.test.ts`).
-- Broadcast set built from procedural primitives (no asset pipeline): wooden stage floor, cyclorama + arena walls, truss, three emissive signage panels (CanvasTexture), two contender desks with monitors/mic stands, central elevated Judge platform with gavel.
+- Initial v0.3 baseline used procedural primitives (no asset pipeline at that
+  point): wooden stage floor, cyclorama + arena walls, truss, three emissive
+  signage panels (CanvasTexture), two contender desks with monitors/mic stands,
+  and a central elevated Judge platform with gavel. The current visual system
+  supersedes that blockout; see the Unreleased visual-foundation entry and
+  `docs/arena-visual-system.md`.
 - Real physics: static colliders for floor/stage/walls/truss/desks/chairs/platform, fixed character capsules, dynamic gavel + two desk mics with the documented spawn-clearance invariant.
 
 ### The world reacts to the match
@@ -61,11 +80,14 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 - Final v0.3 polish removes the remaining outer page chrome so the Arena owns the viewport, moves contender chairs directly to their desks, adds procedural powered monitor stations, and gives the Judge a throne, robe lower body, legs, and shoes for a grounded silhouette.
 
 ### Preserved
-- Engine, reducer, stream contract, API routes, Quick mode, cancellation/error handling, judge verdict semantics, history drawer/export/rejudge — untouched (gate C diff-verified).
+- The pre-existing 2D fallback, provider security behavior, cancellation/error handling, judge verdict semantics, history drawer/export/rejudge, and API compatibility remain preserved. The engine, reducer, and stream contract now consume the format registry so Quick can use six turns without hard-coded phase assumptions.
 - Non-WebGL fallback: the full 2D broadcast stage + IdleSetup render unchanged when WebGL is absent — no user ever sees a blank canvas.
 
 ### Known limitations
-- Character visuals are procedural primitive puppets (deliberate: no rigging pipeline yet); the v0.3 visual direction was accepted after the final game-world review.
+- Character visuals are still procedural stylized stand-ins while the GLB
+  rigging pipeline is being commissioned. The current anchor contract and
+  client-only loader are ready for replacement assets; see the visual-system
+  document and arena asset intake README.
 - Judge model = first configured provider (selection UI deferred to v0.4 per provider-UI gate).
 - `fiber@9` caps React `<19.3`; the 3D stack must bump together.
 
@@ -77,7 +99,7 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 - Stream v1 envelope: every event carries `v`, `matchId`, monotonic `seq`; `done` carries `terminal: completed|error|cancelled`.
 
 ### Policy & enforcement
-- `MATCH_PROFILES` centralize Quick/Standard/Hardcore as data (rounds, output caps, history window, per-side context chars). Quick behavior is unchanged and the only enabled mode.
+- `MATCH_PROFILES` centralize Quick/Standard/Hardcore as data (rounds, output caps, history window, per-side context chars). Quick remains the only enabled mode; its six-turn behavior is owned by the format registry and its limits by the profile policy.
 - Agent history is windowed and char-capped per profile (oldest whole turns dropped first); the judge always sees the full transcript.
 - Token usage and per-turn latency captured from the SDK into the match record (missing usage degrades to zeros, never throws).
 
@@ -93,7 +115,7 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 
 ### Known limitations
 - Standard and Hardcore remain disabled; enabling them is gated on real-model cost/quality evidence (see `docs/eval/`).
-- The OpenCode Go Responses endpoint intermittently returns empty completions for long judge prompts (observed in the rubric v2 eval); the runner retries once and surfaces a clear failure — no verdict is ever fabricated.
+- Some Responses-only providers intermittently return empty completions for long judge prompts. The runner now tries structured output, schema-free streaming, and plain Responses generation before surfacing a clear failure — no verdict is ever fabricated.
 - No browser-test dependency (Playwright) was added; E2E coverage is a scripted mock-provider suite (`src/app/api/debate/route.test.ts`) plus manual acceptance.
 
 ## v0.1.0 — Local Quick Arena (2026-09-04)

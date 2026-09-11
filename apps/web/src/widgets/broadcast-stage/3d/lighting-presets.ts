@@ -28,13 +28,13 @@ export interface LightingPreset {
 
 /** Baseline envelope — same as LIGHTING_INTENSITY_DEFAULTS but typed for the preset. */
 const BASELINE: Readonly<Record<LightKey, number>> = {
-  ambient: 0.32,
-  hemisphere: 0.55,
-  key: 1.15,
-  spotA: 1.4,
-  spotB: 1.4,
-  spotJudge: 1.6,
-  rimHoneylight: 0.45,
+  ambient: 0.46,
+  hemisphere: 0.7,
+  key: 1.55,
+  spotA: 1.1,
+  spotB: 1.1,
+  spotJudge: 1.35,
+  rimHoneylight: 0.32,
 };
 
 /**
@@ -42,43 +42,43 @@ const BASELINE: Readonly<Record<LightKey, number>> = {
  */
 const SPEAKING_A: Record<LightKey, number> = {
   ...BASELINE,
-  spotA: 2.05,
-  spotB: 0.85,
-  rimHoneylight: 0.55,
+  spotA: 1.65,
+  spotB: 0.72,
+  rimHoneylight: 0.42,
 };
 
 const SPEAKING_B: Record<LightKey, number> = {
   ...BASELINE,
-  spotA: 0.85,
-  spotB: 2.05,
-  rimHoneylight: 0.55,
+  spotA: 0.72,
+  spotB: 1.65,
+  rimHoneylight: 0.42,
 };
 
 const REBUTTAL: Record<LightKey, number> = {
   ...BASELINE,
   spotA: 1.6,
   spotB: 1.6,
-  key: 1.25,
-  hemisphere: 0.45,
+  key: 1.65,
+  hemisphere: 0.62,
 };
 
 const JUDGING: Record<LightKey, number> = {
   ...BASELINE,
-  ambient: 0.42,
-  spotJudge: 2.4,
-  rimHoneylight: 0.75,
-  spotA: 0.7,
-  spotB: 0.7,
+  ambient: 0.5,
+  spotJudge: 2.1,
+  rimHoneylight: 0.62,
+  spotA: 0.72,
+  spotB: 0.72,
 };
 
 const VERDICT: Record<LightKey, number> = {
   ...BASELINE,
-  ambient: 0.5,
-  spotJudge: 2.6,
-  rimHoneylight: 0.95,
-  spotA: 1.0,
-  spotB: 1.0,
-  key: 1.05,
+  ambient: 0.56,
+  spotJudge: 2.25,
+  rimHoneylight: 0.76,
+  spotA: 0.9,
+  spotB: 0.9,
+  key: 1.35,
 };
 
 const CANCELLED: Record<LightKey, number> = {

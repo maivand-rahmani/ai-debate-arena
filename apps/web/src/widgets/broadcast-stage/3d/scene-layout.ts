@@ -1,7 +1,7 @@
 /**
  * Pure scene layout for the 3D arena world.
  *
- * World units are meters. The arena is a small stage (~12 units wide) with
+ * World units are meters. The arena is a small stage (~14 units wide) with
  * surrounding negative space so the spectator camera always sees the full
  * composition. All positions/sizes are immutable literals so the layout is
  * unit-testable without standing up Three.js; the rendering side reads them
@@ -71,7 +71,6 @@ export interface ArenaLayout {
   readonly stage: {
     readonly position: Vec3;
     readonly size: Vec3;
-    readonly trimThickness: number;
   };
   readonly walls: {
     readonly thickness: number;
@@ -126,14 +125,14 @@ export interface ArenaLayout {
 
 const arenaWidth = 24;
 const arenaDepth = 24;
-const stageWidth = 12;
-const stageDepth = 6;
+const stageWidth = 14;
+const stageDepth = 7;
 const stageThickness = 0.4;
-const deskHalfWidth = 1.25;
-const deskDepth = 1.0;
-const deskSlabThickness = 0.08;
+const deskHalfWidth = 1.45;
+const deskDepth = 1.35;
+const deskSlabThickness = 0.12;
 const deskTopHeight = 1.0;
-const deskForward = 0.5;
+const deskForward = 0.72;
 /** Y of the seat surface for a standard desk chair. */
 const chairSeatY = 0.55;
 /** Y of the seat surface for the elevated judge chair on the platform. */
@@ -146,7 +145,6 @@ export const ARENA_LAYOUT: ArenaLayout = {
   stage: {
     position: [0, stageThickness / 2, 0],
     size: [stageWidth, stageThickness, stageDepth],
-    trimThickness: 0.05,
   },
   walls: {
     thickness: 0.3,
@@ -154,34 +152,34 @@ export const ARENA_LAYOUT: ArenaLayout = {
     span: arenaWidth,
     leftPosition: [-arenaWidth / 2, 5.6 / 2, 0],
     rightPosition: [arenaWidth / 2, 5.6 / 2, 0],
-    cycloramaRadius: arenaWidth / 2 - 1,
-    cycloramaSegments: 16,
-    cycloramaPosition: [0, 0, -7.0],
+    cycloramaRadius: arenaWidth / 2 - 0.8,
+    cycloramaSegments: 32,
+    cycloramaPosition: [0, 0, -7.4],
   },
   truss: {
-    position: [0, 5.4, 0],
+    position: [0, 5.8, 0],
     size: [arenaWidth - 2, 0.18, 0.18],
     barCount: 4,
   },
   signagePanels: [
     {
       // Wide title banner across the cyclorama
-      position: [0, 3.4, -6.94],
-      size: [8.0, 1.6, 0.06],
+      position: [0, 3.55, -7.34],
+      size: [8.8, 1.45, 0.12],
       text: "AI DEBATE ARENA",
       tone: "title",
     },
     {
       // Honey accent strip below the title
-      position: [0, 2.4, -6.94],
-      size: [6.0, 0.3, 0.06],
+      position: [0, 2.55, -7.34],
+      size: [6.8, 0.32, 0.12],
       text: "TONIGHT'S MOTION",
       tone: "side",
     },
     {
       // Smaller "ON AIR" placard over the judge area
-      position: [0, 4.5, -6.94],
-      size: [1.8, 0.6, 0.06],
+      position: [0, 4.65, -7.34],
+      size: [1.9, 0.62, 0.12],
       text: "ON AIR",
       tone: "side",
     },
@@ -189,41 +187,41 @@ export const ARENA_LAYOUT: ArenaLayout = {
   desks: {
     A: {
       id: "A",
-      position: [-4.5, deskTopHeight, deskForward],
+      position: [-4.35, deskTopHeight, deskForward],
       topSize: [deskHalfWidth * 2, deskSlabThickness, deskDepth],
       baseSize: [deskHalfWidth * 2 - 0.15, deskTopHeight - deskSlabThickness, deskDepth - 0.15],
       accentColor: PALETTE.terracotta,
       accentGlowColor: PALETTE.terracottaGlow,
-      faceCameraRotationY: Math.PI / 8,
+      faceCameraRotationY: Math.PI / 12,
     },
     B: {
       id: "B",
-      position: [4.5, deskTopHeight, deskForward],
+      position: [4.35, deskTopHeight, deskForward],
       topSize: [deskHalfWidth * 2, deskSlabThickness, deskDepth],
       baseSize: [deskHalfWidth * 2 - 0.15, deskTopHeight - deskSlabThickness, deskDepth - 0.15],
       accentColor: PALETTE.plum,
       accentGlowColor: PALETTE.plumGlow,
-      faceCameraRotationY: -Math.PI / 8,
+      faceCameraRotationY: -Math.PI / 12,
     },
   },
   monitors: {
-    // Monitors sit centered on each desk in front of the talent. The screen
-    // tilts back ~10° and turns toward the camera so it reads as a broadcast
-    // workstation monitor (partially visible to the audience).
+    // Monitors sit centered on each desk in front of the talent. Their glass
+    // faces point toward the seated players (negative Z), while the rear
+    // housing remains visible from the spectator camera.
     A: {
-      basePosition: [-4.5, deskTopHeight + deskSlabThickness, deskForward - 0.15],
-      screenSize: [0.62, 0.42, 0.04],
-      screenPosition: [-4.5, deskTopHeight + deskSlabThickness + 0.34, deskForward - 0.15],
-      screenTiltX: -0.12,
-      screenRotationY: -Math.PI / 10,
+      basePosition: [-4.35, deskTopHeight + deskSlabThickness, deskForward + 0.22],
+      screenSize: [1.12, 0.68, 0.11],
+      screenPosition: [-4.35, deskTopHeight + deskSlabThickness + 0.48, deskForward + 0.22],
+      screenTiltX: -0.08,
+      screenRotationY: Math.PI + Math.PI / 14,
       accentColor: PALETTE.terracottaLight,
     },
     B: {
-      basePosition: [4.5, deskTopHeight + deskSlabThickness, deskForward - 0.15],
-      screenSize: [0.62, 0.42, 0.04],
-      screenPosition: [4.5, deskTopHeight + deskSlabThickness + 0.34, deskForward - 0.15],
-      screenTiltX: -0.12,
-      screenRotationY: Math.PI / 10,
+      basePosition: [4.35, deskTopHeight + deskSlabThickness, deskForward + 0.22],
+      screenSize: [1.12, 0.68, 0.11],
+      screenPosition: [4.35, deskTopHeight + deskSlabThickness + 0.48, deskForward + 0.22],
+      screenTiltX: -0.08,
+      screenRotationY: Math.PI - Math.PI / 14,
       accentColor: PALETTE.plumLight,
     },
   },
@@ -233,63 +231,63 @@ export const ARENA_LAYOUT: ArenaLayout = {
     // a metre or more away from it. Seat Z sits just inside the desk
     // back edge; the character sits centered on the chair seat.
     A: {
-      seatPosition: [-4.5, chairSeatY, -0.15],
-      backRest: [0.7, 0.85, 0.12],
+      seatPosition: [-4.35, chairSeatY, -0.02],
+      backRest: [0.86, 0.95, 0.16],
     },
     B: {
-      seatPosition: [4.5, chairSeatY, -0.15],
-      backRest: [0.7, 0.85, 0.12],
+      seatPosition: [4.35, chairSeatY, -0.02],
+      backRest: [0.86, 0.95, 0.16],
     },
   },
   judge: {
-    platformPosition: [0, 0.35, -3.0],
-    platformSize: [3.0, 0.7, 1.4],
+    platformPosition: [0, 0.38, -3.15],
+    platformSize: [3.5, 0.76, 1.8],
     accentColor: PALETTE.honey,
-    characterPosition: [0, judgeSeatY, -3.0],
+    characterPosition: [0, judgeSeatY, -3.15],
     // The judge's throne sits centered on the raised platform, tucked just
     // behind the character so the seat + backrest stay visible above the
     // platform trim from a wide spectator camera.
-    chairSeatPosition: [0, judgeSeatY, -3.0 - 0.55],
-    chairBackRest: [0.95, 1.05, 0.14],
+    chairSeatPosition: [0, judgeSeatY, -3.15 - 0.62],
+    chairBackRest: [1.12, 1.2, 0.18],
   },
   characters: {
     A: {
-      position: [-4.5, deskTopHeight, -0.2],
+      position: [-4.35, deskTopHeight, -0.02],
       headOffset: [0, 1.1, 0],
     },
     B: {
-      position: [4.5, deskTopHeight, -0.2],
+      position: [4.35, deskTopHeight, -0.02],
       headOffset: [0, 1.1, 0],
     },
     // The judge sits on the elevated throne on top of the platform: base at
     // chair-seat height so the legs (rendered by the judge visual) drop
     // visibly from the torso to the platform top.
     judge: {
-      position: [0, judgeSeatY, -3.0],
+      position: [0, judgeSeatY, -3.15],
       headOffset: [0, 1.3, 0],
     },
   },
   props: {
     gavel: {
-      // Judge platform top; z=-2.4 keeps it on the platform (z range -3.7..-2.3)
+      // Judge platform top; z=-2.48 keeps it on the platform (z range -4.05..-2.25)
       // with 0.215 m radial clearance from the judge capsule (Gate B fix).
-      initialPosition: [0, 0.7 + 0.06, -2.4],
-      size: [0.18, 0.07, 0.06],
+      initialPosition: [0, 0.76 + 0.08, -2.48],
+      size: [0.22, 0.08, 0.08],
     },
     micA: {
       // Near the desk front edge so the spawn clears the character capsule by
       // ≥0.10 m radially (capsule edge at z=0.115; mic at z=0.45 → 0.335 m).
-      initialPosition: [-4.5, deskTopHeight + deskSlabThickness + 0.12, deskForward - 0.05],
-      size: [0.07, 0.18, 0.07],
+      initialPosition: [-4.35, deskTopHeight + deskSlabThickness + 0.16, deskForward - 0.08],
+      size: [0.09, 0.22, 0.09],
     },
     micB: {
-      initialPosition: [4.5, deskTopHeight + deskSlabThickness + 0.12, deskForward - 0.05],
-      size: [0.07, 0.18, 0.07],
+      initialPosition: [4.35, deskTopHeight + deskSlabThickness + 0.16, deskForward - 0.08],
+      size: [0.09, 0.22, 0.09],
     },
   },
   camera: {
-    initialPosition: [0, 4.4, 11.5],
-    initialTarget: [0, 1.2, -1.0],
+    initialPosition: [0, 4.6, 12.8],
+    initialTarget: [0, 1.35, -1.45],
     minDistance: 6,
     maxDistance: 18,
     // Lock polar so users cannot orbit under the floor or above the truss.
@@ -300,7 +298,7 @@ export const ARENA_LAYOUT: ArenaLayout = {
   fog: {
     color: PALETTE.ink,
     near: 12,
-    far: 30,
+    far: 34,
   },
 };
 

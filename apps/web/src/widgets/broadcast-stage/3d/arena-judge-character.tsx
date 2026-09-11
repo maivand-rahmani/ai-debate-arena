@@ -6,13 +6,7 @@ import { ARENA_LAYOUT } from "./scene-layout";
 import type { JudgeMood } from "@/widgets/broadcast-stage/mood";
 import type { ReactionBurst } from "./character-poses";
 
-/**
- * Judge — "The Magistrate".
- *
- * 1.2× larger presence (vertical scale), honey robe, sugar-wig wedge,
- * sterner brow set. Seated behind the central platform. Uses an extra
- * `gavelArm` ref hook through Phase C; for Phase B the arm is static.
- */
+/** The Judge: a broad, seated magistrate silhouette with a honey robe. */
 export function CharacterJudge({
   phaseOffset,
   mood,
@@ -37,140 +31,113 @@ export function CharacterJudge({
   return <SeatedCharacter {...props} />;
 }
 
-function JudgeVisual(refs: CharacterAnchorRefs) {
-  const { headRef, mouthRef, leftBrowRef, rightBrowRef } = refs;
+function JudgeVisual({ headRef, mouthRef, leftBrowRef, rightBrowRef }: CharacterAnchorRefs) {
   return (
     <group>
-      {/* Robe base — broad, sleeveless robe (honey). */}
-      <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.78, 0.7, 0.42]} />
-        <meshStandardMaterial
-          color={PALETTE.honey}
-          roughness={0.7}
-          metalness={0.05}
-        />
+      {/* Layered robe and stole give the Judge a strong central silhouette. */}
+      <mesh position={[0, 0.55, 0.02]} scale={[1.1, 1, 0.78]} castShadow receiveShadow>
+        <sphereGeometry args={[0.4, 16, 10]} />
+        <meshStandardMaterial color={PALETTE.honeyDeep} roughness={0.72} />
       </mesh>
-      {/* Robe drape front (lighter tone) */}
-      <mesh position={[0, 0.42, 0.21]} rotation-x={0.04}>
-        <boxGeometry args={[0.62, 0.5, 0.04]} />
-        <meshStandardMaterial
-          color={PALETTE.honeyLight}
-          roughness={0.65}
-        />
+      <mesh position={[0, 0.58, 0.22]} scale={[0.72, 0.92, 0.18]} castShadow>
+        <sphereGeometry args={[0.32, 14, 10]} />
+        <meshStandardMaterial color={PALETTE.honey} roughness={0.62} />
       </mesh>
-      {/* Collar stripe (deep walnut) */}
-      <mesh position={[0, 0.9, 0.18]}>
-        <boxGeometry args={[0.5, 0.06, 0.04]} />
-        <meshStandardMaterial color={PALETTE.walnutDeep} roughness={0.4} />
+      <mesh position={[0, 0.73, 0.32]} rotation-x={0.06}>
+        <boxGeometry args={[0.13, 0.55, 0.035]} />
+        <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.5} />
+      </mesh>
+      <mesh position={[0, 0.93, 0.34]}>
+        <torusGeometry args={[0.19, 0.035, 8, 20]} />
+        <meshStandardMaterial color={PALETTE.honeyLight} emissive={PALETTE.honeyGlow} emissiveIntensity={0.18} metalness={0.45} roughness={0.34} />
       </mesh>
 
-      {/* Arms — sleeves */}
-      <mesh position={[-0.4, 0.5, 0.2]} rotation-z={-0.05} castShadow>
-        <boxGeometry args={[0.12, 0.4, 0.12]} />
-        <meshStandardMaterial color={PALETTE.honey} roughness={0.7} />
+      <mesh position={[-0.4, 0.52, 0.17]} rotation={[0.65, 0, -0.12]} castShadow>
+        <capsuleGeometry args={[0.11, 0.3, 5, 10]} />
+        <meshStandardMaterial color={PALETTE.honey} roughness={0.68} />
       </mesh>
-      <mesh position={[0.4, 0.5, 0.2]} rotation-z={0.05} castShadow>
-        <boxGeometry args={[0.12, 0.4, 0.12]} />
-        <meshStandardMaterial color={PALETTE.honey} roughness={0.7} />
+      <mesh position={[0.4, 0.52, 0.17]} rotation={[0.65, 0, 0.12]} castShadow>
+        <capsuleGeometry args={[0.11, 0.3, 5, 10]} />
+        <meshStandardMaterial color={PALETTE.honey} roughness={0.68} />
       </mesh>
-
-      {/* Hands (small cubes on top of sleeves) */}
-      <mesh position={[-0.4, 0.32, 0.24]} castShadow>
-        <boxGeometry args={[0.13, 0.12, 0.13]} />
-        <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.55} />
+      <mesh position={[-0.39, 0.33, 0.31]} rotation={[0.65, 0, -0.12]} castShadow>
+        <sphereGeometry args={[0.085, 10, 8]} />
+        <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.56} />
       </mesh>
-      <mesh position={[0.4, 0.32, 0.24]} castShadow>
-        <boxGeometry args={[0.13, 0.12, 0.13]} />
-        <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.55} />
+      <mesh position={[0.39, 0.33, 0.31]} rotation={[0.65, 0, 0.12]} castShadow>
+        <sphereGeometry args={[0.085, 10, 8]} />
+        <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.56} />
       </mesh>
-
-      {/* Neck */}
-      <mesh position={[0, 0.98, 0]} castShadow>
-        <boxGeometry args={[0.18, 0.12, 0.18]} />
-        <meshStandardMaterial color={PALETTE.taupe} roughness={0.7} />
+      <mesh position={[0, 0.98, 0]}>
+        <cylinderGeometry args={[0.12, 0.14, 0.18, 12]} />
+        <meshStandardMaterial color={PALETTE.taupe} roughness={0.68} />
       </mesh>
 
-      {/* Head — wider, deeper face for gravitas. */}
       <group ref={headRef}>
-        <mesh position={[0, 1.28, 0]} castShadow>
-          <boxGeometry args={[0.42, 0.44, 0.42]} />
-          <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.55} />
+        <mesh position={[0, 1.28, 0.02]} scale={[1.02, 1.04, 0.94]} castShadow receiveShadow>
+          <sphereGeometry args={[0.31, 18, 14]} />
+          <meshStandardMaterial color={PALETTE.creamWarm} roughness={0.54} />
         </mesh>
-        {/* Sugar-wig wedge — back hair bump + crown */}
-        <mesh position={[0, 1.31, -0.18]} castShadow>
-          <sphereGeometry args={[0.26, 12, 8]} />
-          <meshStandardMaterial color={PALETTE.cream} roughness={0.5} />
+        {/* Hair and powdered side curls make the Judge immediately distinct. */}
+        <mesh position={[0, 1.49, -0.02]} scale={[1.1, 0.5, 0.9]} castShadow>
+          <sphereGeometry args={[0.28, 16, 10]} />
+          <meshStandardMaterial color={PALETTE.cream} roughness={0.42} />
         </mesh>
-        {/* Crown crest */}
-        <mesh position={[0, 1.55, 0]} rotation-z={0} castShadow>
-          <coneGeometry args={[0.18, 0.18, 6]} />
-          <meshStandardMaterial color={PALETTE.cream} roughness={0.5} />
+        {[-0.24, 0.24].map((x) => (
+          <mesh key={x} position={[x, 1.35, 0.02]} castShadow>
+            <sphereGeometry args={[0.105, 10, 8]} />
+            <meshStandardMaterial color={PALETTE.cream} roughness={0.42} />
+          </mesh>
+        ))}
+        <mesh position={[-0.11, 1.3, 0.28]}>
+          <sphereGeometry args={[0.05, 10, 8]} />
+          <meshStandardMaterial color={PALETTE.cream} roughness={0.28} />
         </mesh>
-        {/* Eye ridges */}
-        <mesh position={[-0.085, 1.32, 0.215]}>
-          <boxGeometry args={[0.07, 0.05, 0.02]} />
+        <mesh position={[0.11, 1.3, 0.28]}>
+          <sphereGeometry args={[0.05, 10, 8]} />
+          <meshStandardMaterial color={PALETTE.cream} roughness={0.28} />
+        </mesh>
+        <mesh position={[-0.11, 1.3, 0.31]}>
+          <sphereGeometry args={[0.018, 8, 6]} />
           <meshStandardMaterial color={PALETTE.walnutDeep} />
         </mesh>
-        <mesh position={[0.085, 1.32, 0.215]}>
-          <boxGeometry args={[0.07, 0.05, 0.02]} />
+        <mesh position={[0.11, 1.3, 0.31]}>
+          <sphereGeometry args={[0.018, 8, 6]} />
           <meshStandardMaterial color={PALETTE.walnutDeep} />
         </mesh>
-        {/* Brows — stern (angled down toward center) */}
-        <mesh ref={leftBrowRef} position={[-0.085, 1.39, 0.215]} rotation-z={-0.1}>
-          <boxGeometry args={[0.1, 0.022, 0.022]} />
+        <mesh ref={leftBrowRef} position={[-0.11, 1.39, 0.3]} rotation-z={-0.16}>
+          <capsuleGeometry args={[0.016, 0.09, 4, 8]} />
           <meshStandardMaterial color={PALETTE.walnutDeep} />
         </mesh>
-        <mesh ref={rightBrowRef} position={[0.085, 1.39, 0.215]} rotation-z={0.1}>
-          <boxGeometry args={[0.1, 0.022, 0.022]} />
+        <mesh ref={rightBrowRef} position={[0.11, 1.39, 0.3]} rotation-z={0.16}>
+          <capsuleGeometry args={[0.016, 0.09, 4, 8]} />
           <meshStandardMaterial color={PALETTE.walnutDeep} />
+        </mesh>
+        <mesh position={[0, 1.22, 0.285]} rotation-x={-0.18}>
+          <coneGeometry args={[0.04, 0.12, 6]} />
+          <meshStandardMaterial color={PALETTE.taupeMid} roughness={0.6} />
         </mesh>
       </group>
-
-      {/* Mouth — narrower, stern */}
-      <mesh ref={mouthRef} position={[0, 1.18, 0.215]}>
-        <boxGeometry args={[0.14, 0.025, 0.02]} />
+      <mesh ref={mouthRef} position={[0, 1.17, 0.3]} scale={[1, 0.5, 0.5]}>
+        <boxGeometry args={[0.15, 0.028, 0.022]} />
         <meshStandardMaterial color={PALETTE.walnutDeep} />
       </mesh>
 
-      {/* Lower body / legs — the judge now visibly sits on the throne.
-          Robe skirt hangs from the torso bottom down to the platform top
-          (local y ≈ -0.46) so the legs read as physically present. Two
-          honey shoes peek out at the front so the feet anchor the pose. */}
-      <mesh position={[0, -0.09, 0.04]} castShadow receiveShadow>
-        <boxGeometry args={[0.74, 0.73, 0.38]} />
-        <meshStandardMaterial
-          color={PALETTE.honeyDeep}
-          roughness={0.78}
-          metalness={0.02}
-        />
+      {/* Visible lower robe and shoes anchor the seated pose on the platform. */}
+      <mesh position={[0, -0.1, 0.04]} scale={[1.02, 1, 0.7]} castShadow receiveShadow>
+        <sphereGeometry args={[0.38, 14, 10]} />
+        <meshStandardMaterial color={PALETTE.honeyDeep} roughness={0.76} />
       </mesh>
-      {/* Front drape — slightly forward, lighter tone, suggests the robe
-          folds falling over the knees. */}
-      <mesh position={[0, -0.08, 0.22]} rotation-x={0.04}>
-        <boxGeometry args={[0.58, 0.66, 0.04]} />
-        <meshStandardMaterial
-          color={PALETTE.honey}
-          roughness={0.7}
-        />
+      <mesh position={[0, -0.12, 0.27]} rotation-x={0.05}>
+        <boxGeometry args={[0.64, 0.64, 0.045]} />
+        <meshStandardMaterial color={PALETTE.honey} roughness={0.68} />
       </mesh>
-      {/* Two feet peeking out beneath the robe skirt, anchored on the
-          platform top. */}
-      <mesh position={[-0.16, -0.43, 0.16]} castShadow>
-        <boxGeometry args={[0.18, 0.07, 0.26]} />
-        <meshStandardMaterial
-          color={PALETTE.walnutShadow}
-          roughness={0.55}
-          metalness={0.15}
-        />
-      </mesh>
-      <mesh position={[0.16, -0.43, 0.16]} castShadow>
-        <boxGeometry args={[0.18, 0.07, 0.26]} />
-        <meshStandardMaterial
-          color={PALETTE.walnutShadow}
-          roughness={0.55}
-          metalness={0.15}
-        />
-      </mesh>
+      {[-0.18, 0.18].map((x) => (
+        <mesh key={x} position={[x, -0.44, 0.2]} castShadow>
+          <capsuleGeometry args={[0.09, 0.18, 5, 8]} />
+          <meshStandardMaterial color={PALETTE.walnutShadow} roughness={0.45} metalness={0.2} />
+        </mesh>
+      ))}
     </group>
   );
 }

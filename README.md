@@ -48,6 +48,7 @@ printed or committed. Add a second provider, or reuse one for both sides.
 - `packages/ai/` — model factory + safe errors · `packages/types/` — wire types
 - `TODO.md` — backlog and MVP definition of done
 - `docs/architecture.md` — workspaces, layers, data flow, extension points
+- `docs/arena-visual-system.md` — current broadcast-stage visual system, 3D contracts, asset rules, and agent change guide
 - `docs/debate-engine.md` — match formats, stream contract, judge rubric
 - `docs/providers.md` — provider setup, endpoints, key safety
 - `docs/development.md` — checks, tests, adding a match format
@@ -64,3 +65,13 @@ API keys live server-only in the `0600` JSON store; the UI only ever sees redact
 - `tailwind` — dark cinematic theme without a component library.
 - `vitest` — fast unit tests for runner ordering, verdict parsing, redaction.
 - `tsx` — runs the `provider:add` CLI with no build step.
+
+## Current visual foundation
+
+The main surface is a full-viewport broadcast arena. The active 3D runtime is
+client-only R3F/Rapier with procedural stylized stand-ins while final GLBs are
+being commissioned. It uses walnut/cream studio architecture, terracotta/plum
+contender stations, a honey Judge platform, player-facing detailed computers,
+aligned framed signage, and a patterned broadcast floor. Read
+`docs/arena-visual-system.md` before changing the visual language or 3D layout;
+it is the source of truth for future programming-mode workstation work.

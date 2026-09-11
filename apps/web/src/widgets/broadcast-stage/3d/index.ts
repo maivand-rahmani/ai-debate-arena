@@ -22,7 +22,7 @@ export {
 } from "./webgl-capabilities";
 export { useWebGLSupport } from "./use-webgl-support";
 // Pure-data exports stay importable from server/test code paths.
-export { PALETTE, SIGNAGE_TEXT, type PaletteKey } from "./colors";
+export { PALETTE } from "./colors";
 export {
   ARENA_LAYOUT,
   PHYSICS_CONFIG,
@@ -40,6 +40,25 @@ export {
   type LightKey,
 } from "./scene-layout";
 export { deriveSceneSignal, type SceneSignal } from "./scene-signal";
+export {
+  ARENA_ASSETS,
+  ARENA_ASSET_BASE_PATH,
+  ARENA_ASSET_FALLBACK_CATEGORIES,
+  ARENA_ASSET_IDS,
+  ARENA_CHARACTER_ANCHOR_NAMES,
+  ARENA_CHARACTER_ASSET_IDS,
+  getArenaAssetFallbackCategory,
+  getArenaAssetRequiredAnchors,
+  getArenaAssetSpec,
+  normalizeArenaAssetTransform,
+  type ArenaAssetFallbackCategory,
+  type ArenaAssetId,
+  type ArenaAssetSpec,
+  type ArenaAssetTransform,
+  type ArenaCharacterAnchorName,
+  type ArenaCharacterAssetId,
+  type NormalizedArenaAssetTransform,
+} from "./arena-assets";
 export {
   CAMERA_PRESETS,
   presetForMode,

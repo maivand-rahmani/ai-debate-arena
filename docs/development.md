@@ -22,6 +22,35 @@ npm -w @arena/debate-engine run test # engine suite only
 npm -w @arena/ai run typecheck       # single-package check
 ```
 
+## Latest verification
+
+The current Quick format work was verified on 2026-09-11: 435 web tests and
+110 debate-engine tests pass; the touched workspace typechecks and production
+Next build pass; and a live smoke match generated and displayed all six Quick
+turns. The remaining F4-43 check is provider-backed persistence from the
+user's own terminal, because the Codex sandbox cannot write to
+`C:\Users\PC\.ai-debate-arena`.
+
+## 3D visual changes
+
+Read [`arena-visual-system.md`](arena-visual-system.md) before changing the
+broadcast stage. The active scene is procedural and client-only until final
+GLBs arrive; the GLB manifest/loader is an extension boundary, not permission
+to add missing-file requests to the default runtime. Keep screen glass facing
+the seated players, keep workstation cables and props attached to the layout,
+and keep visual meshes separate from Rapier colliders. Any change to seating,
+monitor distance, banner framing, floor geometry, camera framing, or lights
+must update the focused 3D tests and receive a live desktop preview.
+
+Focused checks:
+
+```bash
+npm -w @arena/web run test -- src/widgets/broadcast-stage/3d
+npm -w @arena/web run typecheck
+npm -w @arena/web run lint -- src/widgets/broadcast-stage/3d
+npm -w @arena/web run build
+```
+
 ## Tests (33 files, `npm test` runs every workspace suite, node env)
 
 | File                                                        | Covers                                              |

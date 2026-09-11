@@ -78,7 +78,7 @@ network or disk:
 
 - `{"type":"phase","phase":"quick-a-opening","side":"A"}`
 - `{"type":"token","side":"A","text":"…"}`
-- `{"type":"turn","turn":{"id":"…","side":"A","phase":"OPENING_A","content":"…","model":"…","createdAt":"…"}}`
+- `{"type":"turn","turn":{"id":"quick-a-opening","side":"A","phase":"OPENING_A","content":"…","model":"…","createdAt":"…"}}` (legacy `phase` is retained for compatibility; `id` is the stable format-owned turn key)
 - `{"type":"judge-start"}`
 - `{"type":"verdict","verdict":{…DebateVerdict…}}`
 - `{"type":"error","message":"…"}`

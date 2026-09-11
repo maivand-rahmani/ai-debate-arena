@@ -45,9 +45,10 @@ interface ArenaSceneProps {
 }
 
 export function ArenaScene({ signal }: ArenaSceneProps) {
+  const { color, near, far } = ARENA_LAYOUT.fog;
   return (
     <>
-      <fog attach="fog" args={[PALETTE.ink, 12, 28]} />
+      <fog attach="fog" args={[color, near, far]} />
       <color attach="background" args={[PALETTE.inkDim]} />
 
       <Suspense fallback={null}>
@@ -126,13 +127,13 @@ function ArenaCharacterAssembly({ signal }: CharacterSignal) {
     <>
       <ArenaDesk layout={ARENA_LAYOUT.desks.A}>
         <ArenaChair
-          position={[chairA.seatPosition[0], chairA.seatPosition[1], chairA.seatPosition[2]]}
+          position={[0, chairA.seatPosition[1], chairA.seatPosition[2] - ARENA_LAYOUT.desks.A.position[2]]}
           backRest={[chairA.backRest[0], chairA.backRest[1], chairA.backRest[2]]}
         />
       </ArenaDesk>
       <ArenaDesk layout={ARENA_LAYOUT.desks.B}>
         <ArenaChair
-          position={[chairB.seatPosition[0], chairB.seatPosition[1], chairB.seatPosition[2]]}
+          position={[0, chairB.seatPosition[1], chairB.seatPosition[2] - ARENA_LAYOUT.desks.B.position[2]]}
           backRest={[chairB.backRest[0], chairB.backRest[1], chairB.backRest[2]]}
         />
       </ArenaDesk>

@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useLayoutEffect } from "react";
 import { Canvas, useFrame, type RootState } from "@react-three/fiber";
+import * as THREE from "three";
 import { ArenaScene } from "./arena-scene";
 import { ARENA_LAYOUT } from "./scene-layout";
 import type { SceneSignal } from "./scene-signal";
@@ -81,10 +82,15 @@ export default function ArenaCanvasClient({ signal, onFirstFrame }: ArenaCanvasC
       aria-label="3D debate arena"
       data-testid="arena-canvas"
     >
-<Canvas
+      <Canvas
         dpr={[1, 1.5]}
         shadows
-        gl={{ powerPreference: "high-performance", antialias: true }}
+        gl={{
+          powerPreference: "high-performance",
+          antialias: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.08,
+        }}
         camera={{
           position: [initialPosition[0], initialPosition[1], initialPosition[2]],
           fov,

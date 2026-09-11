@@ -114,9 +114,16 @@ describe("ARENA_LAYOUT", () => {
     // Screen sits above the desk top — never below it.
     expect(monA.screenPosition[1]).toBeGreaterThan(deskTopY);
     expect(monB.screenPosition[1]).toBeGreaterThan(deskTopY);
-    // Screens face the talent (sign of rotation Y is mirrored per side).
-    expect(monA.screenRotationY).toBeLessThan(0);
-    expect(monB.screenRotationY).toBeGreaterThan(0);
+    // The local +Z glass normal is rotated around to negative Z, toward the
+    // seated talent rather than toward the spectator camera.
+    expect(Math.abs(monA.screenRotationY)).toBeGreaterThan(Math.PI / 2);
+    expect(Math.abs(monB.screenRotationY)).toBeGreaterThan(Math.PI / 2);
+    expect(monA.screenRotationY).toBeCloseTo(Math.PI + Math.PI / 14, 5);
+    expect(monB.screenRotationY).toBeCloseTo(Math.PI - Math.PI / 14, 5);
+    // Leave a deliberate working distance between the contender and the
+    // display so it reads as equipment on the desk, not a face shield.
+    expect(monA.screenPosition[2] - ARENA_LAYOUT.characters.A.position[2]).toBeGreaterThan(0.8);
+    expect(monB.screenPosition[2] - ARENA_LAYOUT.characters.B.position[2]).toBeGreaterThan(0.8);
   });
 
   it("places the judge's throne on the platform, behind the character", () => {

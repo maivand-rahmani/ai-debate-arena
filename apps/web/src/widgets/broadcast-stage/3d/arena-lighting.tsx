@@ -153,13 +153,13 @@ export function ArenaLighting({
         ref={keyRef}
         intensity={LIGHTING_DEFAULTS.key}
         color={LIGHTING_DEFAULTS.keyColor}
-        position={[5, 8, 7]}
+        position={[4, 8.5, 6]}
         castShadow
         shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-10}
-        shadow-camera-right={10}
-        shadow-camera-top={10}
-        shadow-camera-bottom={-10}
+        shadow-camera-left={-11}
+        shadow-camera-right={11}
+        shadow-camera-top={11}
+        shadow-camera-bottom={-8}
         shadow-camera-near={1}
         shadow-camera-far={30}
         shadow-bias={-0.0008}
@@ -170,7 +170,7 @@ export function ArenaLighting({
         ref={spotARef}
         intensity={LIGHTING_DEFAULTS.spotA}
         color={PALETTE.terracottaLight}
-        position={[ARENA_LAYOUT.desks.A.position[0], 5, ARENA_LAYOUT.desks.A.position[2] + 4]}
+        position={[ARENA_LAYOUT.desks.A.position[0] - 1.2, 5.8, ARENA_LAYOUT.desks.A.position[2] + 4.4]}
         target-position={[
           ARENA_LAYOUT.desks.A.position[0],
           ARENA_LAYOUT.desks.A.position[1],
@@ -187,7 +187,7 @@ export function ArenaLighting({
         ref={spotBRef}
         intensity={LIGHTING_DEFAULTS.spotB}
         color={PALETTE.plumLight}
-        position={[ARENA_LAYOUT.desks.B.position[0], 5, ARENA_LAYOUT.desks.B.position[2] + 4]}
+        position={[ARENA_LAYOUT.desks.B.position[0] + 1.2, 5.8, ARENA_LAYOUT.desks.B.position[2] + 4.4]}
         target-position={[
           ARENA_LAYOUT.desks.B.position[0],
           ARENA_LAYOUT.desks.B.position[1],
@@ -204,7 +204,7 @@ export function ArenaLighting({
         ref={spotJudgeRef}
         intensity={LIGHTING_DEFAULTS.spotJudge}
         color={PALETTE.honeyLight}
-        position={[0, 6, 1]}
+        position={[0, 6.8, 0.5]}
         target-position={[
           ARENA_LAYOUT.judge.platformPosition[0],
           ARENA_LAYOUT.judge.platformPosition[1] + ARENA_LAYOUT.judge.platformSize[1] / 2 + 1.5,
