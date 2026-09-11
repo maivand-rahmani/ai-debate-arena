@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 import { deleteProvider, updateProvider } from "@/shared/config/provider-store";
+import { LockTimeoutError } from "@/shared/config/record-lock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +31,9 @@ export async function PUT(request: Request, context: ProviderRouteContext): Prom
     if (error instanceof ZodError) {
       return Response.json({ error: "Invalid provider configuration", issues: toIssues(error) }, { status: 400 });
     }
+    if (error instanceof LockTimeoutError) {
+      return Response.json({ error: "Another provider operation is in progress" }, { status: 409 });
+    }
     throw error;
   }
   if (!updated) {
@@ -40,7 +44,15 @@ export async function PUT(request: Request, context: ProviderRouteContext): Prom
 
 export async function DELETE(_request: Request, context: ProviderRouteContext): Promise<Response> {
   const { id } = await context.params;
-  const existed = await deleteProvider(id);
+  let existed: boolean;
+  try {
+    existed = await deleteProvider(id);
+  } catch (error) {
+    if (error instanceof LockTimeoutError) {
+      return Response.json({ error: "Another provider operation is in progress" }, { status: 409 });
+    }
+    throw error;
+  }
   if (!existed) {
     return Response.json({ error: "Provider not found" }, { status: 404 });
   }

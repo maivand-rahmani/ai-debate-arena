@@ -327,3 +327,46 @@ describe("POST /api/providers/[id]/test", () => {
     expect(mock.requestCount).toBe(0);
   });
 });
+
+describe("concurrent provider-store mutations", () => {
+  it("serializes concurrent creates so no mutation is lost and nothing leaks", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const bodies = Array.from({ length: 6 }, (_, index) => ({
+        id: `conc-${index}`,
+        name: `Concurrent ${index}`,
+        baseUrl: mock.baseUrl,
+        model: "mock-model",
+        api: "chat",
+        apiKey: `sk-concurrent-secret-${index}-abcdefgh`,
+      }));
+
+      // Without the store lock these read-modify-writes would interleave:
+      // each would read the same stale snapshot and drop the others' writes.
+      const results = await Promise.all(
+        bodies.map(async (body) => {
+          const res = await createProvider(jsonRequest("http://localhost/api/providers", "POST", body));
+          return { status: res.status, raw: await res.text() };
+        }),
+      );
+      for (const [index, result] of results.entries()) {
+        expect(result.status).toBe(200);
+        expect(result.raw).not.toContain(bodies[index]!.apiKey);
+        expect(result.raw).not.toContain('"apiKey"');
+      }
+
+      // Every concurrent mutation landed in the store: none was lost.
+      const listed = (await (await listProviders()).json()) as { providers: Array<{ id: string }> };
+      expect(listed.providers.map((provider) => provider.id).sort()).toEqual(bodies.map((body) => body.id).sort());
+
+      const logged = [...warnSpy.mock.calls, ...errorSpy.mock.calls]
+        .map((entry) => entry.map(String).join(" "))
+        .join("\n");
+      expect(logged).not.toMatch(/sk-concurrent-secret/);
+    } finally {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+});

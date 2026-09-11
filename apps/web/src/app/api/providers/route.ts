@@ -1,4 +1,5 @@
 import { addProvider, listProviders, providerConfigSchema, redactProviderConfig } from "@/shared/config/provider-store";
+import { LockTimeoutError } from "@/shared/config/record-lock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,14 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.success) {
     return Response.json({ error: "Invalid provider configuration", issues: toIssues(parsed.error) }, { status: 400 });
   }
-  const provider = await addProvider(parsed.data);
+  let provider;
+  try {
+    provider = await addProvider(parsed.data);
+  } catch (error) {
+    if (error instanceof LockTimeoutError) {
+      return Response.json({ error: "Another provider operation is in progress" }, { status: 409 });
+    }
+    throw error;
+  }
   return Response.json(redactProviderConfig(provider));
 }

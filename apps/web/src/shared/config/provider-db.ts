@@ -1,9 +1,10 @@
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { generateText } from "ai";
 import { buildAiModel, toSafeProviderError, type SafeProviderErrorCode } from "@arena/ai";
+import { withRecordLock } from "./record-lock";
 import { providerStoreSchema, providerUpdateSchema, type ProviderConfig, type ProviderStore, redactProviderConfig, validateProviderConfig, type RedactedProviderConfig } from "./provider";
 
 export function providerStorePath(): string {
@@ -22,18 +23,43 @@ async function readStore(): Promise<ProviderStore> {
 async function writeStore(store: ProviderStore): Promise<void> {
   const path = providerStorePath();
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  const temporaryPath = `${path}.${process.pid}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 });
-  await chmod(temporaryPath, 0o600);
-  await rename(temporaryPath, path);
-  await chmod(path, 0o600);
+  // Unique temp filename per write (same convention as the match store):
+  // concurrent writers — same process or cross-process — can never collide on
+  // one temp path, so a partial write can never be renamed onto the live
+  // store or clobber another writer's temp file.
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 });
+    await chmod(temporaryPath, 0o600);
+    await rename(temporaryPath, path);
+    await chmod(path, 0o600);
+  } catch (error) {
+    // Partial-write safety: a failed write removes its temp file (never left
+    // behind to accumulate secret material on disk) and the previous store
+    // file stays intact and readable.
+    await unlink(temporaryPath).catch(() => {});
+    throw error;
+  }
+}
+
+/**
+ * Runs a read-modify-write on the provider store under the same exclusive
+ * advisory lock primitive the match store uses (`<store>.lock`), so
+ * concurrent create/update/delete operations serialize instead of losing
+ * updates (last full-store write wins only because reads and writes are
+ * serialized — without the lock, concurrent mutations each read the same
+ * stale snapshot and drop each other's changes).
+ */
+async function mutateStore<T>(fn: (store: ProviderStore) => Promise<T>): Promise<T> {
+  return withRecordLock(providerStorePath(), async () => fn(await readStore()));
 }
 
 export async function addProvider(input: unknown): Promise<ProviderConfig> {
   const provider = validateProviderConfig(input);
-  const store = await readStore();
-  await writeStore({ providers: [...store.providers.filter(({ id }) => id !== provider.id), provider] });
-  return provider;
+  return mutateStore(async (store) => {
+    await writeStore({ providers: [...store.providers.filter(({ id }) => id !== provider.id), provider] });
+    return provider;
+  });
 }
 
 export async function getProvider(id: string): Promise<ProviderConfig | undefined> {
@@ -52,27 +78,29 @@ export async function listProviders(): Promise<RedactedProviderConfig[]> {
  */
 export async function updateProvider(id: string, partial: unknown): Promise<RedactedProviderConfig | undefined> {
   const patch = providerUpdateSchema.parse(partial);
-  const store = await readStore();
-  const existing = store.providers.find((provider) => provider.id === id);
-  if (!existing) return undefined;
-  const { apiKey: patchKey, ...rest } = patch;
-  const definedPatch = Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined));
-  const next = validateProviderConfig({
-    ...existing,
-    ...definedPatch,
-    apiKey: patchKey === undefined || patchKey === "" ? existing.apiKey : patchKey,
-    id,
+  return mutateStore(async (store) => {
+    const existing = store.providers.find((provider) => provider.id === id);
+    if (!existing) return undefined;
+    const { apiKey: patchKey, ...rest } = patch;
+    const definedPatch = Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined));
+    const next = validateProviderConfig({
+      ...existing,
+      ...definedPatch,
+      apiKey: patchKey === undefined || patchKey === "" ? existing.apiKey : patchKey,
+      id,
+    });
+    await writeStore({ providers: store.providers.map((provider) => (provider.id === id ? next : provider)) });
+    return redactProviderConfig(next);
   });
-  await writeStore({ providers: store.providers.map((provider) => (provider.id === id ? next : provider)) });
-  return redactProviderConfig(next);
 }
 
 /** Deletes a stored provider. Returns whether a provider with `id` existed. */
 export async function deleteProvider(id: string): Promise<boolean> {
-  const store = await readStore();
-  if (!store.providers.some((provider) => provider.id === id)) return false;
-  await writeStore({ providers: store.providers.filter((provider) => provider.id !== id) });
-  return true;
+  return mutateStore(async (store) => {
+    if (!store.providers.some((provider) => provider.id === id)) return false;
+    await writeStore({ providers: store.providers.filter((provider) => provider.id !== id) });
+    return true;
+  });
 }
 
 export type ProviderTestResult =

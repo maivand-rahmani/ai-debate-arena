@@ -12,6 +12,7 @@ import { webCallModel } from "@/features/run-debate/server/web-adapter";
 import { toSafeErrorMessage } from "@arena/ai";
 import { getProvider } from "@/shared/config/provider-store";
 import { loadMatchRecord, matchRecordPath, saveMatchRecord } from "@/shared/config/match-store";
+import { withRecordLock } from "@/shared/config/record-lock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,24 @@ export async function POST(request: Request, context: RejudgeRouteContext): Prom
   } catch {
     return Response.json({ error: "Match not found" }, { status: 404 });
   }
+
+  // Hardening (P0-5): the whole re-judge read-modify-write runs under the
+  // same per-record lock as challenges, so a concurrent re-judge/challenge
+  // cannot interleave writes and lose updates. Challenge history is carried
+  // through untouched via the record spread below.
+  try {
+    return await withRecordLock(matchRecordPath(id), async () => {
+      return await rejudgeLocked(request, id);
+    });
+  } catch (error) {
+    if (error instanceof Error && /Another operation is in progress/.test(error.message)) {
+      return Response.json({ error: "Another match operation is in progress" }, { status: 409 });
+    }
+    throw error;
+  }
+}
+
+async function rejudgeLocked(request: Request, id: string): Promise<Response> {
   const record = await loadMatchRecord(id);
   if (!record) {
     return Response.json({ error: "Match not found" }, { status: 404 });
@@ -60,6 +79,9 @@ export async function POST(request: Request, context: RejudgeRouteContext): Prom
         providerId: judgeRef.providerId,
         model: judgeRef.model,
         maxOutputTokens: record.policy.judgeMaxOutputTokens,
+        // F10-06: re-judges see the same stored evidence the original run
+        // had. Legacy records without evidence stay valid (undefined).
+        evidence: record.evidence ?? undefined,
       },
       { callModel: webCallModel, abortSignal: signal, sessionKey: sessionKeyForMatchSlot(id, "judge") },
     );

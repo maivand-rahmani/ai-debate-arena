@@ -5,6 +5,7 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "npm -w @arena/web run dev",
+    "start": "npm -w @arena/web run start",
     "build": "npm -w @arena/web run build",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
