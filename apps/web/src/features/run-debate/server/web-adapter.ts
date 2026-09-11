@@ -66,9 +66,8 @@ export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult
       }
       return { text: JSON.stringify(structuredOutput), chunks: [], usage: { ...total } };
     } catch (error) {
-      // Some OpenAI-compatible Responses gateways resolve non-streaming calls
-      // with empty text while their streaming endpoint works normally. Use the
-      // proven streaming transport for the plain-JSON fallback.
+      // Start with a schema-free streaming request. This is compatible with
+      // Responses-only models that cannot accept `Output.object`.
       console.warn("[arena:judge] structured output unavailable; using streaming JSON fallback", {
         providerId: args.providerId,
         modelId: args.modelId,
@@ -82,7 +81,6 @@ export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult
           `concrete integer scores 0-100, no markdown fences, no prose.`,
         maxOutputTokens: args.maxOutputTokens,
         abortSignal: args.abortSignal,
-        temperature: 0,
       });
       const chunks: string[] = [];
       for await (const chunk of fallback.textStream) chunks.push(chunk);
@@ -92,7 +90,29 @@ export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult
       } catch {
         // Usage is optional and must never turn a valid judge result into an error.
       }
-      return { text, chunks: [], usage: { ...total } };
+      if (text.trim()) return { text, chunks: [], usage: { ...total } };
+
+      // Some Responses implementations do the inverse: their plain stream
+      // completes with no text while the ordinary response endpoint returns
+      // it. Try that transport before declaring the judge output invalid.
+      console.warn("[arena:judge] streaming JSON fallback was empty; using plain Responses fallback", {
+        providerId: args.providerId,
+        modelId: args.modelId,
+      });
+      const completed = await generateText({
+        model,
+        system: args.system,
+        prompt:
+          `${args.prompt}\n\nRespond with ONLY valid JSON matching the required schema: ` +
+          `concrete integer scores 0-100, no markdown fences, no prose.`,
+        maxOutputTokens: args.maxOutputTokens,
+        abortSignal: args.abortSignal,
+      });
+      addUsage(total, toModelUsage(completed.usage));
+      if (!completed.text.trim()) {
+        throw new Error("Provider returned an empty judge response. Choose a model that supports text generation.");
+      }
+      return { text: completed.text, chunks: [], usage: { ...total } };
     }
   }
   return callAgentWithStreamingFallback(model, args);

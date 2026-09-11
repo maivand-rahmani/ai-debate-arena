@@ -9,6 +9,7 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 - `MatchFormat`/`MatchTurnSpec` make speaking order shared data across the engine, stream, reducer, captions, history, progress timeline, and broadcast stage. New modes can change their turn count and order without a project-wide phase rewrite.
 - Broadcast scene signals now expose the active turn's metadata to camera and lighting directors. Existing response framing stays intact while future directors can make precise format-aware choices.
 - Re-judging now validates against the saved match policy's turn count, so legacy four-turn records and new six-turn Quick records both remain eligible.
+- Responses-only judge models now fall back from schema output to schema-free streaming JSON, then to a plain Responses call when the stream is empty. The fallback leaves sampling defaults to the provider instead of forcing an unsupported temperature.
 
 ### v0.3.1 usability pass (2026-09-09)
 - Idle = minimal two-step hero (Start new debate / Recent matches); setup + recent matches now modal dialogs sharing one shell with the provider manager.

@@ -18,6 +18,16 @@ Use `api: "responses"` when the endpoint only serves the OpenAI Responses API
 The chat-vs-responses branching lives entirely in `@arena/ai` — callers pass
 the stored provider record through unchanged.
 
+### Responses-only judge fallback
+
+The judge first requests schema-validated output when the provider supports it.
+If a Responses-only model does not produce that form, the web adapter retries
+with a schema-free JSON instruction over streaming, then once through the
+ordinary Responses transport if the stream is empty. This keeps models that
+support ordinary response generation — but not structured schemas — usable as
+judges. The adapter does not force a temperature on that fallback; the provider
+keeps its own compatible default.
+
 ## Storage
 
 `~/.ai-debate-arena/providers.json` (override: `AI_DEBATE_ARENA_PROVIDER_FILE`).
