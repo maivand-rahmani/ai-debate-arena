@@ -116,13 +116,25 @@ re-exported from `@arena/types` where identical. Credentials and
 
 ## Next product extension
 
-Quick keeps its fixed six-turn format. Standard uses a live agent action loop
-inside `runDebate`: after both openings, contenders alternate open moves and
-decide when their case is ready for judgment. A contender may call configured
-tools, receive results, turn them into visible evidence, spend or stake
-match-local resources, and then deliver its speech. Tool and economy actions
-join the existing ordered event stream so the arena, transcript, judge, and
-later replay all observe the same match story.
+Quick keeps its fixed six-turn format. Standard is an agent-versus-agent game.
+The match orchestrator creates two lightweight, independent agent sessions and
+keeps them alive for the full match. Each session owns its selected model,
+fixed side and objective, private working context, available skills and tools,
+and match-local resources. The sessions share only public match events; neither
+agent receives the other's private context.
+
+For each open move, the orchestrator gives the active agent the current public
+state. The agent chooses its next action: use a tool, use another tool after
+seeing the result, make or challenge a claim, stake resources, speak, or signal
+readiness. Tool results return to that same session so it can adapt before
+committing its public move. This loop may contain zero or multiple tool actions;
+the orchestrator applies rules and costs but never scripts the strategy.
+
+Public actions, tool calls, results, evidence, resource changes, speeches, and
+readiness decisions join the existing ordered event stream. The arena,
+transcript, separate judge, and later replay therefore observe one coherent
+match story without exposing private chain-of-thought. Implement this as the
+smallest abstraction needed by Standard, not as a generic agent framework.
 
 Standard ends when both contenders are ready, resources force a finish, or a
 decisive challenge creates a knockout; a generous emergency ceiling only

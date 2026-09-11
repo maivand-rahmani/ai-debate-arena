@@ -5,11 +5,13 @@ Runs locally on Next.js; bring any OpenAI-compatible provider (OpenAI, OpenRoute
 npm workspaces monorepo: `@arena/web` (the Next app) + `@arena/debate-engine`, `@arena/ai`, `@arena/types` packages (see `docs/architecture.md`).
 
 Quick Mode is the current fixed six-turn debate. The next product direction is
-Standard Mode: an open-ended, resource-driven match where contenders decide
-when to continue or finish, search the web, run code, produce visible evidence,
-challenge claims, and place match-local stakes. v0.4 through v0.6 grow Standard;
-afterward it receives a dedicated UI/UX pass. Extreme is deliberately left for
-later. See `TODO.md`.
+Standard Mode: an open-ended, resource-driven agent-versus-agent match. Each
+contender persists as one independent agent for the whole match, keeps its own
+context, skills, tools, and resources, and decides how to investigate, respond,
+continue, or finish. Agents can search the web, run code, produce visible
+evidence, challenge claims, and place match-local stakes. v0.4 through v0.6
+grow Standard; afterward it receives a dedicated UI/UX pass. Extreme is
+deliberately left for later. See `TODO.md`.
 
 ## Stack
 

@@ -8,7 +8,7 @@
 
 AI Debate Arena is a game and a model-versus-model experiment.
 
-Two AI contenders should be able to argue, inspect the web, run code, use a growing set of tools, turn tool results into visible evidence, challenge each other, and risk match points on claims. A separate judge evaluates both the debate and how well each contender used evidence.
+Two AI contenders should be able to argue, inspect the web, run code, use a growing set of tools, turn tool results into visible evidence, challenge each other, and risk match points on claims. Each contender is one independent agent that persists for the whole match, not a sequence of unrelated model calls. A separate judge evaluates both the debate and how well each contender used evidence.
 
 The interesting thing on screen is not infrastructure. It is watching two capable models decide what to do, produce proof, attack each other's claims, take risks, and win or lose.
 
@@ -19,6 +19,22 @@ The interesting thing on screen is not infrastructure. It is watching two capabl
 - **Extreme** is reserved for later ideas. Do not design, document, or implement it until the owner explicitly starts that discussion.
 
 Versions describe the growth of Standard Mode; they are not additional modes.
+
+## What a player is in Standard
+
+Each player is a match-long agent driven by its selected model. The agent has a fixed side and objective, its own working context, a configurable skill and tool loadout, and its own match-local resources. Agent A and Agent B do not share private working context; they meet through the public match transcript, tool results, evidence, claims, challenges, and score changes.
+
+On every move, the active agent follows an iterative workflow:
+
+1. Observe the current public match state and the opponent's latest actions.
+2. Decide whether to investigate, use a skill, make or challenge a claim, spend resources, speak, continue, or prepare to finish.
+3. Execute zero or more tool actions and receive their results back into the same agent session.
+4. Adapt its approach from those results rather than following a prewritten tool sequence.
+5. Commit a public argument or game action, then keep its match context for its next move.
+
+The match orchestrator schedules the two agents and enforces game rules, budgets, event order, and ending conditions. It must not choose the agents' strategy for them. The judge is a separate model role that evaluates the public match record after play ends. We expose useful actions, sources, and results to the viewer; we do not expose or require private chain-of-thought.
+
+This should remain a thin product abstraction built for the playable Standard match, not a general-purpose agent platform.
 
 ## Rules for anyone working on the project
 
@@ -80,8 +96,10 @@ Standard Mode becomes playable. During a live move, each contender can decide to
 
 ### First playable slice
 
+- [ ] Introduce one lightweight, persistent agent session per contender with its model, side, objective, working context, tool loadout, and match-local resources.
 - [ ] Add a small tool registry shared by both contenders.
-- [ ] Add the agent action loop: choose a tool, receive its result, continue reasoning, then deliver the turn.
+- [ ] Add the iterative agent action loop: observe the match, choose the next action, execute zero or more tools, consume their results, adapt, and then deliver the public move.
+- [ ] Keep Agent A and Agent B independent for the whole match; neither receives the other's private working context.
 - [ ] Replace Standard's fixed turn list with the opening + open-round + closing lifecycle.
 - [ ] Let each contender return a continue/ready intent so match length emerges from play.
 - [ ] Add a generous match-local resource pool and basic action costs to guarantee a natural ending.
@@ -96,6 +114,8 @@ Standard Mode becomes playable. During a live move, each contender can decide to
 ### v0.4 release gate
 
 - [ ] In one live match, both models independently use web search and code execution.
+- [ ] Each contender demonstrably persists as one agent across moves and changes its next action in response to opponent or tool results.
+- [ ] The two agents can choose different tool sequences and strategies from the same available loadout; the orchestrator does not script those choices.
 - [ ] Two Standard matches can end after different numbers of moves because the contenders made different decisions.
 - [ ] The spectator can understand what each model tried, what it found, and how that affected its argument.
 - [ ] The judge distinguishes unsupported claims from claims backed by visible tool results.

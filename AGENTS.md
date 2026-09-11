@@ -8,6 +8,11 @@ AI Debate Arena is a game about two capable AI models competing with arguments, 
 
 - Quick Mode is the existing fixed six-turn debate and should remain stable.
 - All v0.4–v0.6 gameplay work belongs to Standard Mode.
+- In Standard, each player is one independent, match-long agent driven by the selected model. Do not implement a player as a chain of unrelated one-shot prompts.
+- Each player keeps its own side, objective, working context, tool/skill loadout, and match-local resources across moves. Private agent context is not shared with the opponent.
+- A Standard agent iterates through observe → choose action → use zero or more tools → consume results → adapt → make a public move. Tool choice and sequencing belong to the agent, not to a hard-coded script.
+- The match orchestrator schedules agents and applies game rules, budgets, event ordering, and ending conditions. It does not decide their debate strategy. The judge remains a separate adjudicator over the public match record.
+- Show public actions, tool calls, results, evidence, and game decisions without requesting or exposing private chain-of-thought.
 - Standard has variable match length driven by agent decisions, tool/action spending, stakes, and match-local resources rather than a predetermined turn count.
 - Extreme Mode is reserved. Do not invent requirements or roadmap tasks for it until the user explicitly asks.
 - Through v0.6, add only enough UI to make new Standard mechanics usable and understandable. The dedicated Standard UI/UX pass comes after the full loop works and before any Extreme work.

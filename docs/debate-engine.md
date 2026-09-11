@@ -24,6 +24,21 @@ tests. They are compatibility support, not the source of truth for new runs.
 `appendTurn` remains immutable and `attachVerdict` still produces a finished
 state; each side keeps its fixed `FOR`/`AGAINST` position.
 
+### Planned Standard agent format
+
+Standard will not be a longer fixed turn list. The runner will host two
+independent, match-long agent sessions: one for A and one for B. Each retains
+its model, side, objective, private working context, tool and skill loadout,
+and current match resources between moves.
+
+When scheduled, an agent observes the public match state and chooses its own
+next action. It may execute zero or more tools, receive each result into the
+same session, adapt, and then make a public argument or game decision. The
+runner validates and records actions, charges resources, alternates control,
+and evaluates ending rules; it does not preselect the agent's tools or strategy.
+Only public actions and results enter the shared transcript and event stream.
+The judge remains a separate role over that public record.
+
 ## Runner loop (`runDebate`, `packages/debate-engine/src/runner.ts`)
 
 Async generator with injectable `deps.callModel` (tests stub it; no network).
@@ -42,9 +57,10 @@ judge JSON emits `Judge returned invalid verdict` then `done`.
 | Standard | 3500      | 4500      | 4      | 24000           | 10              |
 | Hardcore | 5000      | 6000      | 4      | 48000           | 16              |
 
-The active Quick match has a seven-minute lifecycle bound. Standard and
-Hardcore remain disabled until each gets its own approved format and quality
-evidence.
+The active Quick match has a seven-minute lifecycle bound. The existing
+Standard and Hardcore rows are disabled legacy placeholders; the new Standard
+agent format will replace its fixed-round placeholder, while Extreme remains
+undefined until the owner explicitly starts that work.
 
 ## Prompt strategy
 
