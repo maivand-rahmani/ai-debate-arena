@@ -65,12 +65,12 @@ Exact starting resources, action costs, stake sizes, and ending thresholds must 
 
 ## Immediate cleanup before the new v0.4
 
-- [ ] Remove the rejected Windows sandbox host and its dedicated test suite.
-- [ ] Remove the post-match-only challenge/proof flow that does not serve the live game.
-- [ ] Remove redundant evidence/security schemas and test matrices.
-- [ ] Keep only reusable pieces: basic evidence identity/provenance, generic request reliability, and the HTTPS page fetcher if it can become a live agent tool.
-- [ ] Remove all false release approvals and references to the rejected v0.4 direction.
-- [ ] Confirm the existing v0.3.1 match still runs after cleanup.
+- [x] Remove the rejected Windows sandbox host and its dedicated test suite.
+- [x] Remove the post-match-only challenge/proof flow that does not serve the live game.
+- [x] Remove redundant evidence/security schemas and test matrices.
+- [x] Retain only small generic request/storage reliability improvements. Rebuild evidence and web tools lean inside the live Standard loop instead of carrying the rejected framework forward.
+- [x] Remove all false release approvals and references to the rejected v0.4 direction.
+- [x] Confirm the v0.3.1 automated baseline after cleanup: 439 tests and all workspace typechecks pass.
 
 ## v0.4 — Standard: Agentic Evidence Match
 
