@@ -18,7 +18,6 @@ ai-debate-arena/
     src/                     wire.ts (DebateSide, MatchMode),
                              match-format.ts (turn metadata/order),
                              streaming.ts (NDJSON event types)
-  infrastructure/docker/     reserved for the v0.5 worker/sandbox images
 ```
 
 | Package | npm name | Responsibility | Deps (ours) | Consumers | Forbidden imports |
@@ -115,15 +114,18 @@ partial-payload guards) plus `shared/api/matches.ts`; canonical types are
 re-exported from `@arena/types` where identical. Credentials and
 `provider-store`/`provider-db` are `server-only`.
 
-## Extension points (unimplemented)
+## Next product extension
 
-- **Credits/betting:** attach at `app` layer as a wrapper around `runDebate`
-  input/output; domain types stay untouched until then.
-- **CHALLENGE/PROOF turns:** define the turn metadata and an opt-in
-  `MatchFormat` in `packages/types/src/match-format.ts`, then provide its
-  policy and prompt rules. The runner, stream, UI timeline, captions, history,
-  and camera signal consume the descriptor automatically; only a genuinely new
-  turn role needs a presentation rule.
-- **apps/api + apps/worker:** consume `@arena/debate-engine` + `@arena/ai`
-  directly (no React/Next); DB-backed storage and docker sandbox deferred to
-  v0.4/v0.5.
+Quick keeps its fixed six-turn format. Standard uses a live agent action loop
+inside `runDebate`: after both openings, contenders alternate open moves and
+decide when their case is ready for judgment. A contender may call configured
+tools, receive results, turn them into visible evidence, spend or stake
+match-local resources, and then deliver its speech. Tool and economy actions
+join the existing ordered event stream so the arena, transcript, judge, and
+later replay all observe the same match story.
+
+Standard ends when both contenders are ready, resources force a finish, or a
+decisive challenge creates a knockout; a generous emergency ceiling only
+prevents broken infinite matches. Start with `web_search`, `fetch_url`, and
+`run_code`. Stakes and challenges are match actions built on the same event
+stream after the tool-enabled match is fun. Extreme has no architecture yet.

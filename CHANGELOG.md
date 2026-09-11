@@ -4,25 +4,12 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 
 ## [Unreleased]
 
-### Local sandbox host (2026-09-11)
-- Added `@arena/sandbox-host` (F10-19/F10-24): a narrow, fail-closed local
-  worker host that runs one allow-listed, server-owned deterministic worker
-  inside a Windows Job Object (kill-on-close, no-breakaway, active-process
-  and per-process memory caps) with a behavioral containment preflight,
-  host-owned wall-clock watchdog, output cap with kill, verified process-tree
-  termination, retried temp-dir cleanup, and host-attested cleanup receipts.
-  Non-Windows, missing FFI, or unverifiable containment reports
-  `unavailable` and spawns nothing; denial and input/limit validation happen
-  strictly before any spawn. No generic command runner, no client-controlled
-  executables/args/env/paths, no source fetching, no filesystem/network
-  capabilities. Job Objects are containment/resource governance, not a
-  filesystem or network security boundary — see
-  `docs/security/sandbox-host.md`.
-- Evidence: 36 sandbox-host tests (fail-closed paths on every platform plus
-  real Windows containment: denial-before-spawn, watchdog kill, output-cap
-  kill, malformed output, cancellation, whole-tree termination via the job
-  PID list, no orphan process/temp dir, no secret/path leakage), 297
-  engine tests, typecheck, lint, and production build green.
+### Product direction reset (2026-09-11)
+- Rejected the infrastructure-first v0.4 plan before release. The accepted
+  direction is now a playable agentic arena: live web/code tools, visible
+  evidence, claim stakes, challenges, and model comparison.
+- Replaced the large phase/checklist roadmap with a short product-first plan
+  and explicit agent rules. No v0.4 approval or release is implied.
 
 ### 3D visual foundation (2026-09-11)
 - Updated the broadcast stage to the current premium stylized game-art

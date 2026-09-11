@@ -3,7 +3,10 @@
 Tested on Node 22 + npm 11. No `.env` needed; provider secrets live in the
 `0600` JSON store, never in env files.
 
-## Checks (run all before submitting, from the repo root)
+## Checks
+
+Run focused checks while iterating. Run the full set below when a coherent
+playable milestone is ready, not after every small edit.
 
 ```bash
 npm install    # once: installs all workspaces (apps/*, packages/*)
@@ -23,35 +26,12 @@ npm -w @arena/debate-engine run test # engine suite only
 npm -w @arena/ai run typecheck       # single-package check
 ```
 
-## Local-only security assumption
+## Iteration workflow
 
-The documented dev and production startup commands bind the Next server to
-`127.0.0.1` by default (`apps/web` scripts `dev` and `start`; the root `npm
-run dev` / `npm start` delegate to them). This is a security property, not a
-convenience: the match APIs (`/api/*`) have no authentication, no CSRF
-protection, and no origin checks, so the app is only safe while reachable from
-the user's own machine. It is asserted by
-`src/shared/config/startup.test.ts`.
-
-Do not override the binding (`next dev -H 0.0.0.0`, `HOSTNAME` tricks, reverse
-proxies, or container port mappings that expose the container listener) in any
-documented or supported flow. Non-loopback deployment is **unsupported** until
-authentication, CSRF protection, and a pairing flow exist. The full analysis —
-assets, trust boundaries, prompt injection, provider SSRF/exfiltration,
-source consent/replay, sandbox capabilities, storage/locking, mitigations,
-and remaining residual risks — lives in
-[`security/v0.4-threat-model.md`](security/v0.4-threat-model.md).
-
-## Latest verification
-
-The current Quick format work was verified on 2026-09-11: 317 web tests and
-110 debate-engine tests pass; the touched workspace typechecks and production
-Next build pass; and a live smoke match generated and displayed all six Quick
-turns. Match persistence uses the normal
-`C:\Users\PC\.ai-debate-arena\matches` store and automatically falls back to
-the gitignored `.data/matches` directory when the home store is blocked. The
-remaining F4-43 check is the owner's final browser confirmation that the new
-match appears in Recents.
+Start with the user-visible flow, wire the smallest implementation through the
+runner and UI, and watch it in the browser. Add architecture only when the
+working slice proves that it is needed. `TODO.md` and the repository-level
+`AGENTS.md` are the current product and testing rules.
 
 ## 3D visual changes
 
@@ -73,7 +53,12 @@ npm -w @arena/web run lint -- src/widgets/broadcast-stage/3d
 npm -w @arena/web run build
 ```
 
-## Tests (33 files, `npm test` runs every workspace suite, node env)
+## Tests
+
+There is no test-count or coverage target. Add a small number of tests that
+protect game rules, scoring, event order, or a real regression. Do not mirror
+the same contract exhaustively across layers and do not build test matrices for
+hypothetical infrastructure.
 
 | File                                                        | Covers                                              |
 | ----------------------------------------------------------- | --------------------------------------------------- |
@@ -119,8 +104,7 @@ failing cases.
    product rules and evaluation evidence are approved.
 3. Add a role-specific prompt rule only when the existing opening/response
    instruction is not sufficient.
-4. Add runner, reducer, timeline, caption/history, and scene-signal tests.
-   They consume the descriptor rather than requiring a new switch case.
+4. Add the smallest focused runner/UI test that protects the new behavior.
 5. Update `docs/debate-engine.md`, this guide, and `TODO.md` with the format's
    order, limits, and compatibility expectations.
 

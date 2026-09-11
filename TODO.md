@@ -1,834 +1,173 @@
-# AI Debate Arena — Master TODO / Roadmap
+# AI Debate Arena — Product Roadmap
 
-> The single working backlog for AI Debate Arena from v0.1 through v0.6.
+> Current product baseline: v0.3.1.
 >
-> Status snapshot: 2026-09-11 — the v0.3 close was amended: the v0.3 closeout lane below must pass before v0.4 starts.
-> Baseline: the original PHASE 0–8 backlog and the current project context.
-
-This file is written for both the product owner and an autonomous coding agent. It is intentionally ordered: close v0.1 before starting v0.2, and do not pull a future feature into an earlier release merely because it is interesting.
-
-## How to use this file
-
-1. Read the current version, its phase dependencies, and the relevant release gate.
-2. Select the highest-priority unchecked task that is not blocked.
-3. Implement the smallest complete slice.
-4. Run the applicable tests, typecheck, lint, build, and manual check.
-5. Mark the task complete only after there is evidence in code, tests, or a documented manual verification.
-6. Keep completed tasks. If a decision changes, add a note or a replacement task; never erase history.
-7. Before starting a later version, pass the previous version's release gate.
-
-### Status and priority legend
-
-- [x] Completed in the inherited baseline. Re-verify at the release gate if the task has not been checked against the current tree.
-- [ ] Not complete.
-- [P0] Blocker or required for the current release.
-- [P1] Important for a credible release, but may follow the first working slice.
-- [P2] Useful improvement that must not block the release.
-- [P3] Future or deliberately deferred work.
-
-Task IDs are stable references for commits, agent handoffs, and release notes. Dependencies use those IDs.
-
-## Current status
-
-### Current implementation snapshot — 2026-09-11
-
-The active Quick runtime is now format-driven and committed in `be053f4` and
-`cc6b992`:
-
-- Quick is the only enabled format and has six alternating turns: A opening,
-  B opening, A response, B response, A response, B response; the judge runs
-  only after the sixth turn.
-- `packages/types/src/match-format.ts` owns ordered turn metadata. The runner,
-  stream, reducer, captions, progress UI, history, and camera signals consume
-  that metadata instead of assuming a fixed four-phase flow.
-- The viewer can read each completed speech and advance with the on-screen
-  Next response action or Escape. Model generation continues in the background;
-  the judge waits for the viewer to continue after the last speech.
-- Quick policy is six turns, 3,000 output tokens per debater, 4,000 judge
-  tokens, 18,000 judge context characters, and an 8-turn history window.
-- Judge generation has structured-output, schema-free streaming, and plain
-  Responses fallbacks. Empty provider output still becomes a clear failure;
-  the system never fabricates a verdict.
-- Camera signals now carry the active `MatchTurnSpec`, so future camera
-  choreography can use stable turn metadata rather than hard-coded phase names.
-- Repository verification passed: web 317 tests, engine 110 tests, all touched
-  workspace typechecks, and the production Next build. A live smoke match
-  generated all six Quick turns and showed the selected speech in the viewer.
-- F4-43 remains open only for final owner-local browser verification. The
-  match-store now falls back to gitignored `.data/matches` when the default
-  home directory is blocked, and the API lists both locations.
+> The previous v0.4 security/evidence roadmap was rejected by the product owner. It was not an accepted release direction and must not guide future work.
 
-The current working tree also contains separate, uncommitted designer work in
-the 3D arena files and `apps/web/next.config.ts`. Do not mix or discard those
-changes while working on the engine or documentation.
-
-The inherited baseline says that the core local arena is already assembled:
-
-- Feature-Sliced frontend structure exists.
-- The domain debate engine and state machine exist.
-- OpenAI-compatible providers, local CLI configuration, and server-side secret storage exist.
-- Streaming, the arena UI, the judge, token policy, tests, documentation stubs, and frontend/backend integration exist.
+## North star
 
-The v0.1 MVP is not considered released until the open closure tasks in PHASE 1, PHASE 2, PHASE 6, PHASE 7, and PHASE 8 are complete. The most important known closure items are safe model-factory errors, disconnect cleanup, a provider-backed or faithful integration happy path, smoke coverage, and the final release checklist.
+AI Debate Arena is a game and a model-versus-model experiment.
 
-## Product Vision
+Two AI contenders should be able to argue, inspect the web, run code, use a growing set of tools, turn tool results into visible evidence, challenge each other, and risk match points on claims. A separate judge evaluates both the debate and how well each contender used evidence.
 
-AI Debate Arena is a local-first arena where two configurable AI agents argue a topic, respond to one another under bounded rules, and receive a structured evaluation from a separate judge agent.
+The interesting thing on screen is not infrastructure. It is watching two capable models decide what to do, produce proof, attack each other's claims, take risks, and win or lose.
 
-The product should make an AI debate:
+## The three modes
 
-- observable in real time rather than a blank waiting screen;
-- understandable, with visible positions, rounds, criteria, and reasoning;
-- reproducible, with the exact configuration and transcript preserved;
-- extensible, so challenges, evidence, sandbox checks, tournaments, and replays can be added without rewriting the core engine;
-- private and provider-neutral, with the user's computer acting as the application server and support for OpenAI-compatible endpoints.
+- **Quick** is the current six-turn debate. Keep it fast, predictable, and simple. New agentic mechanics must not be forced into Quick.
+- **Standard** is the product direction for v0.4 through v0.6. Web search, code execution, skills, evidence, stakes, live challenges, variable match length, replay, and model comparison all belong here.
+- **Extreme** is reserved for later ideas. Do not design, document, or implement it until the owner explicitly starts that discussion.
 
-The product is not just a chat screen. The central product object is a bounded, inspectable match:
+Versions describe the growth of Standard Mode; they are not additional modes.
 
-Topic + rules + two agent configurations → ordered debate events → transcript → structured verdict → optional evidence, credits, replay, or tournament records.
+## Rules for anyone working on the project
 
-## Version Strategy
+1. Build a playable vertical slice before adding architecture around it.
+2. Every work batch must end in a visible improvement to the match, setup, spectator experience, or verdict.
+3. Do not create a security, compliance, hosting, persistence, migration, or observability project unless the owner explicitly asks for it.
+4. Do not narrow agent capabilities because of hypothetical future deployment concerns. Agents choose tools dynamically from the match loadout.
+5. Add only the minimum operational checks needed to make the current feature run reliably. Product capability comes first; hardening comes later.
+6. Do not infer owner approval. A release, design, or direction is accepted only when the owner explicitly says so after seeing it.
+7. Keep documentation short and current. Delete superseded plans instead of preserving a maze of stale phases and checkboxes.
+8. Preserve Quick as the stable baseline, put new gameplay into Standard, and leave Extreme untouched.
 
-| Version | Product promise | Primary architectural focus | Release must not ship without |
-|---|---|---|---|
-| v0.1 | A complete local Quick debate can run from setup to verdict. | Stable foundation, provider boundary, state machine, streaming, arena UI. | A clean local install, safe provider configuration, streamed match, structured judge result, and tested failure paths. |
-| v0.2 | A user can trust, inspect, compare, export, and re-judge a debate. | Versioned contracts, prompt/rubric quality, evaluation fixtures, budgets, reliability, explainability. | Regression evidence that judge and engine changes do not silently degrade match quality or cost. |
-| v0.3 | The Arena becomes a memorable broadcast-style 3D/2.5D experience. | Arena scene, characters, desks, judge, lighting, emotion, camera choreography, and readable overlays. | The user approves the visual direction before implementation; a complete match remains readable and usable. |
-| v0.4 | A debate can challenge claims and attach bounded, auditable evidence or safe proof results. | Evidence/challenge domain, provenance, capability boundaries, safe execution contracts. | Backward-compatible old matches, explicit provenance, bounded resource use, and security tests. |
-| v0.5 | Repeated local competition has durable fictional credits and ratings. | Local persistence, repository ports, immutable ledger, profiles, settlement invariants. | No negative balances, idempotent settlement, migrations/backups, and clear fictional-only product language. |
-| v0.6 | Matches can be replayed, organized into tournaments, and shared as controlled public artifacts. | Append-only events, replay compatibility, tournament lifecycle, optional distribution boundary. | Offline replay, resumable tournament state, privacy controls, and a safe share/host contract. |
+## Testing policy
 
-### Version boundaries
+- There is no test-count target and no reason to maximize coverage numbers.
+- Add focused tests for important game rules, scoring, event order, and bugs likely to return.
+- A normal feature usually needs a happy-path test and only the failure cases that protect real user experience.
+- Do not generate thousands of lines of schema tests, mirrored contract tests, exhaustive security matrices, or tests for hypothetical adapters.
+- Prefer one end-to-end playable demonstration over dozens of low-value unit tests.
+- Run focused checks while iterating. Run the full suite only when a coherent milestone is ready.
 
-- v0.1 supports Quick only. Standard and Hardcore remain disabled or clearly marked Coming Soon.
-- v0.2 may enable Standard only after the policy, quality, and budget gates pass. Hardcore remains experimental until there is evidence that its cost and context behavior are acceptable.
-- v0.3 is a visual/product redesign release. It changes the Arena presentation without changing the core debate contract.
-- v0.4 adds evidence and challenge mechanics as opt-in capabilities. A normal Quick match must continue to work without them.
-- v0.5 uses fictional credits only. Real-money betting, payments, and financial accounts are out of scope through v0.6.
-- v0.6 can introduce an optional hosted or public adapter, but the local-first core must remain usable without a central service.
+## What already works and stays
 
-## Phase Map
+- Two configurable contenders and a separate judge.
+- Six-turn Quick matches with streamed responses.
+- Provider-neutral OpenAI-compatible model configuration.
+- Match history, transcript pages, export, re-judge, and verdict breakdowns.
+- The broadcast arena, characters, camera, lighting, captions, and match playback.
+- The existing match runner and ordered event stream as the base for agent actions.
 
-The original PHASE 0–8 baseline is preserved. PHASE 4 now contains the dedicated v0.3 Arena redesign. PHASE 9–12 carry the later product work as v0.2, v0.4, v0.5, and v0.6.
+## Standard match structure
 
-| Phase | Name | Version focus | Outcome | Main dependencies |
-|---|---|---|---|---|
-| 0 | Project Foundation | v0.1 | Understandable repository, tooling, domain boundaries. | None |
-| 1 | Provider System | v0.1, hardening in v0.2 | Safe, configurable OpenAI-compatible model access. | Phase 0 |
-| 2 | Debate Engine | v0.1, quality in v0.2, extensions in v0.4 | Bounded match orchestration and extensible state transitions. | Phases 0–1 |
-| 3 | Judge | v0.1, judge quality in v0.2, evidence adjudication in v0.4 | Structured and inspectable verdicts. | Phase 2 |
-| 4 | Arena UI | v0.1, v0.3 redesign, later UX | A readable arena that feels like a broadcast rather than a generic chat dashboard. | Phases 0–3 |
-| 5 | Streaming | v0.1, durable events in v0.6 | Real-time event delivery with safe cancellation. | Phases 1–2 |
-| 6 | Integration | every version | Stable contracts between UI, API, engine, storage, and future adapters. | Phases 1–5 |
-| 7 | QA | every version | Tests and acceptance evidence for each release gate. | All active phases |
-| 8 | MVP Release | v0.1 | A formally closed and documented local MVP. | Phases 0–7 |
-| 9 | Quality and Evaluation Lab | v0.2 | Trustworthy prompts, judge behavior, budgets, transcripts, and re-judging. | Phase 8 |
-| 10 | Evidence, Challenges, and Safe Execution | v0.4 | Auditable claims/evidence and bounded proof capabilities. | Phase 9 + v0.3 UI |
-| 11 | Persistence, Credits, and Ratings | v0.5 | Durable local competition with an auditable fictional economy. | Phases 9–10 |
-| 12 | Replay, Tournaments, and Distribution | v0.6 | Replayable matches, tournament lifecycle, and controlled sharing. | Phases 9–11 |
+Standard does not have a predetermined number of turns. It has a generous shared ruleset and a resource-driven ending, so different models can create genuinely different matches.
 
-### Dependency path
+1. Both contenders always receive an opening move.
+2. The match then enters alternating open rounds. On a move, a contender may research, use tools, make or challenge claims, place stakes, and deliver an argument.
+3. Each contender controls a match-local resource pool. Speeches, tool actions, and stakes create meaningful resource decisions instead of a fixed round counter.
+4. At round boundaries, each contender can signal `continue` or `ready`. The match ends naturally when both are ready. If only one is ready, another paired round happens so neither side loses the right to answer.
+5. A contender with insufficient resources is forced to finish. The opponent receives one final move before closing. A decisive stake/challenge outcome may instead create a knockout ending.
+6. A generous emergency ceiling on total actions and runtime exists only to prevent a broken match from running forever; it is not the normal game clock.
+7. When the match ends normally, both sides receive a closing moment before the judge decides.
 
-Foundation → Provider/Engine → Judge/Streaming → Integration/QA → v0.1 release → Quality Lab → Arena redesign → Evidence/Safe Execution → Persistence/Economy → Replay/Tournaments/Distribution.
+Exact starting resources, action costs, stake sizes, and ending thresholds must be tuned through real matches. Do not bury them in architecture before the loop is playable.
 
-The path is intentionally conservative. Quality comes before the visual redesign, and versioned event contracts come before evidence, economy, or public competition because those features amplify any ambiguity in the match model.
+## Immediate cleanup before the new v0.4
 
-## Detailed TODO by phase and version
+- [ ] Remove the rejected Windows sandbox host and its dedicated test suite.
+- [ ] Remove the post-match-only challenge/proof flow that does not serve the live game.
+- [ ] Remove redundant evidence/security schemas and test matrices.
+- [ ] Keep only reusable pieces: basic evidence identity/provenance, generic request reliability, and the HTTPS page fetcher if it can become a live agent tool.
+- [ ] Remove all false release approvals and references to the rejected v0.4 direction.
+- [ ] Confirm the existing v0.3.1 match still runs after cleanup.
 
-## PHASE 0 — Project Foundation
+## v0.4 — Standard: Agentic Evidence Match
 
-Milestone: a new developer or coding agent can understand the repository, run checks, and locate the domain boundaries without reverse-engineering the whole application.
+### Product promise
 
-### v0.1 baseline — inherited completed work
+Standard Mode becomes playable. During a live move, each contender can decide to use tools before delivering its argument. Tool activity and results are visible in the arena and become evidence the opponent and judge can inspect. Quick remains unchanged.
 
-- [x] [P0] F0-01 Create the Next.js + TypeScript + Tailwind application shell in src/app.
-- [x] [P0] F0-02 Establish the Feature-Sliced structure with entities, features, widgets, shared, pages, and the app layer.
-- [x] [P0] F0-03 Add clear dev, build, lint, typecheck, and test commands.
-- [x] [P0] F0-04 Define domain types for debate phases, agents, turns, configuration, and match state.
-- [x] [P0] F0-05 Implement the CREATED → OPENING_A → OPENING_B → REBUTTAL_A → REBUTTAL_B → JUDGING → FINISHED state machine with transition tests.
-- [x] [P0] F0-06 Add a centralized token-policy module with the initial agent and judge output limits of 1200 and 1000 tokens.
-- [x] [P0] F0-07 Add .gitignore, a local configuration directory, and documentation stubs.
+### First playable slice
 
-### v0.1 closure
+- [ ] Add a small tool registry shared by both contenders.
+- [ ] Add the agent action loop: choose a tool, receive its result, continue reasoning, then deliver the turn.
+- [ ] Replace Standard's fixed turn list with the opening + open-round + closing lifecycle.
+- [ ] Let each contender return a continue/ready intent so match length emerges from play.
+- [ ] Add a generous match-local resource pool and basic action costs to guarantee a natural ending.
+- [ ] Add `web_search` so a contender can find relevant sources without the user pasting URLs.
+- [ ] Add `fetch_url` so a contender can inspect a selected source.
+- [ ] Add `run_code` for useful calculations, data checks, and executable demonstrations.
+- [ ] Stream tool-start, tool-result, evidence, and failure events into the existing match UI.
+- [ ] Show compact evidence cards with source, excerpt/result, producing contender, and related claim.
+- [ ] Give the judge the transcript plus tool-produced evidence and require the verdict to reference important evidence.
+- [ ] Give both contenders the same configurable tool and time budget for a fair comparison.
 
-- [x] [P0] F0-08 Verify a clean install from a fresh checkout using the documented commands. (2026-09-04: Windows clean clone passed install/typecheck/tests/build; `npm ci` hits npm/cli#4828 for rolldown native bindings - documented workaround is `npm install`.)
-- [x] [P0] F0-09 Document the server-only/client-safe boundary and the import rules that prevent secrets from entering the client bundle. Depends on F0-02 and F1-02.
-- [ ] [P1] F0-10 Record the first architecture decision note for local-first storage, provider abstraction, and the decision not to add a database in v0.1.
+### v0.4 release gate
 
-### Later foundation work
+- [ ] In one live match, both models independently use web search and code execution.
+- [ ] Two Standard matches can end after different numbers of moves because the contenders made different decisions.
+- [ ] The spectator can understand what each model tried, what it found, and how that affected its argument.
+- [ ] The judge distinguishes unsupported claims from claims backed by visible tool results.
+- [ ] Tool failure is visible and does not destroy the whole match.
+- [ ] The owner plays or watches the complete match and explicitly approves v0.4.
 
-- [x] [P1] F0-11 v0.2 Define versioned domain-contract ownership: which layer owns MatchConfig, MatchEvent, Transcript, and Verdict.
-- [x] [P1] F0-12 v0.2 Add a lightweight schema/version compatibility policy for persisted or exported match data.
-- [ ] [P1] F0-13 v0.4 Add capability discovery so optional evidence, challenge, and sandbox features are explicit rather than inferred from UI state.
-- [ ] [P1] F0-14 v0.5 Add repository ports and migrations as a documented architectural boundary before introducing durable match and economy storage.
-- [ ] [P1] F0-15 v0.6 Document the local core versus optional hosted/distribution adapters.
+## v0.5 — Standard: Stakes and Live Challenges
 
-## PHASE 1 — Provider System
+### Product promise
 
-Milestone: the server can call a configured OpenAI-compatible model without exposing credentials, and provider failures become understandable product errors.
+Standard's resource system becomes a real game. Claims become actions: contenders can put match-local credits behind a claim, challenge an opponent, produce proof under pressure, and visibly win or lose the stake. Quick remains unchanged.
 
-### v0.1 baseline — inherited completed work
+### Playable slice
 
-- [x] [P0] F1-01 Define and validate provider configuration with provider name, base URL, API key, model ID, and redacted output.
-- [x] [P0] F1-02 Implement a server-only local provider store with restrictive file permissions.
-- [x] [P0] F1-03 Implement the interactive npm run provider:add CLI.
-- [x] [P0] F1-04 Implement the OpenAI-compatible model factory.
-- [x] [P0] F1-05 Implement GET /api/providers as a redacted provider list for the UI.
-- [x] [P1] F1-06 Support the OpenAI Responses API endpoint alongside chat completions where the configured adapter requires it.
+- [ ] Give each contender the same match-local pool of credibility points.
+- [ ] Let a contender attach a stake to a specific claim during its turn.
+- [ ] Let the opponent accept, counter, or challenge the claim.
+- [ ] On challenge, give the claimant a short tool-enabled proof phase.
+- [ ] Resolve the claim as supported, contradicted, or insufficient using the visible evidence.
+- [ ] Apply a simple deterministic settlement rule and show it clearly in the arena.
+- [ ] Let resolved stakes transfer or consume resources and create possible knockout endings.
+- [ ] Cap the stake effect on the final result so debate quality still matters.
 
-### v0.1 closure
+### v0.5 release gate
 
-- [x] [P0] F1-07 Wrap model-factory failures into safe, typed errors for authentication, invalid configuration, unreachable endpoint, timeout, unsupported model, and provider response errors. Never expose API keys or raw secret-bearing request data. Depends on F1-04.
-- [x] [P0] F1-08 Add request cancellation and a bounded timeout path that reaches the model call from the match-run lifecycle. Depends on F1-07 and F2-06.
-- [x] [P1] F1-09 Add a mock OpenAI-compatible provider for contract and happy-path tests without a real credential. Depends on F1-04.
+- [ ] A complete match contains multiple voluntary stakes and at least one live challenge.
+- [ ] The points make model confidence and bluffing interesting rather than random.
+- [ ] The viewer can trace every point change to one claim and outcome.
+- [ ] The owner playtests the mechanic and explicitly approves v0.5.
 
-### v0.2 provider hardening
+Persistent wallets, accounting systems, database migrations, and real-money mechanics are not part of this version.
 
-- [ ] [P1] F1-10 Define a small, explicit provider capability contract for streaming, structured output, cancellation, and Responses API support.
-- [ ] [P1] F1-11 Add bounded retry behavior only where retrying is safe, observable, and does not silently duplicate a turn.
-- [ ] [P1] F1-12 Add provider/model health verification with redacted diagnostics and no automatic calls on page load unless the user requests a check.
-- [ ] [P2] F1-13 Add provider management in the UI for add, edit, delete, and test; preserve CLI support as a reliable fallback.
-- [ ] [P2] F1-14 Add per-provider default generation settings while keeping the match snapshot authoritative.
+## v0.6 — Standard: Model Arena and Skill Loadouts
 
-### v0.4–v0.6 adapters
+### Product promise
 
-- [ ] [P1] F1-15 v0.4 Add an explicit user-controlled source/evidence adapter interface; do not grant arbitrary web or tool access to agents.
-- [ ] [P1] F1-16 v0.4 Add a sandbox adapter interface with capability, resource, and network policy inputs.
-- [ ] [P2] F1-17 v0.6 Add a hosted-provider adapter boundary only if public matches require it; do not couple the local engine to a remote service.
+Standard becomes a meaningful model-comparison game: different models can use rich tool loadouts, and the product shows how they reason, research, execute, manage resources, and compete. Quick remains the fast baseline; Extreme remains untouched.
 
-## PHASE 2 — Debate Engine
+### Playable slice
 
-Milestone: a match is a bounded domain process, not orchestration logic hidden inside an API route or React component.
+- [ ] Make tools easy to add as skills without changing the core match loop.
+- [ ] Add useful skill categories such as math, datasets, document analysis, repository search, and structured data inspection.
+- [ ] Add match presets and configurable skill loadouts.
+- [ ] Record model quality, evidence quality, tool success, latency, token use, and cost.
+- [ ] Add a comparison screen that explains why one model performed better.
+- [ ] Replay speeches, tool actions, evidence, stakes, and verdict moments from the match event log.
+- [ ] Add one simple tournament format only after individual matches are fun.
 
-### v0.1 baseline — inherited completed work
+### v0.6 release gate
 
-- [x] [P0] F2-01 Build prompt context with history slicing.
-- [x] [P0] F2-02 Add agent system prompts that identify the debate, topic, assigned position, rules, phase, and current round.
-- [x] [P0] F2-03 Implement state helpers such as appendTurn and attachVerdict.
-- [x] [P0] F2-04 Implement the injectable streaming debate runner.
-- [x] [P0] F2-05 Enforce round/turn caps and output-token limits from the token policy.
+- [ ] Multiple model pairs can run the same preset with comparable tools and budgets.
+- [ ] Replays preserve the interesting decisions and evidence trail.
+- [ ] The comparison view is useful for choosing models, not merely a leaderboard.
+- [ ] The owner reviews the full arena experience and explicitly approves v0.6.
 
-### v0.1 closure
+## After v0.6 — Standard UI/UX pass
 
-- [x] [P0] F2-06 Propagate client disconnect and explicit cancel into the runner, abort the active provider request, and release match resources. Depends on F1-08.
-- [x] [P0] F2-07 Guarantee terminal cleanup for success, provider failure, parse failure, cancellation, and unexpected exception.
-- [x] [P0] F2-08 Reject illegal transitions with typed errors and ensure a failed match cannot continue as if it were healthy.
-- [x] [P1] F2-09 Add a small match-run integration test that proves the complete Quick sequence and terminal cleanup using the mock provider. Depends on F1-09 and F2-06.
+Once Standard's complete game loop works, give it a dedicated usability and presentation pass before discussing Extreme.
 
-### v0.2 engine quality
+- [ ] Make the mode selector clearly explain Quick versus Standard.
+- [ ] Design a variable-length match timeline instead of pretending every match has the same rounds.
+- [ ] Make tools, evidence, remaining resources, readiness, stakes, challenges, and knockouts readable at a glance.
+- [ ] Add satisfying research, stake, challenge, proof, win, loss, and closing moments to the broadcast presentation.
+- [ ] Playtest the full Standard experience with the owner and iterate on pacing.
+- [ ] Do not begin Extreme until Standard functionality and this UI/UX pass are explicitly approved.
 
-- [x] [P0] F2-10 Extend token policy to define rounds, maximum context characters, history turns per policy, judge limits, and per-mode budgets. Keep Quick, Standard, and Hardcore as data-driven profiles.
-- [x] [P0] F2-11 Snapshot the effective MatchConfig, token policy, prompt versions, and provider/model metadata at match start. Never store the API key.
-- [x] [P1] F2-12 Introduce stable MatchEvent types for phase changes, thinking, token deltas, completed turns, errors, and verdicts.
-- [x] [P1] F2-13 Make history slicing explicit and test it against context overflow, empty history, long turns, and judge context.
-- [x] [P1] F2-14 Add a deterministic event sequence number and match ID to every server-to-client event.
-- [x] [P1] F2-15 Add a controlled re-judge operation that consumes a stored transcript without re-running Agent A or Agent B.
-- [ ] [P1] F2-16 Enable Standard only behind a feature flag after F2-10, F3-08, F7-09, and the v0.2 release gate pass.
-- [ ] [P2] F2-17 Keep Hardcore represented in policy and UI, but do not enable it until cost, context, and quality evidence justify it.
+## Later, only when explicitly requested
 
-### v0.4 extension hooks
+- Production security hardening and threat modeling.
+- Authentication, accounts, permissions, and public hosting.
+- Databases, migrations, backup/restore systems, and distributed workers.
+- Permanent wallets, complex rating economies, or real-money wagering.
+- Compliance, abuse-reporting, and enterprise administration.
 
-- [ ] [P0] F2-18 Add backward-compatible extension points for CHALLENGE, EVIDENCE, PROOF, and SANDBOX without changing the behavior of a plain Quick match.
-- [ ] [P0] F2-19 Define bounded challenge budgets, phase ownership, and termination rules before implementing challenge UI.
-- [ ] [P1] F2-20 Allow optional capability negotiation per match so evidence or sandbox phases cannot appear accidentally.
-- [ ] [P1] F2-21 Add event-version migration tests for v0.2 transcripts entering the v0.4 engine.
-
-## PHASE 3 — Judge
-
-Milestone: the judge returns a valid, inspectable verdict and the product communicates uncertainty instead of pretending that a score is objective truth.
-
-### v0.1 baseline — inherited completed work
-
-- [x] [P0] F3-01 Define the basic DebateVerdict schema and tolerant JSON parsing.
-- [x] [P0] F3-02 Include argument quality, rebuttal, consistency, and relevance criteria for both agents.
-- [x] [P0] F3-03 Implement a judge prompt with a rubric over the full transcript and strict JSON output instructions.
-- [x] [P1] F3-04 Apply lenient parsing for missing/partial criteria, derive safe defaults from scores, and emit an error event for invalid results.
-
-### v0.1 closure and validation
-
-- [x] [P0] F3-05 Validate score ranges, winner/score consistency, required fields, and draw behavior after parsing. Depends on F3-01 and F3-04.
-- [x] [P1] F3-06 Show a safe fallback state when the judge fails; never invent a winner in the UI.
-
-### v0.2 judge quality
-
-- [x] [P0] F3-07 Version the judge prompt and rubric; store the version with every verdict. Depends on F2-11.
-- [x] [P0] F3-08 Create representative golden transcripts and judge regression tests covering clear wins, close wins, draws, contradictions, irrelevant arguments, and malformed model output.
-- [ ] [P1] F3-09 Add confidence/calibration fields and a documented policy for low-confidence verdicts and abstention.
-- [ ] [P1] F3-10 Include compact supporting excerpts or turn references for each criterion so the user can inspect why a score was assigned.
-- [ ] [P1] F3-11 Separate raw judge output, parsed verdict, and user-facing explanation; never let UI parsing become the domain validator.
-- [ ] [P2] F3-12 Add optional multi-judge comparison as an experiment, not as a required v0.2 path.
-
-### v0.4 evidence adjudication
-
-- [ ] [P0] F3-13 Extend the rubric with claim-level evidence status, provenance quality, challenge outcome, and proof-result interpretation.
-- [ ] [P0] F3-14 Make the judge distinguish “not proven”, “contradicted”, and “supported”; do not represent model confidence as factual certainty.
-- [ ] [P1] F3-15 Show evidence-aware verdict explanations with citations to transcript events and evidence items.
-- [ ] [P2] F3-16 Compare evidence-aware and transcript-only judgments for evaluation fixtures.
-
-## PHASE 4 — Arena UI
-
-Milestone: the interface feels like a premium debate arena while remaining readable, responsive, and operationally useful.
-
-### v0.1 baseline — inherited completed work
-
-- [x] [P1] F4-01 Implement a dark cinematic theme, typography, and an extended visual palette.
-- [x] [P0] F4-02 Implement match creation with topic, provider/model selectors, positions, and automatic FOR/AGAINST mirroring that remains editable.
-- [x] [P0] F4-03 Show Quick, Standard, and Hardcore in the mode selector with non-Quick modes disabled or marked Coming Soon.
-- [x] [P1] F4-04 Implement the arena layout with distinct Agent A, Agent B, and Judge areas.
-- [x] [P0] F4-05 Render agent speech as visually distinct speech panels rather than a generic ChatGPT message list.
-- [x] [P1] F4-06 Add round, phase, thinking, speaking, judging, and finished indicators.
-- [x] [P1] F4-07 Implement the separate judge panel with scores, reasoning, and winner presentation.
-- [x] [P1] F4-08 Support desktop first, then tablet and mobile layouts without hiding the match outcome.
-
-### v0.1 closure
-
-- [x] [P0] F4-09 Add usable loading, validation, provider-error, judge-error, cancellation, retry, and empty states.
-- [x] [P1] F4-10 Verify that no API key, raw provider error, or secret-bearing configuration is rendered in the browser.
-- [ ] [P1] F4-11 Run a manual responsive smoke pass for match creation, active streaming, judge reveal, and failure states. Depends on F4-09.
-
-### v0.2 trust and inspection
-
-- [x] [P1] F4-12 Add a transcript/timeline view with phase and turn filters, collapsed long turns, and clear speaker identity.
-- [x] [P1] F4-13 Add a “why this verdict” view tied to rubric criteria and transcript references.
-- [x] [P1] F4-14 Add match export and re-judge actions with clear version labels.
-- [ ] [P1] F4-15 Add provider management UI only after the server-side validation and redaction flow is stable. Depends on F1-13.
-- [ ] [P2] F4-16 Add accessible reduced-motion behavior and keyboard navigation for the arena.
-
-### v0.3 Arena UI redesign — agreed concept
-
-Milestone: a match feels like a funny, cinematic sports broadcast with two AI contenders and a central Judge, while the debate text stays easy to follow.
-
-- [x] [P0] F4-17 Before writing v0.3 UI code, pause and discuss the design brief with the user: scene layout, visual style, character direction, camera shots, lighting, emotions, and implementation scope. Do not start this redesign silently. (2026-09-04: premium hybrid 3D direction approved as Option B; CSS/SVG stage skeleton lane first, WebGL lane deferred.)
-- [x] [P0] F4-18 Confirm the stylized 3D/2.5D arena direction: two contenders seated at separate desks with computers, a Judge seated between them, an arena-like set, and a sports-broadcast feeling without copying UFC branding. (2026-09-04: confirmed with R1 CSS/SVG skeleton — two desks with monitors, central Judge plinth, perspective backdrop with floor, inline-SVG geometric mascots, central round marker; future WebGL atmosphere to layer on top.)
-- [x] [P0] F4-19 Build the main scene composition with two characters, two desks/computers, the central Judge, arena backdrop, round indicator, and match status. (2026-09-04: R1 CSS/SVG skeleton landed in `src/widgets/broadcast-stage/` — backdrop+floor, two `AgentDesk`s, central `JudgePlinth`, floating `RoundMarker`, monitor tiles carrying provider/model/status. Pure `deriveStageView` projection from existing `DebateRuntimeState`; 21 focused unit tests on the state mapping. Awaiting R2 review for emotion/meme and WebGL atmosphere layer.)
-- [x] [P0] F4-20 Add state-driven lighting and a small set of planned camera changes for thinking, speaking, rebuttal, Judge speaking, and verdict. Do not build a free-roaming 3D camera. (2026-09-05: replaced by the REAL 3D slice per user clarification — `camera-presets.ts`/`camera-director.tsx` with 7 broadcast shots driven by the scene signal, `lighting-presets.ts`/`lighting-director.tsx` lerping spot/key intensities per state; spectator OrbitControls (constrained) + automatic cinematic cuts; no free-roam. Unit-tested.)
-- [x] [P0] F4-21 Keep streamed speech as a readable first-class layer over or beside the 3D scene; the visual spectacle must not hide the debate. (2026-09-05: ArenaHud teleprompter rails/round marker/verdict render as real HTML above the canvas with pointer-events layering; SSR + tests confirm markup always present. Gate C checked readability boundaries.)
-- [x] [P1] F4-22 Add simple character emotions and reactions tied to match events and phases; do not make an extra AI call only to decide an emotion. (2026-09-05: `character-poses.ts` pure mood→pose tables applied through named anchors in the character `useFrame` — deterministic, zero extra AI calls (oracle gate C grep-confirmed).)
-- [x] [P1] F4-23 Add a small curated meme-reaction library such as “Agent is cooking”, “Judge is not impressed”, and “Argument.exe stopped responding”, with mute and reduced-motion support. (2026-09-05: 7 curated reactions via `deriveReaction`, ReactionOverlay with mute toggle; reduced-motion suppresses bursts.)
-- [x] [P1] F4-24 Provide a responsive layout and a lightweight non-WebGL fallback that preserves the same match information. (2026-09-05: full-viewport canvas world; CanvasGate probe + error boundary render the complete 2D BroadcastStage when WebGL is unavailable — SSR probe shows fallback markup with zero three/rapier leakage; HUD hides itself without WebGL so the 2D stage carries all surfaces.)
-- [x] [P1] F4-25 Keep the first 3D pass lightweight: limited assets and animations, no physics, no free-roam world, and no complex character-rigging pipeline. (SUPERSEDED 2026-09-05 by explicit user direction: a REAL 3D game-like arena WITH physics and a controllable spectator camera. Implemented accordingly: pinned three/fiber/drei/rapier, detailed procedural stand-ins with a local GLB manifest/client loader boundary, no rigging — animation is ref-writes in useFrame; camera is constrained orbit, not free-roam. The "no physics" clause replaced; all other spirit kept. Current visual contracts live in `docs/arena-visual-system.md`.)
-- [x] [P0] F4-26 Review the working v0.3 Arena with the user before moving to v0.4; record the accepted direction and the remaining visual polish. (ACCEPTED 2026-09-05 via user “finish v0.3”: full-viewport arena, close player seating with computer stations, and a complete Judge chair/lower body are the accepted v0.3 direction.)
-
-NOTE (2026-09-05, 3D stack): three/@react-three/fiber 9 caps React <19.3 — fiber/drei/rapier/three must bump together when 19.3 lands.
-
-### v0.3 closeout — scope reopened 2026-09-09
-
-The 2026-09-05 v0.3 close missed product points the owner considers part of v0.3. This closeout must pass before any v0.4 (PHASE 10) work starts.
-
-- [x] [P0] V3C-01 (F1-18) OpenCode Go gateway header fix. As of 2026-09-05/06, `https://opencode.ai/zen/go/v1/*` returns `400 MissingSessionID` for inference requests without `x-opencode-session` (stable per-conversation ID) and expects a real client `User-Agent`, not the SDK default. Matches configured against an `opencode-go` provider fail end-to-end today. Requirements: every model call (chat completions, Responses API, streaming, retry paths) to a provider whose base-URL host is `opencode.ai` sends `x-opencode-session` with a value stable per match conversation (per Agent A / Agent B / Judge thread, unique per match; never one global constant — static values collapse the gateway's cache-affinity buckets); Zen pay-as-you-go routes should send the same headers (not yet enforced there). Non-opencode providers must be unaffected. Ref: https://dev.opencode.ai/docs/go. (2026-09-09: `packages/ai/src/opencode-gateway.ts` pure helper — host-exact `opencode.ai` → `x-opencode-session` + `User-Agent: ai-debate-arena/0.3.0`, inert otherwise — wired into `buildAiModel` provider options for BOTH adapters (streaming + non-streaming). Engine `sessionKeyForMatchSlot(matchId, slot)` yields `<matchId>:agent-a|agent-b|judge`, threaded via `ModelCallArgs.sessionKey`/`RunJudgeDeps.sessionKey` through the web adapter and the re-judge route (re-judge reuses the original key); connection probes use one-shot `probe-<uuid>`. 9 @arena/ai + 5 engine tests.)
-- [x] [P0] V3C-02 (F1-13 + F4-15) Provider connect in the web UI. Today the browser can only list redacted providers (`GET /api/providers`) and provisioning is CLI-only (`npm run provider:add`). Required: server-store `update`/`delete`/`test` operations, write + test API routes (responses stay redacted; on edit, an omitted API key preserves the stored one), and a settings UI for add / edit / delete / test-connection with clear failure states. CLI support remains as the documented fallback. Test calls happen only on explicit user action, never on page load (F1-12 constraint). (2026-09-09: `updateProvider`/`deleteProvider`/`testProvider` landed in the provider store (preserve-key on omitted/empty apiKey, full re-validation, 15s-bounded probe with safe typed error codes); POST /api/providers, PUT/DELETE /api/providers/[id], POST /api/providers/[id]/test added with redaction sweep tests; `features/manage-providers/` modal (list, add/edit form with "leave empty to keep current key", confirm-delete dialog, per-provider test state machine, server 400 `issues` mapped inline) reachable from the BroadcastConsole/IdleSetup provider area and the rewritten ProvidersEmptyState CTA; CLI kept as documented fallback. 14 API contract + 15 client + 19 action + render tests.)
-- [ ] [P1] V3C-03 Closeout verification: focused tests plus typecheck/lint/build, a live `opencode-go` match smoke, a manual provider-management walkthrough, TODO.md/CHANGELOG evidence, and owner sign-off. v0.4 stays blocked until V3C-01 and V3C-02 are green. (2026-09-09: automated evidence complete — merged tree 274 web + 8 ai + 108 engine tests, typecheck, lint, and production build all green. REMAINING: user live `opencode-go` Quick match + manual provider-management walkthrough + sign-off.)
-
-### v0.3.1 Usability and readability pass — owner directive 2026-09-09 (blocks v0.4)
-
-Owner feedback: the idle page shows too much at once; during a live match the speech text is hard to read while the 3D scene steals attention. The debate — the battle of models — must be the product's focal point; the 3D arena remains as atmosphere, not the star. History presentation is poor; each match deserves a real page.
-
-- [x] [P0] F4-34 Two-step idle landing: the idle Arena shows a minimal hero (title, one "Start new debate" action, recent-matches entry); setup (topic, agents, mode, advanced options) opens as a modal consistent with the ManageProvidersModal; provider management stays reachable. Draft/validation flows and the non-WebGL fallback behavior unchanged.
-- [x] [P0] F4-35 Cinematic caption readability: during a match, live speech renders as ONE bottom-center broadcast-caption surface (large ~20-24px high-contrast text on a dimmed/blurred glass panel), speaker identity and phase obvious; round/status chip stays compact; judge speech and the verdict reveal get the same treatment; the 3D scene stays visible but visually secondary. Reduced-motion and mobile supported; non-WebGL fallback keeps identical information.
-- [x] [P0] F4-36 Per-match detail page `/matches/[id]`: full transcript as a large chat-style thread with speaker identity, phases, and rounds; verdict card with criteria and scores; export and re-judge actions; blurred/dimmed static backdrop (no live 3D cost on this page); clear unknown-id error state. The history drawer becomes a simple recent-matches list linking to these pages.
-- [x] [P0] F4-37 Pass verification: (2026-09-09 automated: 302 web + 8 ai + 108 engine tests / typecheck / lint / build green; /matches/[id] route registered. REMAINING: owner manual walkthrough + sign-off.) focused tests for the new surfaces, full typecheck/lint/build/test batch, and the owner's manual walkthrough (idle hero → setup modal → live captions → history → match page). v0.4 stays blocked until this passes.
-- [x] [P1] F4-38 Record the accepted v0.3.1 visual direction in the arena UI docs so v0.4 evidence/challenge UX builds on the caption + detail-page patterns. (2026-09-11: current 3D visual system, workstation foundation, asset boundary, camera/lighting/layout contracts, and agent change guide documented in `docs/arena-visual-system.md`.)
-
-### Quick format foundation — owner directive 2026-09-11
-
-- [x] [P0] F4-39 Replace the fixed four-phase Quick loop with a data-owned six-turn format: A opening, B opening, then two targeted A/B response exchanges. The active transcript and live timeline must expose every turn before judging begins.
-- [x] [P0] F4-40 Make turn descriptors the shared contract for the engine, stream, reducer, captions, history, progress UI, and broadcast stage. New formats must be able to choose turn count/order without a project-wide phase rewrite; legacy four-turn records remain readable and re-judgeable.
-- [x] [P0] F4-41 Retune Quick prompts and budgets for concise, watchable turns: one decisive opening argument or one named claim plus focused counterclaim per response; 180–300 visible words; 3,000 agent / 4,000 judge output-token ceilings; 7-minute match bound.
-- [x] [P1] F4-42 Expose active turn metadata to scene directors so camera/lighting choreography can become format-aware without coupling the 3D scene to engine phase names. Existing response framing remains the safe default.
-- [ ] [P0] F4-43 Run a live six-turn Quick match through the browser after the owner’s machine is stable, confirming all six pauses are visible, manual advance works, judge evaluation follows only the sixth turn, and the match appears in Recents. (2026-09-11: live Spark run generated all six turns. A playback race that let the judge panel cover a queued response was fixed and regression-tested; judge-only Spark call completed through the new Responses fallback. The match-store now falls back to gitignored `.data/matches` when the home directory is blocked. Owner-local verification remains.)
-
-### v0.4 evidence and challenge UX
-
-- [ ] [P0] F4-27 Add an explicit challenge request/resolution surface with remaining challenge budget.
-- [ ] [P0] F4-28 Render evidence cards with provenance, source type, timestamp, and unverified/verified-by-rule status.
-- [ ] [P1] F4-29 Make source content visibly untrusted and prevent it from looking like system instructions.
-- [ ] [P1] F4-30 Show sandbox/proof status, resource limits, and failure reasons without exposing sensitive runtime details.
-
-### v0.5–v0.6 competition UX
-
-- [ ] [P1] F4-31 v0.5 Add local profiles, fictional wallet, ledger history, ratings, and settlement explanations.
-- [ ] [P1] F4-32 v0.6 Add replay controls, event timeline scrubbing, tournament bracket, standings, and share/export actions.
-- [ ] [P1] F4-33 v0.6 Add privacy labels and read-only public artifact views for shared matches.
-
-## PHASE 5 — Streaming
-
-Milestone: users see a trustworthy real-time match and the client can recover from ordering, cancellation, and failure conditions.
-
-### v0.1 baseline — inherited completed work
-
-- [x] [P0] F5-01 Connect the streaming debate runner to a Next.js API route.
-- [x] [P0] F5-02 Stream token/status events for agent thinking, speaking, round changes, judging, and completion.
-- [x] [P0] F5-03 Reduce server events into the arena state without coupling React components to provider internals.
-- [x] [P1] F5-04 Surface provider and judge errors in the active match UI.
-
-### v0.1 closure
-
-- [x] [P0] F5-05 Verify cancel/disconnect propagation from browser to API route to provider request. Depends on F2-06 and F1-08.
-- [x] [P0] F5-06 Ensure the stream closes exactly once for success, failure, cancel, and disconnect.
-- [x] [P1] F5-07 Add a client reconnect/closed-stream state that does not duplicate turns or fabricate completion.
-
-### v0.2 contract hardening
-
-- [x] [P0] F5-08 Add match ID, monotonically increasing event sequence, event type, schema version, and terminal reason to the stream contract. Depends on F2-12 and F2-14.
-- [ ] [P1] F5-09 Handle slow consumers and long token streams with bounded buffering/backpressure behavior.
-- [ ] [P1] F5-10 Add a test matrix for event ordering, duplicate events, truncated streams, and late verdict events.
-
-### v0.6 durable replay stream
-
-- [ ] [P0] F5-11 Persist an append-only event log for replay without making the live UI depend on a remote stream. Depends on F2-12 and F11-01.
-- [ ] [P1] F5-12 Support replay playback from stored events with no provider calls. Depends on F12-02.
-
-## PHASE 6 — Integration
-
-Milestone: the end-to-end path has explicit contracts and each layer can evolve without leaking implementation details into another layer.
-
-### v0.1 baseline — inherited completed work
-
-- [x] [P0] F6-01 Connect the match creation form to the debate API.
-- [x] [P0] F6-02 Connect provider/model selection to server-side configuration.
-- [x] [P0] F6-03 Connect stream events to the client reducer and arena widgets.
-- [x] [P0] F6-04 Connect the parsed verdict to the judge panel and finished state.
-- [x] [P1] F6-05 Keep provider keys and model-factory details server-only.
-
-### v0.1 closure
-
-- [x] [P0] F6-06 Run a provider-backed happy path using either a real configured provider or the faithful mock provider, from create form through winner. Depends on F1-09, F2-09, and F5-06.
-- [x] [P0] F6-07 Add API contract tests for invalid configuration, missing provider, invalid mode, empty topic, cancellation, provider failure, malformed judge output, and successful completion.
-- [x] [P1] F6-08 Confirm that refreshing or navigating away cannot leave a live runner or secret-bearing process behind.
-
-### v0.2–v0.6 integration contracts
-
-- [x] [P0] F6-09 v0.2 Define and validate MatchConfig, MatchEvent, Transcript, and DebateVerdict at the API/domain boundary.
-- [x] [P1] F6-10 v0.2 Add export/import of a redacted transcript and the exact non-secret configuration snapshot.
-- [ ] [P0] F6-11 v0.4 Integrate evidence packets and challenge events without requiring evidence for legacy matches.
-- [ ] [P0] F6-12 v0.5 Integrate local repositories behind ports; keep the engine independent of SQLite or another concrete store.
-- [ ] [P1] F6-13 v0.6 Add stable read-only share/export contracts and an optional hosted adapter boundary.
-
-## PHASE 7 — QA
-
-Milestone: every release gate has repeatable evidence, not just a successful visual demo.
-
-### v0.1 baseline — inherited completed work
-
-- [x] [P0] F7-01 Test state transitions and illegal transitions.
-- [x] [P0] F7-02 Test round progression and turn caps.
-- [x] [P0] F7-03 Test tolerant judge parsing and verdict criteria.
-- [x] [P0] F7-04 Test provider configuration validation and secret redaction.
-- [x] [P0] F7-05 Test the initial token policy.
-- [x] [P1] F7-06 Keep lint, typecheck, build, and unit-test commands available.
-
-### v0.1 closure
-
-- [x] [P0] F7-07 Add a mock-provider end-to-end happy-path test from match creation through terminal verdict. Depends on F1-09 and F6-06.
-- [ ] [P0] F7-08 Add a minimal browser smoke test for create → stream → judge → finished and the primary error state. NOTE 2026-09-04: deferred by decision - would require a browser-test dependency (Playwright). Covered for now by the scripted mock-provider e2e (F7-07), real-provider live runs, and the manual acceptance path F8-02.
-- [x] [P0] F7-09 Add cancellation/disconnect tests and verify no active run remains afterward. Depends on F2-06 and F5-05.
-- [x] [P1] F7-10 Run a secret-safety check over server responses, browser state, logs, and build output.
-- [x] [P1] F7-11 Record a clean-install verification and the supported runtime/package-manager assumptions.
-
-### v0.2 evaluation
-
-- [x] [P0] F7-12 Build a small fixture suite for prompt, context slicing, mode budgets, and judge verdict regression. Depends on F2-10, F2-11, and F3-08.
-- [x] [P0] F7-13 Track token usage, latency, error rate, and completion rate per fixture without logging secrets or full prompts by default.
-- [x] [P1] F7-14 Add contract tests for transcript export/import and re-judge behavior.
-- [ ] [P1] F7-15 Add an evaluation report format that compares prompt/rubric versions.
-
-### v0.3 Arena redesign QA
-
-- [x] [P0] F7-16 Verify the three-character arena composition, two desks/computers, central Judge, and readable speech layer on the main desktop layout. (Accepted in the F4-26 review; final polish added close chairs, monitor stations, Judge throne/lower body, and removed outer page chrome.)
-- [x] [P0] F7-17 Verify lighting and camera changes for thinking, speaking, rebuttal, Judge speaking, and verdict states. (Accepted in the F4-26 review; camera/lighting presets remain unit-tested and the full scene is production-build validated.)
-- [x] [P1] F7-18 Verify emotion/meme reactions, mute/reduced-motion behavior, and that no extra model calls are made for mood. (2026-09-05: pure pose/reaction tables, gate C confirmed zero extra AI calls; mute wired through banner toggle; reduced-motion snaps directors and suppresses confetti; 308 tests green.)
-- [x] [P1] F7-19 Verify responsive behavior, lightweight performance, and the non-WebGL fallback. (2026-09-05: dpr cap [1,1.5], single 1024² shadow map, sleeping dynamic props; SSR probe proves fallback HTML carries every surface with no WebGL code executed; responsive CSS breakpoints + camera framing verified technically. Responsive feel also covered in the user's F4-26 pass.)
-
-### v0.4 security and evidence QA
-
-- [ ] [P0] F7-20 Test evidence provenance, size/type limits, malformed evidence, and prompt-injection-like source content.
-- [ ] [P0] F7-21 Test challenge budgets, termination, event migration, and evidence-free legacy matches.
-- [ ] [P0] F7-22 Test sandbox capability denial, timeout, output cap, cleanup, and network-disabled behavior.
-- [ ] [P1] F7-23 Run an explicit threat-model review before enabling any external source or code execution adapter.
-
-### v0.5–v0.6 QA
-
-- [ ] [P0] F7-24 v0.5 Test ledger invariants, idempotent settlement, cancellation/refund, migrations, backup, restore, and import.
-- [ ] [P0] F7-25 v0.6 Test replay equivalence, bundle compatibility, tournament resume, failure handling, privacy redaction, and read-only sharing.
-- [ ] [P1] F7-26 v0.6 Add bounded load/performance tests for local tournament runs and event-log growth.
-
-## PHASE 8 — MVP Release (v0.1)
-
-Milestone: a new user can run a complete local Quick debate and see a trustworthy structured verdict.
-
-### Release work
-
-- [ ] [P0] F8-01 Close all v0.1 P0 tasks: F0-08, F1-07, F1-08, F2-06, F2-07, F2-08, F3-05, F4-09, F5-05, F5-06, F6-06, F6-07, F7-07, F7-08, and F7-09. (14 of 15 closed 2026-09-04; only F7-08 browser smoke deferred by decision above.)
-- [ ] [P0] F8-02 Complete the manual acceptance path: fresh install → provider:add → dev server → create topic → select two models → Quick → Start → watch all turns → judge evaluation → winner.
-- [ ] [P0] F8-03 Confirm no API key is exposed in UI, network payloads intended for the client, logs, or committed files.
-- [ ] [P0] F8-04 Confirm a provider failure, judge failure, invalid form, and user cancellation end in a clear recoverable UI state.
-- [ ] [P1] F8-05 Finish README instructions for installation, provider setup, first debate, architecture map, and this TODO.
-- [ ] [P1] F8-06 Finish the short architecture, debate-engine, providers, and development documentation.
-- [x] [P1] F8-07 Add a v0.1 changelog/release note with known limitations and supported provider assumptions.
-- [ ] [P1] F8-08 Create the v0.1.0 release commit/tag only after the working tree and release evidence are reviewed.
-- [ ] [P1] F8-09 Freeze the v0.1 contract: no Standard/Hardcore, evidence, sandbox, credits, tournaments, or public hosting in the MVP.
-
-## PHASE 9 — Quality and Evaluation Lab (v0.2)
-
-Milestone: a user can inspect a match, export it, re-judge it, and understand whether a prompt or judge change improved the product.
-
-Dependencies: F8-01 through F8-09.
-
-### Contract and reproducibility foundation
-
-- [x] [P0] F9-01 Define runtime-validated, versioned schemas for MatchConfig, MatchEvent, Transcript, and DebateVerdict. Depends on F0-11 and F6-09.
-- [x] [P0] F9-02 Store a redacted match snapshot containing provider name, model ID, mode, positions, rules, token policy, prompt versions, and timestamps. Never store API keys.
-- [x] [P0] F9-03 Assign stable match IDs and ordered event IDs; make terminal state and terminal reason explicit.
-- [x] [P0] F9-04 Implement redacted JSON and human-readable Markdown transcript export.
-- [x] [P1] F9-05 Implement import validation with schema version checks and actionable errors.
-- [x] [P1] F9-06 Add an architecture note for compatibility and migration of exported transcripts.
-
-### Prompt, rubric, and judge quality
-
-- [x] [P0] F9-07 Move agent and judge prompts into versioned templates with explicit template IDs and change notes.
-- [x] [P0] F9-08 Define the v0.2 rubric in one source of truth, including score ranges, weights, draw policy, and confidence semantics.
-- [x] [P0] F9-09 Create a compact but representative golden transcript suite and judge regression fixtures. Depends on F3-08.
-- [ ] [P1] F9-10 Add turn references or short evidence excerpts to the verdict explanation.
-- [x] [P1] F9-11 Add a compare-report format for two prompt/rubric versions over the same fixture set.
-- [x] [P1] F9-12 Add re-judge from an imported/stored transcript without re-running the debaters. Depends on F2-15 and F9-04.
-- [ ] [P2] F9-13 Explore a multi-judge panel as an opt-in experiment; do not make it a dependency of the release.
-
-### Budgets, modes, and reliability
-
-- [x] [P0] F9-14 Implement Quick, Standard, and Hardcore as centralized policy profiles with rounds, context, output, and judge limits. Depends on F2-10.
-- [x] [P0] F9-15 Add hard enforcement and clear UI explanation for context, token, timeout, and turn limits.
-- [x] [P1] F9-16 Record aggregate token usage, latency, and failure reason per match; avoid full-prompt logging by default.
-- [x] [P1] F9-17 Add context-compaction tests that preserve required topic, position, rules, and recent arguments.
-- [ ] [P1] F9-18 Add provider timeout/cancellation/retry behavior to the evaluation matrix.
-- [ ] [P1] F9-19 Enable Standard behind a feature flag only after the v0.2 gate passes.
-- [x] [P2] F9-20 Keep Hardcore disabled by default and document its expected cost/context tradeoff.
-
-### Trust and product UX
-
-- [x] [P1] F9-21 Add transcript timeline/filter/collapse controls.
-- [x] [P1] F9-22 Add a “why this verdict” view connected to rubric criteria and turn references.
-- [x] [P1] F9-23 Add export and re-judge actions with prompt/rubric version labels.
-- [ ] [P2] F9-24 Add editable provider management in the UI after F1-13 is complete.
-
-### v0.2 milestone and exit
-
-- [x] [P0] F9-25 Demonstrate two prompt/rubric versions evaluated over the same fixtures with a readable comparison report.
-- [x] [P0] F9-26 Demonstrate export → import → re-judge without calling Agent A or Agent B.
-- [ ] [P0] F9-27 Pass the v0.2 release gate and update the changelog before starting the v0.3 Arena redesign.
-
-## PHASE 10 — Evidence, Challenges, and Safe Execution (v0.4)
-
-Milestone: a user can challenge a bounded claim, inspect the attached provenance, and see whether a proof/evaluator result was accepted without confusing it with absolute truth.
-
-Dependencies: v0.3 Arena redesign, F9-01 through F9-27, especially F2-18, F3-13, and F7-20 through F7-23.
-
-### Evidence domain
-
-- [x] [P0] F10-01 Define Claim, EvidenceItem, Provenance, Challenge, ChallengeResponse, ProofResult, and EvidenceStatus domain types. (2026-09-11: dependency-free canonical types and bounded runtime schemas added.)
-- [x] [P0] F10-02 Define evidence event schemas and version them independently from provider response formats. (2026-09-11: v1 evidence event envelope and discriminated lifecycle bodies added.)
-- [x] [P0] F10-03 Add claim/evidence references to transcripts and verdicts without making evidence mandatory for old matches. (2026-09-11: optional references added; legacy records remain valid.)
-- [x] [P0] F10-04 Define explicit statuses such as supported, contradicted, insufficient, unverified, and unavailable. (2026-09-11: status vocabulary enforced by runtime schemas.)
-- [x] [P1] F10-05 Add provenance fields for source type, user/provider origin, timestamp, content hash, and extraction method. (2026-09-11: required bounded provenance fields added.)
-
-### User-supplied evidence first
-
-- [x] [P0] F10-06 Support a bounded user-supplied evidence packet using pasted text or approved local files. (2026-09-11: pasted text and plain-text/Markdown local files supported; server owns normalization.)
-- [x] [P0] F10-07 Enforce evidence size, type, count, and context limits before content reaches an agent or judge. (2026-09-11: strict UTF-8 item/packet limits, request-body cap, and pre-call rejection added.)
-- [x] [P0] F10-08 Render evidence as untrusted content and isolate it from system/developer instructions. (2026-09-11: bounded JSON rendering and adversarial prompt tests added.)
-- [x] [P1] F10-09 Add optional source adapters behind an explicit user action and capability flag; web search is not automatic. (2026-09-11: consent-gated HTTPS adapter, SSRF defenses, one-shot snapshot route/UI, safe failures, idempotency, and 16 route tests added; no automatic refresh.)
-- [x] [P1] F10-10 Cache source metadata and content hashes for repeatable inspection without silently claiming freshness. (2026-09-11: immutable hash-pinned source snapshots, freshness predicates, consent/audit contracts, and legacy normalization added; no automatic refresh.)
-
-### Challenge mechanics
-
-- [x] [P0] F10-11 Implement bounded challenge requests with ownership, remaining budget, target claim, and termination rule. (2026-09-11: post-match requests are strict, idempotent, finite-budget, and concurrency-locked.)
-- [x] [P0] F10-12 Let the challenged agent respond with evidence or an explicit inability to prove the claim. (2026-09-11: bounded answer/unable response contract with citation enforcement added.)
-- [x] [P0] F10-13 Let the judge adjudicate challenge outcomes and attach the decision to the relevant claim and events. (2026-09-11: model-assessed adjudication and versioned lifecycle events persisted.)
-- [x] [P0] F10-14 Preserve a valid terminal verdict when a challenge, evidence source, or proof adapter fails. (2026-09-11: challenge/provider/judge failures become terminal challenge outcomes without changing the original verdict.)
-- [x] [P1] F10-15 Add UI for requesting, answering, and resolving a challenge. (2026-09-11: completed-match detail UI supports target selection, evidence references, submission, and outcome display.)
-
-### Safe proof and sandbox boundary
-
-- [x] [P0] F10-16 Define a SandboxAdapter port with declared capabilities, input/output schemas, limits, and denial reasons. (2026-09-11: versioned strict contracts and safe denial/result semantics added; no runtime host yet.)
-- [x] [P0] F10-17 Make network access, filesystem access, process execution, and secrets explicit capabilities; default all to denied. (2026-09-11: capability-free deterministic adapter and deny-by-default validation added.)
-- [x] [P1] F10-18 Implement one narrow deterministic proof/evaluator adapter with time, memory, output, and cleanup limits. (2026-09-11: pure SHA-256 content-integrity proof adapter and bounded result contracts added.)
-- [x] [P1] F10-19 Add process isolation and temporary-resource cleanup appropriate to the supported local runtime. (2026-09-11: fail-closed Windows Job Object worker host in @arena/sandbox-host with behavioral containment preflight, host-enforced watchdog/output-cap, verified cleanup receipts; non-Windows/FFI-missing stays unavailable.)
-- [x] [P1] F10-20 Keep Docker or a remote sandbox as an optional adapter, not a hard dependency for the local core. (2026-09-11: no Docker dependency in the local core — pure in-process proof adapter plus the fail-closed Windows sandbox host; Docker remains a reserved deferred placeholder in `infrastructure/docker/README.md`. Evidence: `docs/security/v0.4-acceptance-evidence.md`.)
-- [ ] [P2] F10-21 Add more proof adapters only after the first adapter has security and reliability evidence.
-
-### v0.4 milestone and exit
-
-- [x] [P0] F10-22 Demonstrate a normal evidence-free Quick match still works unchanged. (2026-09-11: evidence-free runs stay legacy-shaped with byte-identical prompts and legacy records/requests remain valid — runner, prompt-evidence, evidence-contract, and debate-route tests. Evidence: `docs/security/v0.4-acceptance-evidence.md`.)
-- [x] [P0] F10-23 Demonstrate a challenge with a bounded evidence packet, visible provenance, and judge adjudication. (2026-09-11: challenges route test runs the completed challenge end-to-end with a stored bounded evidence packet, hash-pinned provenance, and judge adjudication while preserving the original verdict. Evidence: `docs/security/v0.4-acceptance-evidence.md`.)
-- [x] [P0] F10-24 Demonstrate sandbox denial, timeout, malformed output, and cleanup without hanging the match. (2026-09-11: real Windows tests prove denial-before-spawn, watchdog kill, output-cap kill, malformed-output classification, cancellation, whole-tree termination, and no orphan process/temp dir. Evidence: `docs/security/v0.4-acceptance-evidence.md`.)
-- [x] [P0] F10-25 Complete the threat-model review and pass the v0.4 release gate. (2026-09-11: owner acknowledgment recorded in `docs/security/v0.4-threat-model.md`; automated acceptance evidence and residual local-only deployment constraints recorded in `docs/security/v0.4-acceptance-evidence.md`.)
-
-## PHASE 11 — Persistence, Credits, and Ratings (v0.5)
-
-Milestone: a user can run repeated local matches with durable history, fictional stakes, and ratings that remain auditable after restart.
-
-Dependencies: v0.3 Arena redesign, F9-01 through F9-27, F10-01 through F10-25, and especially F6-12.
-
-### Persistence foundation
-
-- [ ] [P0] F11-01 Define repository ports for profiles, matches, events, transcripts, verdicts, ledger entries, and tournaments.
-- [ ] [P0] F11-02 Add a local SQLite adapter or another documented embedded store only after the repository port is stable; keep configuration secrets outside match storage.
-- [ ] [P0] F11-03 Add schema migrations, version checks, file locking, and a clear data directory policy.
-- [ ] [P0] F11-04 Add local backup, restore, export, and corruption/error messaging.
-- [ ] [P0] F11-05 Import v0.2 redacted transcripts without inventing missing economy or profile data.
-- [ ] [P1] F11-06 Add retention controls and a way to remove local match history without deleting provider configuration accidentally.
-
-### Local identity and profiles
-
-- [ ] [P0] F11-07 Define stable local profile and agent IDs independent from display names or provider model IDs.
-- [ ] [P0] F11-08 Add local profiles for agent configurations and human-created match presets without requiring accounts or authentication.
-- [ ] [P1] F11-09 Preserve provider/model/prompt snapshots when a profile changes later.
-
-### Fictional credits ledger
-
-- [ ] [P0] F11-10 Define integer-based CreditAccount and immutable LedgerEntry types; never use floating-point money arithmetic.
-- [ ] [P0] F11-11 Implement starting balances, optional entry stakes, settlement, cancellation, and refund as explicit ledger operations.
-- [ ] [P0] F11-12 Enforce no-negative-balance, idempotency, conservation, and terminal-match settlement invariants.
-- [ ] [P0] F11-13 Make all credits clearly fictional, local, and non-redeemable in product copy and UI.
-- [ ] [P1] F11-14 Add an auditable ledger view showing why each balance changed.
-- [ ] [P1] F11-15 Add configurable local caps and an opt-out path; do not pressure a user to stake credits.
-
-### Ratings and competition signals
-
-- [ ] [P1] F11-16 Define a rating model separate from credits; start with a documented Elo-like model or another simple deterministic baseline.
-- [ ] [P1] F11-17 Update ratings only from valid terminal matches and record the calculation inputs.
-- [ ] [P1] F11-18 Add local rankings and filters by model, provider, mode, prompt version, and date.
-- [ ] [P2] F11-19 Add matchmaking suggestions after enough local history exists; do not hide the pairing logic.
-
-### v0.5 milestone and exit
-
-- [ ] [P0] F11-20 Restart the application and retain match history, profiles, ledger, and ratings.
-- [ ] [P0] F11-21 Prove repeated settlement is idempotent and cannot create or destroy credits unexpectedly.
-- [ ] [P0] F11-22 Restore a backup and import a v0.2 transcript successfully.
-- [ ] [P0] F11-23 Pass the v0.5 release gate with fictional-only language and no payment path.
-
-## PHASE 12 — Replay, Tournaments, and Distribution (v0.6)
-
-Milestone: a completed match can be replayed offline, several matches can be run under tournament rules, and a user can share a controlled read-only artifact.
-
-Dependencies: v0.3 Arena redesign, F11-01 through F11-23, especially F5-11 and F7-25.
-
-### Replay
-
-- [ ] [P0] F12-01 Define an append-only event-log format with schema version, match ID, sequence, timestamp, and terminal reason.
-- [ ] [P0] F12-02 Implement replay state reconstruction from events without provider calls, network access, or secret configuration.
-- [ ] [P0] F12-03 Make replay reproduce the transcript, phase progression, verdict, evidence references, and visible UI state.
-- [ ] [P0] F12-04 Add export/import bundles with checksums, version metadata, and secret redaction.
-- [ ] [P1] F12-05 Add replay speed controls, timeline seeking, phase filtering, and a comparison between original and re-judged verdicts.
-- [ ] [P1] F12-06 Add compatibility tests for at least the v0.2 and v0.4 event formats.
-
-### Tournament lifecycle
-
-- [ ] [P0] F12-07 Define a tournament domain model with participants, rules, seeding, rounds, match slots, standings, and terminal states.
-- [ ] [P0] F12-08 Implement one bounded format first, preferably single elimination, before adding round robin or Swiss formats.
-- [ ] [P0] F12-09 Add deterministic pairing/seeding and explicit handling for provider failure, cancellation, draw, and disqualification.
-- [ ] [P0] F12-10 Persist resumable tournament state and prevent a completed match from being settled twice.
-- [ ] [P1] F12-11 Add bracket, standings, match detail, and tournament progress UI.
-- [ ] [P2] F12-12 Add additional tournament formats only after the first format has replay and failure evidence.
-
-### Controlled sharing and public matches
-
-- [ ] [P0] F12-13 Define a read-only share artifact with privacy mode, included fields, omitted fields, and provenance labels.
-- [ ] [P0] F12-14 Add local file/share import and export before requiring a hosted service.
-- [ ] [P1] F12-15 Define an optional hosted API adapter with authentication, authorization, rate limits, and no provider-key upload.
-- [ ] [P1] F12-16 Add public/private/unlisted controls and a deletion path for hosted artifacts.
-- [ ] [P1] F12-17 Add content-safety and abuse-reporting hooks at the hosted boundary; keep them out of the local core.
-
-### v0.6 milestone and exit
-
-- [ ] [P0] F12-18 Replay a completed match offline from an exported bundle.
-- [ ] [P0] F12-19 Resume a tournament after application restart and recover from a failed match according to documented rules.
-- [ ] [P0] F12-20 Share a redacted read-only artifact that contains no provider credentials or private local paths.
-- [ ] [P0] F12-21 Pass the v0.6 release gate and document what remains experimental.
-
-## Release Gates
-
-The release gates are the definition of a version, not a suggestion. A version is complete when all P0 work for that version is complete, the applicable gate passes, and the release evidence is documented.
-
-### v0.1 Local Quick Arena
-
-- [ ] Fresh install succeeds from the documented prerequisites.
-- [ ] provider:add stores configuration locally with restrictive permissions and redacts API keys.
-- [ ] The browser can list/select providers and models without receiving credentials.
-- [ ] A Quick match runs through all format-owned turns with visible streaming status.
-- [ ] Agent A and Agent B receive the correct topic, position, rules, history, and turn metadata.
-- [ ] Output, rounds, context, and judge limits are enforced.
-- [ ] The judge returns a validated structured verdict or a clear failure state.
-- [ ] Invalid input, missing provider, provider timeout/failure, malformed judge output, cancel, and disconnect are recoverable.
-- [ ] No active runner remains after terminal completion, failure, cancel, or disconnect.
-- [ ] Unit tests, mock-provider integration test, smoke E2E, lint, typecheck, and build pass.
-- [ ] README and core development docs describe the actual behavior and limitations.
-- [ ] Standard/Hardcore, evidence, sandbox, credits, betting, tournaments, and public hosting are not accidentally enabled.
-
-### v0.2 Trustworthy Debate Lab
-
-- [x] All v0.1 gates remain green.
-- [x] Match configuration, event stream, transcript, verdict, prompt, rubric, and policy versions are recorded without secrets.
-- [x] Export/import validation is versioned and tested.
-- [x] A stored transcript can be re-judged without re-running the debaters.
-- [x] Golden fixtures cover judge and prompt regressions, including draws and malformed outputs.
-- [x] Token usage, latency, and failure metrics are measurable without default secret/prompt leakage.
-- [x] Quick remains stable; Standard is enabled only if its policy and evaluation evidence pass.
-- [x] The user can inspect why a verdict was produced.
-
-Verified 2026-09-04: 192 tests / typecheck / lint / build green; real-provider evidence in docs/eval/rubric-v1-vs-v2.md and docs/development.md; release notes in CHANGELOG.md; tagged v0.2.0.
-
-### v0.3 Arena UI Redesign
-
-- [x] All v0.2 gates remain green.
-- [x] The coding agent pauses before implementation and discusses the scene plan with the user.
-- [x] The main arena has two contenders at desks with computers, a central Judge, and a sports-broadcast/UFC-like atmosphere without copying UFC branding.
-- [x] The 3D/2.5D scene changes lighting and camera emphasis for thinking, speaking, rebuttal, Judge speaking, and verdict.
-- [x] Character emotions and curated meme reactions are driven by match events without extra AI calls just for mood.
-- [x] Streamed speech, round status, and verdict remain readable at all times.
-- [x] The scene stays lightweight, responsive, and has a usable non-WebGL fallback.
-- [x] The user reviews the working redesign before v0.4 work begins. (Accepted 2026-09-05; final polish direction recorded in F4-26.)
-
-Technical evidence 2026-09-05: real R3F+Rapier arena world; 312 tests / typecheck / lint / production build green. SSR probe keeps fallback HTML intact with zero three/rapier execution server-side. Final polish validated full-viewport CSS, workstation monitors, chair placement, Judge throne/lower body, and layout-clearance invariants. User review accepted; v0.3 is closed.
-
-### v0.4 Evidence and Safe Execution
-
-- [ ] All v0.3 gates remain green.
-- [ ] Evidence, claims, challenges, and proof results are typed, bounded, provenance-aware, and versioned.
-- [ ] Evidence is opt-in, visibly untrusted, and cannot override system/developer instructions.
-- [ ] A challenge always has a finite budget and a terminal path.
-- [ ] Legacy evidence-free matches remain compatible.
-- [ ] Sandbox capabilities default to denied; time, memory, output, network, filesystem, and cleanup rules are tested.
-- [ ] Threat-model and prompt-injection reviews are complete before external sources or execution are enabled.
-
-### v0.5 Local Competitive Economy
-
-- [ ] All v0.4 gates remain green.
-- [ ] Local storage survives restart, has migrations, backup, restore, and clear corruption handling.
-- [ ] Profiles and match snapshots are stable across display-name or provider changes.
-- [ ] Credits are fictional, integer-based, local, auditable, and non-redeemable.
-- [ ] Settlement is idempotent and never produces a negative balance or double reward.
-- [ ] Ratings are separate from credits and use documented inputs.
-- [ ] No payment, subscription, real-money betting, or financial-account path exists.
-
-### v0.6 Replay and Competition Platform
-
-- [ ] All v0.5 gates remain green.
-- [ ] Replay reconstructs a match offline without provider calls or secrets.
-- [ ] Exported bundles have schema versions, checksums, compatibility tests, and privacy redaction.
-- [ ] A tournament has deterministic pairing, resumable state, and documented failure/draw behavior.
-- [ ] Shared artifacts are read-only by default and expose only intentionally included data.
-- [ ] Any hosted boundary has authentication, authorization, rate limits, privacy controls, deletion, and content-safety hooks.
-- [ ] Local-first operation still works without the hosted adapter.
-
-## Definition of Done
-
-### Individual task
-
-A task is done when it is implemented as part of a coherent work batch and does not leave the product in a knowingly broken state. Add a focused test when the task changes domain logic or a critical failure path. Do not create a separate commit, full QA cycle, or document for every small checkbox.
-
-### Phase
-
-A phase is done when its milestone can be demonstrated, all P0 tasks are complete, direct dependencies are complete, and one consolidated phase check has been run.
-
-### Version
-
-A version is done when:
-
-- every earlier version gate remains green;
-- all current-version P0 tasks are complete;
-- P1 omissions are explicitly listed as non-blocking and do not compromise safety, correctness, or the core product promise;
-- release notes, migration notes, and known limitations are updated together at the milestone;
-- the release gate is checked in this file;
-- the version is tagged or otherwise identified in the repository.
-
-## Architectural Principles
-
-1. Local-first by default. The user's computer runs the application and owns local configuration and history unless a later feature explicitly opts into a service.
-2. Domain logic first. Debate Engine, Provider Layer, Judge, Match State, token policy, event contracts, and persistence ports do not belong inside React components.
-3. UI does not know provider details. The UI consumes safe domain/API contracts and never sees API keys, raw model clients, or provider request formats.
-4. Server-only secrets. Credentials are read and used on the server, never serialized into client state, logs, exports, or replay bundles.
-5. Ports and adapters. OpenAI-compatible providers, evidence sources, sandbox runners, storage engines, and hosted services are replaceable adapters behind narrow interfaces.
-6. Bounded execution. Every model turn, context, round, challenge, evidence packet, sandbox run, retry, and tournament has explicit limits.
-7. Events are the spine of observability. A match should be explainable from ordered events, not from incidental UI state.
-8. Version contracts before expansion. Persisted/exported data and events need schema versions and migration rules before replay, economy, or public sharing.
-9. Provenance over certainty. Evidence and judge confidence must be labeled; the product must not present model output as objective truth.
-10. Additive evolution. New capabilities should not break evidence-free Quick matches or invalidate older transcripts without a migration path.
-11. Test invariants, not only snapshots. State transitions, budgets, redaction, ledger arithmetic, event ordering, and cleanup deserve focused tests.
-12. Minimize dependencies and complexity. Add a library or service only when its value is documented and the simpler local design is insufficient.
-
-## Non-goals
-
-### Explicitly out of v0.1
-
-- Authentication, accounts, subscriptions, payments, or real-money betting.
-- Social feeds, comments, community profiles, or public leaderboards.
-- Tournaments, matchmaking, and persistent economy.
-- A central cloud server or mandatory centralized database.
-- Docker or unrestricted code execution sandbox.
-- Automatic web search, GitHub tools, arbitrary autonomous tool use, or agent-controlled network access.
-- Complex long-term agent memory.
-- A separate custom integration for every model provider.
-- Enabling Standard or Hardcore before their policies and quality evidence are ready.
-
-### Still out through v0.6 unless separately approved
-
-- Real-money wagering, financial custody, payouts, or regulated gambling mechanics.
-- Unrestricted autonomous browsing, arbitrary tool execution, or unreviewed source ingestion.
-- A microservice rewrite driven only by hypothetical scale.
-- A hosted platform without authentication, authorization, privacy, rate limits, deletion, and abuse controls.
-- Treating a judge verdict as ground truth rather than a model-based evaluation with evidence and confidence.
-
-## Future Extensions
-
-These ideas are intentionally recorded but are not dependencies of v0.1–v0.6:
-
-- Human-versus-AI and human-in-the-loop judging.
-- Team debates, more than two agents, cross-examination, and audience questions.
-- Multi-judge calibration, judge tournaments, and model-vs-model evaluation suites.
-- Optional web evidence with source freshness, citation verification, and user-controlled browsing.
-- More deterministic proof adapters for math, code, data, and formal claims.
-- Voice, multimodal arguments, diagrams, and live captioning.
-- Hosted synchronization, organization workspaces, permissions, and model/provider sharing.
-- Community match libraries and a public benchmark dataset built from consented/redacted artifacts.
-- Adaptive prompt policies and learned cost/quality routing.
-- Real-money mechanics only as a separate compliance, safety, and product program; never as an implicit extension of fictional credits.
-
-## Autonomous Coding-Agent Workflow
-
-Use this loop for each coherent work batch or milestone:
-
-1. Read this file and identify the active version and phase.
-2. Select a small group of related tasks that can be implemented together.
-3. Check their dependencies and reuse the existing architecture before adding abstractions.
-4. Implement the group as one vertical slice.
-5. Run one appropriate check pass after the group: focused tests for domain changes, plus lint/typecheck/build when the batch or phase warrants it.
-6. Review security, cancellation, token, and data-redaction implications at the batch or phase level.
-7. Mark the verified tasks complete and update documentation only when public behavior or an architectural contract changed.
-8. Make a commit at a meaningful batch or milestone boundary, not after every checkbox.
-9. Run the full release gate at the end of the phase.
-10. Before v0.3 implementation, pause and discuss the Arena design with the user. Do not silently start the 3D redesign.
-11. Do not begin a later version while the current release gate has an unresolved P0.
-
-Recommended agent responsibilities:
-
-- Architect: boundaries, contracts, dependencies, migrations, and architecture notes.
-- Debate Engine: state machine, runner, prompts, context, policies, and event semantics.
-- Provider: adapters, configuration, secrets, timeouts, cancellation, and mock provider.
-- Judge/Evaluation: rubric, parsing, fixtures, calibration, and re-judge behavior.
-- Frontend: arena, creation flow, timeline, evidence, replay, accessibility, and responsive UX.
-- QA/Security: tests, release gates, failure paths, redaction, threat modeling, and regression checks.
-- Documentation/Release: README, development docs, changelog, migration notes, and TODO maintenance.
-
-Do not create more agents than the work requires. Every agent must have a bounded responsibility and must return test evidence plus the files or modules changed.
-
-## Decision Log
-
-- v0.1 remains local-first and Quick-only.
-- The original PHASE 0–8 backlog is preserved as the baseline; completed tasks are not deleted.
-- Quality/evaluation is a separate v0.2 phase because stronger judge behavior and reproducibility are prerequisites for evidence, credits, and competition.
-- Evidence and sandbox are separate concerns: evidence can be user-supplied and auditable; execution must be capability-limited and denied by default.
-- v0.3 is a dedicated Arena UI redesign: three stylized characters, two desks with computers, a central Judge, sports-broadcast staging, changing lights, emotions, and camera shots.
-- The coding agent must discuss and confirm the v0.3 Arena design with the user before implementing it, then review the working result with the user before moving on.
-- Credits in v0.5 are fictional and local. Real-money betting is not part of this roadmap.
-- Replay is based on versioned ordered events, not on re-running providers, and is delivered in v0.6.
-- Public matches begin as redacted read-only artifacts; a hosted service is optional and must have its own security boundary.
+These may become important after the game is compelling. They must not block proving the product first.
