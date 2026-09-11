@@ -24,7 +24,7 @@ const verdictJson = JSON.stringify({
 const noopSave = async (): Promise<void> => {};
 
 describe("runDebate", () => {
-  it("emits phase, tokens, turns x4, then judge-start, verdict, done", async () => {
+  it("emits six format-owned Quick turns, then judge-start, verdict, and done", async () => {
     const calls: string[] = [];
     const events: DebateStreamEvent[] = [];
     for await (const event of runDebate(
@@ -48,33 +48,18 @@ describe("runDebate", () => {
 
     const types = events.map((event) => event.type);
     expect(types).toEqual([
-      "phase",
-      "token",
-      "token",
-      "turn",
-      "phase",
-      "token",
-      "token",
-      "turn",
-      "phase",
-      "token",
-      "token",
-      "turn",
-      "phase",
-      "token",
-      "token",
-      "turn",
-      "judge-start",
-      "verdict",
-      "done",
+      ...Array.from({ length: 6 }, () => ["phase", "token", "token", "turn"]).flat(),
+      "judge-start", "verdict", "done",
     ]);
 
     const phases = events.filter((event) => event.type === "phase");
     expect(phases.map((event) => (event.type === "phase" ? event.phase : null))).toEqual([
-      DebatePhase.OPENING_A,
-      DebatePhase.OPENING_B,
-      DebatePhase.REBUTTAL_A,
-      DebatePhase.REBUTTAL_B,
+      "quick-a-opening",
+      "quick-b-opening",
+      "quick-a-response-1",
+      "quick-b-response-1",
+      "quick-a-response-2",
+      "quick-b-response-2",
     ]);
 
     const verdictEvent = events.find((event) => event.type === "verdict");
@@ -427,9 +412,9 @@ describe("runDebate stream contract v1 + persistence", () => {
     expect(record.mode).toBe("quick");
     expect(record.terminal).toBe("completed");
     expect(record.terminalReason).toBeNull();
-    expect(record.transcript).toHaveLength(4);
+    expect(record.transcript).toHaveLength(6);
     expect(record.verdict?.winner).toBe("A");
-    expect(record.metrics.turnsMs).toHaveLength(4);
+    expect(record.metrics.turnsMs).toHaveLength(6);
     expect(record.metrics.totalMs).toBeGreaterThanOrEqual(0);
     expect(record.policy).toMatchObject({ mode: "quick", agentMaxOutputTokens: 3000 });
     expect(record.promptVersions).toEqual({ agent: "2", judge: "2" });
@@ -536,7 +521,7 @@ describe("runDebate stream contract v1 + persistence", () => {
       expect(event.seq).toBeGreaterThan(0);
     }
 
-    expect(limits).toEqual([123, 123, 123, 123]);
+    expect(limits).toEqual([123, 123, 123, 123, 123, 123]);
     expect(judgeLimits).toEqual([456]);
     expect(saved).toHaveLength(1);
     expect(saved[0]!.policy.agentMaxOutputTokens).toBe(123);
@@ -563,7 +548,7 @@ describe("runDebate token metrics (F7-13)", () => {
 
     expect(types[types.length - 1]).toBe("done");
     expect(saved).toHaveLength(1);
-    expect(saved[0]!.metrics.usage).toEqual({ promptTokens: 45, completionTokens: 87 });
+    expect(saved[0]!.metrics.usage).toEqual({ promptTokens: 65, completionTokens: 127 });
   });
 
   it("records zeros when the provider reports no usage", async () => {

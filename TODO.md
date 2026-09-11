@@ -297,6 +297,14 @@ Owner feedback: the idle page shows too much at once; during a live match the sp
 - [x] [P0] F4-37 Pass verification: (2026-09-09 automated: 302 web + 8 ai + 108 engine tests / typecheck / lint / build green; /matches/[id] route registered. REMAINING: owner manual walkthrough + sign-off.) focused tests for the new surfaces, full typecheck/lint/build/test batch, and the owner's manual walkthrough (idle hero → setup modal → live captions → history → match page). v0.4 stays blocked until this passes.
 - [ ] [P1] F4-38 Record the accepted v0.3.1 visual direction in the arena UI docs so v0.4 evidence/challenge UX builds on the caption + detail-page patterns.
 
+### Quick format foundation — owner directive 2026-09-11
+
+- [x] [P0] F4-39 Replace the fixed four-phase Quick loop with a data-owned six-turn format: A opening, B opening, then two targeted A/B response exchanges. The active transcript and live timeline must expose every turn before judging begins.
+- [x] [P0] F4-40 Make turn descriptors the shared contract for the engine, stream, reducer, captions, history, progress UI, and broadcast stage. New formats must be able to choose turn count/order without a project-wide phase rewrite; legacy four-turn records remain readable and re-judgeable.
+- [x] [P0] F4-41 Retune Quick prompts and budgets for concise, watchable turns: one decisive opening argument or one named claim plus focused counterclaim per response; 180–300 visible words; 3,000 agent / 4,000 judge output-token ceilings; 7-minute match bound.
+- [x] [P1] F4-42 Expose active turn metadata to scene directors so camera/lighting choreography can become format-aware without coupling the 3D scene to engine phase names. Existing response framing remains the safe default.
+- [ ] [P0] F4-43 Run a live six-turn Quick match through the browser after the owner’s machine is stable, confirming all six pauses are visible, manual advance works, and judge evaluation follows only the sixth turn.
+
 ### v0.4 evidence and challenge UX
 
 - [ ] [P0] F4-27 Add an explicit challenge request/resolution surface with remaining challenge budget.

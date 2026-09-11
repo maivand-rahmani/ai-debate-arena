@@ -64,7 +64,7 @@ const VERDICT_B_JSON = JSON.stringify({
   reasoning: "B had stronger rebuttals",
 });
 
-const AGENT_TEXTS = ["A opening.", "B opening.", "A rebuttal.", "B rebuttal."];
+const AGENT_TEXTS = ["A opening.", "B opening.", "A first response.", "B first response.", "A final response.", "B final response."];
 
 let mock: MockOpenAIProvider;
 let dir = "";
@@ -176,7 +176,7 @@ describe("GET /api/matches/[id]", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as MatchRecord;
     expect(body.matchId).toBe("m-1");
-    expect(body.transcript).toHaveLength(4);
+    expect(body.transcript).toHaveLength(6);
     expect(body.verdict?.winner).toBe("A");
   });
 
@@ -189,7 +189,7 @@ describe("GET /api/matches/[id]", () => {
     const body = await res.text();
     expect(body).toContain("# Debate: Should AI be regulated?");
     expect(body).toContain("Winner: A (82–74)");
-    expect(body).toContain("### OPENING_A — Side A");
+    expect(body).toContain("### quick-a-opening — Side A");
     expect(body).toContain("Reasoning: A had stronger arguments");
   });
 
@@ -225,9 +225,9 @@ describe("POST /api/matches/[id]/rejudge", () => {
     expect(stored?.verdict?.winner).toBe("B");
     expect(stored?.verdict?.reasoning).toBe("B had stronger rebuttals");
     expect(stored?.judgedAt).toBe(body.judgedAt);
-    expect(stored?.transcript).toHaveLength(4);
+    expect(stored?.transcript).toHaveLength(6);
     expect(stored?.transcript.map((turn) => turn.content)).toEqual(AGENT_TEXTS);
-    expect(stored?.metrics.turnsMs).toHaveLength(4);
+    expect(stored?.metrics.turnsMs).toHaveLength(6);
     expect(typeof stored?.metrics.judgeMs).toBe("number");
     expect(stored?.promptVersions).toEqual({ agent: "2", judge: "2" });
     expect(JSON.stringify(stored)).not.toMatch(/apiKey|baseUrl|sk-test/i);
@@ -299,7 +299,7 @@ describe("POST /api/matches/import", () => {
 
     const loaded = await loadMatchRecord("m-1");
     expect(loaded?.verdict).toEqual(seeded.verdict);
-    expect(loaded?.transcript).toHaveLength(4);
+    expect(loaded?.transcript).toHaveLength(6);
   });
 
   it("imports under a foreign id, serves it via GET, and rejudge answers 409 without a provider", async () => {
@@ -366,7 +366,7 @@ describe("POST /api/matches/import", () => {
     const exported = JSON.parse(exportMatchJson(other)) as Record<string, unknown>;
     const res = await postImport({ ...exported, matchId: "m-1" });
     expect(res.status).toBe(200);
-    expect((await loadMatchRecord("m-1"))?.transcript).toHaveLength(4);
+    expect((await loadMatchRecord("m-1"))?.transcript).toHaveLength(6);
   });
 
   it("scans nested structures for credential-like string fields", () => {

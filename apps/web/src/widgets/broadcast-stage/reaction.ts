@@ -18,6 +18,7 @@
  */
 
 import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
+import { findMatchTurn } from "@arena/types";
 
 export type ReactionId =
   | "cooking"
@@ -79,8 +80,8 @@ export function deriveReaction(state: DebateRuntimeState): ReactionView | null {
       if (len >= PANICKING_LENGTH) return REACTIONS.panicking;
       if (len >= COOKING_LENGTH) return REACTIONS.cooking;
     }
-    const phase = state.currentPhase;
-    if (phase === "REBUTTAL_A" || phase === "REBUTTAL_B") {
+    const turn = findMatchTurn(state.mode, state.currentPhase);
+    if (turn?.role === "response") {
       return REACTIONS.objection;
     }
   }

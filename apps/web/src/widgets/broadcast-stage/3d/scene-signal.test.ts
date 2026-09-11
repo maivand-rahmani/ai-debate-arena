@@ -41,6 +41,15 @@ describe("deriveSceneSignal", () => {
     expect(sig.camera).toBe("rebuttal");
   });
 
+  it("forwards flexible turn metadata to camera directors", () => {
+    const sig = deriveSceneSignal(
+      baseState({ mode: "quick", status: "streaming", currentSide: "A", currentPhase: "quick-a-response-2" }),
+      false,
+    );
+    expect(sig.camera).toBe("rebuttal");
+    expect(sig.turn).toMatchObject({ id: "quick-a-response-2", side: "A", role: "response", order: 5 });
+  });
+
   it("computes moods (deriving from a streaming panel)", () => {
     const sig = deriveSceneSignal(
       baseState({

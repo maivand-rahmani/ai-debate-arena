@@ -28,7 +28,7 @@ describe("token policy", () => {
   });
 
   it("defines rounds, context, and history budgets per policy", () => {
-    expect(TOKEN_POLICIES.Quick).toMatchObject({ rounds: 4, maxContextChars: 12000, maxHistoryTurns: 6 });
+    expect(TOKEN_POLICIES.Quick).toMatchObject({ rounds: 6, maxContextChars: 18000, maxHistoryTurns: 8 });
     expect(TOKEN_POLICIES.Standard).toMatchObject({ rounds: 4, maxContextChars: 24000, maxHistoryTurns: 10 });
     expect(TOKEN_POLICIES.Hardcore).toMatchObject({ rounds: 4, maxContextChars: 48000, maxHistoryTurns: 16 });
   });
@@ -42,20 +42,20 @@ describe("token policy", () => {
   });
 
   it("bounds streamed matches with a lifecycle timeout", () => {
-    expect(MATCH_TIMEOUT_MS).toBe(300_000);
+    expect(MATCH_TIMEOUT_MS).toBe(420_000);
   });
 });
 
 describe("match profiles", () => {
-  it("keeps quick byte-identical to the v0.1 Quick policy with 2 turns per side", () => {
+  it("defines Quick as a six-turn exchange with enough context for the full transcript", () => {
     expect(MATCH_PROFILES.quick).toEqual({
       mode: "quick",
       enabled: true,
-      rounds: 4,
+      rounds: 6,
       agentMaxOutputTokens: 3000,
       judgeMaxOutputTokens: 4000,
-      historyTurns: 6,
-      maxContextCharsPerSide: 12000,
+      historyTurns: 8,
+      maxContextCharsPerSide: 18000,
     });
     expect(getMatchProfile("quick")).toBe(MATCH_PROFILES.quick);
   });

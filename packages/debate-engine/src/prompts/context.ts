@@ -1,8 +1,11 @@
-import type { DebateConfig, DebatePhase, DebatePosition, DebateState, DebateTurn } from "../types";
+import type { MatchTurnSpec } from "@arena/types";
+import type { DebateConfig, DebatePosition, DebateState, DebateTurn } from "../types";
 
 export interface DebatePromptContext {
   readonly topic: string;
-  readonly phase: DebatePhase;
+  readonly phase: string;
+  /** Format-owned metadata for the turn currently being generated. */
+  readonly turn?: MatchTurnSpec;
   readonly agent: DebateConfig["agents"]["A"];
   readonly side?: "A" | "B";
   readonly opponentSide?: "A" | "B";
@@ -38,17 +41,14 @@ export function limitAgentHistory(
   return windowed.slice(drop);
 }
 
-function sideForPhase(phase: DebatePhase): "A" | "B" {
-  return phase.endsWith("_B") ? "B" : "A";
-}
-
 export function buildPromptContext(
   config: DebateConfig,
   state: DebateState,
   agentId: string,
+  turn?: MatchTurnSpec,
 ): DebatePromptContext {
   const agent = config.agents.A.id === agentId ? config.agents.A : config.agents.B;
-  const side = sideForPhase(state.phase);
+  const side = turn?.side ?? (agent.id === config.agents.A.id ? "A" : "B");
   const max = Math.max(0, config.maxHistoryTurns ?? 6);
   const windowed = state.turns.slice(-max);
   const cap = config.maxContextCharsPerSide;
@@ -58,6 +58,7 @@ export function buildPromptContext(
   return {
     topic: config.topic,
     phase: state.phase,
+    turn,
     agent,
     side,
     opponentSide: side === "A" ? "B" : "A",

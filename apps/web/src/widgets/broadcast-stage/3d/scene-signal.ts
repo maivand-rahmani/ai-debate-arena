@@ -12,6 +12,7 @@
 
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
 import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
+import type { MatchTurnSpec } from "@arena/types";
 import type {
   ContenderMood,
   JudgeMood,
@@ -40,6 +41,8 @@ export interface SceneSignal {
   readonly verdictStamp: string | null;
   /** Bounded entry scroll, additive to the existing camera director. */
   readonly heroProgress: number;
+  /** Format-owned turn metadata for camera/lighting directors. */
+  readonly turn: MatchTurnSpec | null;
 }
 
 const INITIAL_VIEW: StageView = {
@@ -106,6 +109,7 @@ export function deriveSceneSignal(
     reducedMotion,
     verdictStamp,
     heroProgress: Math.max(0, Math.min(1, Number.isFinite(heroProgress) ? heroProgress : 1)),
+    turn: view.currentTurn ?? null,
   };
 }
 

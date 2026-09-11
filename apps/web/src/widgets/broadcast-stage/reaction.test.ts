@@ -3,8 +3,12 @@ import { initialRuntimeState, type DebateRuntimeState } from "@/features/run-deb
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
 import { deriveReaction, REACTIONS } from "./reaction";
 
-function panel(content: string, sealed = false): DebateRuntimeState["panels"][number] {
-  return { id: "A:OPENING_A", side: "A", phase: "OPENING_A", content, sealed, model: "test" };
+function panel(
+  content: string,
+  sealed = false,
+  phase: DebateRuntimeState["currentPhase"] = "OPENING_A",
+): DebateRuntimeState["panels"][number] {
+  return { id: `A:${phase}`, side: "A", phase, content, sealed, model: "test" };
 }
 
 const verdict: DebateStreamVerdict = {
@@ -98,6 +102,17 @@ describe("deriveReaction — streaming states", () => {
       currentPhase: "REBUTTAL_A",
       currentSide: "A",
       panels: [panel("Hi")],
+    });
+    expect(view).toEqual(REACTIONS.objection);
+  });
+
+  it("resolves objection from format metadata for a Quick response", () => {
+    const view = deriveReaction({
+      ...initialRuntimeState,
+      status: "streaming",
+      currentPhase: "quick-a-response-2",
+      currentSide: "A",
+      panels: [panel("Hi", false, "quick-a-response-2")],
     });
     expect(view).toEqual(REACTIONS.objection);
   });

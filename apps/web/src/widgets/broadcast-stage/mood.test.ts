@@ -175,4 +175,18 @@ describe("deriveMoods — streaming heuristics", () => {
     state = panelFor(state, "A", "Hello there, friend. " + "x".repeat(120), true);
     expect(deriveMoods(state).a).toBe("confident");
   });
+
+  it("orders format-owned panels instead of comparing phase names", () => {
+    const state: DebateRuntimeState = {
+      ...initialRuntimeState,
+      status: "streaming",
+      currentSide: "A",
+      currentPhase: "quick-a-response-2",
+      panels: [
+        { id: "A:quick-a-opening", side: "A", phase: "quick-a-opening", content: "opening", sealed: true, model: "test" },
+        { id: "A:quick-a-response-2", side: "A", phase: "quick-a-response-2", content: "response content that has landed", sealed: false, model: "test" },
+      ],
+    };
+    expect(deriveMoods(state).a).toBe("speaking");
+  });
 });

@@ -73,7 +73,7 @@ describe("runDebate session-key wiring", () => {
       saveMatch: noopSave,
       callModel: await stubCallModel(seen),
     })) {
-      // Drain the full run (4 agent turns + judge + retry-safe judge path).
+      // Drain the full run (6 agent turns + judge + retry-safe judge path).
       void event;
       eventCount += 1;
     }
@@ -82,9 +82,11 @@ describe("runDebate session-key wiring", () => {
     expect(seen.length).toBeGreaterThanOrEqual(5);
     const agents = seen.filter((args) => args.kind === "agent");
     const judges = seen.filter((args) => args.kind === "judge");
-    expect(agents).toHaveLength(4);
-    // Turn order: A, B, A, B — each side reuses its own slot key.
+    expect(agents).toHaveLength(6);
+    // Turn order alternates A/B; each side reuses its own slot key.
     expect(agents.map((args) => args.sessionKey)).toEqual([
+      "match-session-1:agent-a",
+      "match-session-1:agent-b",
       "match-session-1:agent-a",
       "match-session-1:agent-b",
       "match-session-1:agent-a",

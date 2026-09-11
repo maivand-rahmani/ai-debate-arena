@@ -29,7 +29,7 @@ npm -w @arena/ai run typecheck       # single-package check
 | `packages/debate-engine/tests/debate.test.ts`               | Phase progression, judge JSON accept/reject         |
 | `packages/debate-engine/tests/state.test.ts`                | `appendTurn` immutability, `attachVerdict` finish   |
 | `packages/debate-engine/tests/verdict.test.ts`              | Criteria present/missing/invalid                    |
-| `packages/debate-engine/src/token-policy.ts` (`token-policy.test.ts`) | Quick P0 limits, per-policy budgets, tier scaling |
+| `packages/debate-engine/src/token-policy.ts` (`token-policy.test.ts`) | Quick six-turn limits, per-policy budgets, tier scaling |
 | `apps/web/src/shared/config/provider.test.ts`               | Schema validation, key redaction                    |
 | `packages/ai/tests/errors.test.ts`                          | Safe-error mapping, no key/URL leakage              |
 | `packages/debate-engine/tests/runner.test.ts`               | Event order via stubbed model, error→done           |
@@ -58,15 +58,20 @@ point; on some npm versions `--args` are not forwarded, so prefer `npx tsx`
 when passing flags. `AI_DEBATE_EVAL_DEBUG=1` prints raw judge output on
 failing cases.
 
-## Adding a phase end-to-end
+## Adding a match format
 
-1. `packages/debate-engine/src/types.ts` — extend `DebatePhase` (and turn-phase union).
-2. `packages/debate-engine/src/state.ts` — add the `NEXT_PHASE` edge.
-3. `packages/debate-engine/src/prompts/agent-prompt.ts` — add or update its
-   phase-specific instruction and bump `AGENT_PROMPT_VERSION` for wording changes.
-4. `packages/debate-engine/src/runner.ts` — extend `AGENT_PHASES`.
-5. `docs/debate-engine.md` — extend the stream contract (byte-identical rest).
-6. `apps/web/src/features/run-debate/lib` + `ui` — handle the new phase in reducer/panels.
+1. Define its ordered `MatchTurnSpec` entries in
+   `packages/types/src/match-format.ts`; use stable IDs and an existing
+   semantic role (`opening` or `response`) where possible.
+2. Register the format in `MATCH_FORMATS` and give it an explicit profile in
+   `packages/debate-engine/src/token-policy.ts`. Keep it disabled until its
+   product rules and evaluation evidence are approved.
+3. Add a role-specific prompt rule only when the existing opening/response
+   instruction is not sufficient.
+4. Add runner, reducer, timeline, caption/history, and scene-signal tests.
+   They consume the descriptor rather than requiring a new switch case.
+5. Update `docs/debate-engine.md`, this guide, and `TODO.md` with the format's
+   order, limits, and compatibility expectations.
 
 ## Build note
 

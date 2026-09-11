@@ -10,6 +10,7 @@ import type {
   MatchSummary,
   TranscriptTurnRecord,
 } from "@/shared/api/matches";
+import { findMatchTurn } from "@arena/types";
 
 export const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -25,7 +26,7 @@ export function formatMatchDate(iso: string): string {
   return DATE_FORMATTER.format(date);
 }
 
-export const PHASE_LABEL: Readonly<Record<TranscriptTurnRecord["phase"], string>> = {
+export const PHASE_LABEL: Readonly<Record<string, string>> = {
   CREATED: "Created",
   OPENING_A: "Opening · A",
   OPENING_B: "Opening · B",
@@ -75,7 +76,10 @@ export function isRejudged(summary: MatchSummary): boolean {
 
 /** Human label for a turn's phase + speaker ("Opening · A", "Rebuttal · B"…). */
 export function turnPhaseLabel(turn: TranscriptTurnRecord): string {
-  return PHASE_LABEL[turn.phase] ?? turn.phase;
+  const legacyLabel = PHASE_LABEL[turn.phase];
+  if (legacyLabel) return legacyLabel;
+  const formatTurn = findMatchTurn("quick", turn.phase);
+  return formatTurn ? `Turn ${formatTurn.order} · ${formatTurn.role === "opening" ? "Opening" : "Response"}` : turn.phase;
 }
 
 /** Human label for which side produced a turn. */

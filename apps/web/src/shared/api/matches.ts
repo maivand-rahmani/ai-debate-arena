@@ -59,7 +59,7 @@ export interface TranscriptTurnRecord {
   readonly id: string;
   readonly agentId: string;
   readonly side: "A" | "B";
-  readonly phase: "OPENING_A" | "OPENING_B" | "REBUTTAL_A" | "REBUTTAL_B" | "JUDGING" | "FINISHED" | "CREATED";
+  readonly phase: string;
   readonly content: string;
   readonly model: string;
   readonly createdAt: string;

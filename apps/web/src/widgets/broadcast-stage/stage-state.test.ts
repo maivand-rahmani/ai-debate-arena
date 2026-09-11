@@ -104,6 +104,21 @@ describe("deriveStageView — mode mapping", () => {
     expect(view.round).toBe("2");
   });
 
+  it("uses format metadata for a new Quick response turn", () => {
+    const view = deriveStageView(withPhase(baseState, "quick-b-response-2", "B"));
+    expect(view.camera).toBe("rebuttal");
+    expect(view.round).toBe("2");
+    expect(view.currentTurn).toMatchObject({ role: "response", order: 6, side: "B" });
+    expect(view.stageLabel).toBe("Agent B · Round 2 · Rebuttal");
+  });
+
+  it("exposes opening metadata without changing opening treatment", () => {
+    const view = deriveStageView(withPhase(baseState, "quick-a-opening", "A"));
+    expect(view.camera).toBe("a");
+    expect(view.round).toBe("1");
+    expect(view.currentTurn).toMatchObject({ role: "opening", order: 1, side: "A" });
+  });
+
   it("is judging when the runtime status is judging", () => {
     const view = deriveStageView({
       ...baseState,

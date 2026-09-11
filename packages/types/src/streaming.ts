@@ -11,14 +11,12 @@
 
 import type { DebateSide } from "./wire";
 
-export type DebateStreamPhase =
-  | "CREATED"
-  | "OPENING_A"
-  | "OPENING_B"
-  | "REBUTTAL_A"
-  | "REBUTTAL_B"
-  | "JUDGING"
-  | "FINISHED";
+/**
+ * Lifecycle markers plus format-owned turn ids. A turn id is intentionally a
+ * string: formats define their own speaking order instead of extending this
+ * wire contract whenever a match gains a round.
+ */
+export type DebateStreamPhase = string;
 
 export type DebateStreamTerminal = "completed" | "error" | "cancelled";
 

@@ -1,12 +1,5 @@
-import type { DebateRuntimeState, SpeechPanel, SpeechPhase } from "@/features/run-debate/lib/reducer";
-
-const PHASE_ORDER: Readonly<Record<SpeechPhase, number>> = {
-  OPENING_A: 0,
-  OPENING_B: 1,
-  REBUTTAL_A: 2,
-  REBUTTAL_B: 3,
-  JUDGING: 4,
-};
+import { findMatchTurn } from "@arena/types";
+import type { DebateRuntimeState, SpeechPanel } from "@/features/run-debate/lib/reducer";
 
 export interface MatchPlaybackSnapshot {
   readonly focusedPanel: SpeechPanel | null;
@@ -21,7 +14,11 @@ export interface MatchPlaybackSnapshot {
 
 /** Stable natural order, independent of network arrival timing. */
 export function orderedSpeechPanels(panels: readonly SpeechPanel[]): readonly SpeechPanel[] {
-  return [...panels].sort((a, b) => PHASE_ORDER[a.phase] - PHASE_ORDER[b.phase]);
+  return [...panels].sort(
+    (a, b) =>
+      (a.turn?.order ?? findMatchTurn("quick", a.phase)?.order ?? Number.MAX_SAFE_INTEGER) -
+      (b.turn?.order ?? findMatchTurn("quick", b.phase)?.order ?? Number.MAX_SAFE_INTEGER),
+  );
 }
 
 /**
@@ -31,15 +28,23 @@ export function orderedSpeechPanels(panels: readonly SpeechPanel[]): readonly Sp
  */
 export function deriveMatchPlayback(state: DebateRuntimeState, requestedIndex: number): MatchPlaybackSnapshot {
   const panels = orderedSpeechPanels(state.panels);
-  const focusedIndex = panels.length === 0 ? 0 : Math.min(Math.max(0, requestedIndex), panels.length - 1);
-  const focusedPanel = panels[focusedIndex] ?? null;
+  // `panels.length` is the explicit "continue to judge" sentinel. Do not
+  // clamp it back to the last panel: doing so can make the timeline say the
+  // audience is on a speech while the judge surface takes over.
+  const terminalSelected = panels.length > 0 && requestedIndex >= panels.length;
+  const focusedIndex = terminalSelected
+    ? panels.length
+    : panels.length === 0
+      ? 0
+      : Math.min(Math.max(0, requestedIndex), panels.length - 1);
+  const focusedPanel = terminalSelected ? null : panels[focusedIndex] ?? null;
   const unseenTurns = focusedPanel ? panels.length - focusedIndex - 1 : 0;
   // `panels.length` is a deliberate sentinel: after the final speech it means
   // the viewer has explicitly elected to move on to the judge.
   const holdTerminal =
     (state.status === "judging" || state.status === "finished") &&
     panels.length > 0 &&
-    requestedIndex < panels.length;
+    !terminalSelected;
   const nextIndex = unseenTurns > 0 ? focusedIndex + 1 : holdTerminal ? panels.length : null;
   const canAdvance = nextIndex !== null;
 

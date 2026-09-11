@@ -26,7 +26,9 @@ export const transcriptTurnSchema = z.object({
   id: z.string().min(1),
   agentId: z.string().min(1),
   side: z.enum(["A", "B"]),
-  phase: z.enum(["CREATED", "OPENING_A", "OPENING_B", "REBUTTAL_A", "REBUTTAL_B", "JUDGING", "FINISHED"]),
+  // Format-owned turn ids are deliberately open-ended; historical phase ids
+  // remain valid so local match history stays readable after new formats land.
+  phase: z.string().min(1),
   content: z.string(),
   model: z.string(),
   createdAt: z.string(),

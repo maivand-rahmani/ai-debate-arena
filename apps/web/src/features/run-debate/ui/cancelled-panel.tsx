@@ -1,7 +1,7 @@
 "use client";
 
 import type { DebateRuntimeState } from "../lib/reducer";
-import { PHASE_ROUNDS } from "../lib/reducer";
+import { currentFormatTurn } from "../lib/reducer";
 
 interface CancelledPanelProps {
   readonly state: DebateRuntimeState;
@@ -14,9 +14,9 @@ interface CancelledPanelProps {
  * "something broke" — deliberately distinct from the coral error screen.
  */
 export function CancelledPanel({ state, onNewMatch }: CancelledPanelProps) {
-  const reached = PHASE_ROUNDS.find((round) => round.key === state.currentPhase);
+  const reached = currentFormatTurn(state);
   const reachedLabel = reached
-    ? `Stopped during ${reached.label}`
+    ? `Stopped during turn ${reached.order}: ${reached.label}`
     : state.currentPhase === "JUDGING"
       ? "Stopped while the judge was evaluating"
       : state.currentPhase === "FINISHED"

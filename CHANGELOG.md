@@ -4,6 +4,12 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 
 ## [Unreleased]
 
+### Quick format foundation (2026-09-11)
+- Quick now runs six alternating, focused turns: two openings followed by two response exchanges. Prompts require 180–300 visible words, one decisive argument for an opening, and one named opponent claim plus a focused counterclaim for a response.
+- `MatchFormat`/`MatchTurnSpec` make speaking order shared data across the engine, stream, reducer, captions, history, progress timeline, and broadcast stage. New modes can change their turn count and order without a project-wide phase rewrite.
+- Broadcast scene signals now expose the active turn's metadata to camera and lighting directors. Existing response framing stays intact while future directors can make precise format-aware choices.
+- Re-judging now validates against the saved match policy's turn count, so legacy four-turn records and new six-turn Quick records both remain eligible.
+
 ### v0.3.1 usability pass (2026-09-09)
 - Idle = minimal two-step hero (Start new debate / Recent matches); setup + recent matches now modal dialogs sharing one shell with the provider manager.
 - Live speech moved from thin side rails to ONE bottom-center broadcast caption (large high-contrast text, dimmed glass, scrim darkens the 3D scene; same surface in the 2D fallback; reduced-motion + mobile handled).

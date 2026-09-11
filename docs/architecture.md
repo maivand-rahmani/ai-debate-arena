@@ -16,6 +16,7 @@ ai-debate-arena/
     src/                     build-ai-model.ts, errors.ts, index.ts
   packages/types/            @arena/types — canonical wire types
     src/                     wire.ts (DebateSide, MatchMode),
+                             match-format.ts (turn metadata/order),
                              streaming.ts (NDJSON event types)
   infrastructure/docker/     reserved for the v0.5 worker/sandbox images
 ```
@@ -23,7 +24,7 @@ ai-debate-arena/
 | Package | npm name | Responsibility | Deps (ours) | Consumers | Forbidden imports |
 | ------- | -------- | -------------- | ----------- | --------- | ----------------- |
 | apps/web | `@arena/web` | Routes, UI, server-only provider/match stores, web adapter | engine, ai, types | — (leaf) | engine internals via `@arena/*/src/*` deep paths (barrels only) |
-| packages/debate-engine | `@arena/debate-engine` | Phase machine, prompts, rubric, verdict, contracts, `runDebate`/`runJudge` | types | web, future `apps/api` + `apps/worker` | react/next/three/`@ai-sdk/*`/`ai`/node:fs/path/os/`server-only`/`@arena/ai` (node:crypto is the only approved builtin) |
+| packages/debate-engine | `@arena/debate-engine` | Format runner, prompts, rubric, verdict, contracts, `runDebate`/`runJudge` | types | web, future `apps/api` + `apps/worker` | react/next/three/`@ai-sdk/*`/`ai`/node:fs/path/os/`server-only`/`@arena/ai` (node:crypto is the only approved builtin) |
 | packages/ai | `@arena/ai` | `buildAiModel` (chat vs responses branching) + `toSafeErrorMessage` | none | web, future `apps/api` + `apps/worker` | fs/secrets — provider resolution stays in web |
 | packages/types | `@arena/types` | Canonical NDJSON event types (`v:1`/`matchId`/`seq`), `DebateSide`, `MatchMode` | none | engine, ai (via engine), web | everything (leaf, types only) |
 
@@ -74,14 +75,14 @@ Client (arena-screen → use-debate-stream → debate-stream.ts)
   │  POST /api/debate { topic, mode:"quick", agentA, agentB }   (zod, 400 on invalid)
   ▼
 ReadableStream NDJSON  ←  runDebate() generator (@arena/debate-engine/runner)
-  │  per phase: webCallModel (provider-db.getProvider → @arena/ai buildAiModel → streamText)
+  │  per format turn: webCallModel (provider-db.getProvider → @arena/ai buildAiModel → streamText)
   ▼  AI provider (OpenAI-compatible baseUrl + apiKey, server-only)
 Client reducer appends tokens → turns → verdict; abort() cancels fetch.
 ```
 
 ## Judge path
 
-After 4 agent turns the runner emits `judge-start`, calls `generateText`
+After the selected format's agent turns (six in Quick) the runner emits `judge-start`, calls `generateText`
 (default: agent A's provider) with the full transcript + rubric, parses strict
 JSON via `parseDebateVerdict`, emits `verdict`, then `done`.
 
@@ -97,9 +98,11 @@ re-exported from `@arena/types` where identical. Credentials and
 
 - **Credits/betting:** attach at `app` layer as a wrapper around `runDebate`
   input/output; domain types stay untouched until then.
-- **CHALLENGE/PROOF phases:** add members to `DebatePhase`, extend `NEXT_PHASE`
-  in `packages/debate-engine/src/state.ts`, add instructions in `prompts.ts`,
-  extend `AGENT_PHASES` in the runner, then the stream contract and UI reducer (`docs/development.md`).
+- **CHALLENGE/PROOF turns:** define the turn metadata and an opt-in
+  `MatchFormat` in `packages/types/src/match-format.ts`, then provide its
+  policy and prompt rules. The runner, stream, UI timeline, captions, history,
+  and camera signal consume the descriptor automatically; only a genuinely new
+  turn role needs a presentation rule.
 - **apps/api + apps/worker:** consume `@arena/debate-engine` + `@arena/ai`
   directly (no React/Next); DB-backed storage and docker sandbox deferred to
   v0.4/v0.5.

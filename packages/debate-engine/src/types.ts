@@ -3,6 +3,7 @@ import type { DebateSide } from "@arena/types";
 
 export enum DebatePhase {
   CREATED = "CREATED",
+  /** Legacy v0.3 ids kept for stored-record and test compatibility. */
   OPENING_A = "OPENING_A",
   OPENING_B = "OPENING_B",
   REBUTTAL_A = "REBUTTAL_A",
@@ -25,7 +26,8 @@ export interface DebateTurn {
   readonly id: string;
   readonly agentId: string;
   readonly side: DebateSide;
-  readonly phase: Exclude<DebatePhase, DebatePhase.CREATED | DebatePhase.FINISHED>;
+  /** Format-owned turn id, or the JUDGING lifecycle marker. */
+  readonly phase: string;
   readonly content: string;
   readonly model: string;
   readonly createdAt: string;
@@ -61,7 +63,8 @@ export interface DebateConfig {
 }
 
 export interface DebateState {
-  readonly phase: DebatePhase;
+  /** Lifecycle marker or a format-owned turn id. */
+  readonly phase: string;
   readonly turns: readonly DebateTurn[];
   readonly verdict?: DebateVerdict;
 }

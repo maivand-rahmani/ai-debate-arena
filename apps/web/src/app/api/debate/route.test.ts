@@ -50,8 +50,10 @@ const GARBAGE_JUDGE_TEXT = "this is not JSON at all {{{";
 const AGENT_TEXTS = [
   "Agent A opening argument.",
   "Agent B opening argument.",
-  "Agent A rebuttal argument.",
-  "Agent B rebuttal argument.",
+  "Agent A first response.",
+  "Agent B first response.",
+  "Agent A final response.",
+  "Agent B final response.",
 ];
 
 let mock: MockOpenAIProvider;
@@ -117,7 +119,7 @@ async function readErrorBody(res: Response): Promise<{ status: number; error: un
 }
 
 describe("POST /api/debate", () => {
-  it("streams a full Quick match: phases, token deltas, 4 turns, verdict, exactly one done (F7-07)", async () => {
+  it("streams a full Quick match: six turns, token deltas, verdict, exactly one done (F7-07)", async () => {
     mock.enqueue(
       ...AGENT_TEXTS.map((text) => ({ kind: "text", text }) as const),
       // Two copies: the judge may take one HTTP call (structured output) or
@@ -136,10 +138,12 @@ describe("POST /api/debate", () => {
     expect(events[events.length - 1]?.type).toBe("done");
 
     expect(events.filter((event) => event.type === "phase").map((event) => event.type === "phase" ? event.phase : null)).toEqual([
-      "OPENING_A",
-      "OPENING_B",
-      "REBUTTAL_A",
-      "REBUTTAL_B",
+      "quick-a-opening",
+      "quick-b-opening",
+      "quick-a-response-1",
+      "quick-b-response-1",
+      "quick-a-response-2",
+      "quick-b-response-2",
     ]);
 
     const turns = events.filter((event) => event.type === "turn");
@@ -166,7 +170,7 @@ describe("POST /api/debate", () => {
     // Wire proof: agent calls streamed over HTTP, everything hit the mock.
     expect(mock.requestCount).toBeGreaterThanOrEqual(5);
     expect(mock.requests.every((request) => request.url.endsWith("/chat/completions"))).toBe(true);
-    expect(mock.requests.slice(0, 4).every((request) => request.stream === true)).toBe(true);
+    expect(mock.requests.slice(0, 6).every((request) => request.stream === true)).toBe(true);
 
     // Stream contract v1: every event carries v/matchId/seq, seq from 1.
     expect(events.every((event) => event.v === 1)).toBe(true);
@@ -184,7 +188,7 @@ describe("POST /api/debate", () => {
     expect(record?.matchId).toBe(streamMatchId);
     expect(record?.terminal).toBe("completed");
     expect(record?.verdict?.winner).toBe("A");
-    expect(record?.transcript).toHaveLength(4);
+    expect(record?.transcript).toHaveLength(6);
     expect(record?.sides.A.providerName).toBe("Mock Provider");
     expect(record?.sides.B.providerName).toBe("Mock Provider");
     expect(JSON.stringify(record)).not.toMatch(/apiKey|baseUrl|sk-test/i);
@@ -336,7 +340,7 @@ describe("POST /api/debate", () => {
     if (errorEvent?.type === "error") {
       expect(errorEvent.message).toBe("Judge returned invalid verdict");
     }
-    // Retry traffic actually happened (4 agents + at least 2 judge attempts).
+    // Retry traffic actually happened (6 agents + at least 2 judge attempts).
     expect(mock.requestCount).toBeGreaterThanOrEqual(6);
     const doneJudge = events[events.length - 1];
     if (doneJudge?.type === "done") expect(doneJudge.terminal).toBe("error");

@@ -4,16 +4,16 @@ import { initialRuntimeState, type DebateRuntimeState } from "@/features/run-deb
 import { MatchProgress } from "./match-progress";
 
 describe("MatchProgress", () => {
-  it("makes the current turn and the full five-step format visible", () => {
+  it("makes the current Quick turn and the seven-step format visible", () => {
     const state: DebateRuntimeState = {
       ...initialRuntimeState,
       status: "streaming",
-      currentPhase: "REBUTTAL_A",
+      currentPhase: "quick-a-response-2",
       currentSide: "A",
     };
 
     const html = renderToStaticMarkup(<MatchProgress state={state} />);
-    expect(html).toContain("Step 3 of 5");
+    expect(html).toContain("Step 5 of 7");
     expect(html).toContain("Challenger responds");
     expect(html).toContain("Judge&#x27;s verdict");
     expect(html).toContain('aria-current="step"');
@@ -28,6 +28,6 @@ describe("MatchProgress", () => {
 
     const html = renderToStaticMarkup(<MatchProgress state={state} />);
     expect(html).toContain("Match complete · verdict ready");
-    expect((html.match(/match-progress__step--complete/g) ?? [])).toHaveLength(5);
+    expect((html.match(/match-progress__step--complete/g) ?? [])).toHaveLength(7);
   });
 });

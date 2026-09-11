@@ -12,6 +12,7 @@
  */
 
 import type { DebateSide } from "@arena/debate-engine";
+import { findMatchTurn, type MatchTurnSpec } from "@arena/types";
 import type {
   DebateStreamEvent,
   DebateStreamPhase,
@@ -31,9 +32,10 @@ export interface SpeechPanel {
   /** True once a `turn` event has sealed this panel. */
   readonly sealed: boolean;
   readonly model?: string;
+  readonly turn?: MatchTurnSpec;
 }
 
-export type SpeechPhase = Exclude<DebateStreamPhase, "CREATED" | "FINISHED">;
+export type SpeechPhase = string;
 
 export type DebateRuntimeStatus =
   | "idle"
@@ -50,6 +52,7 @@ export interface DebateRuntimeState {
   readonly mode: "quick";
   readonly currentPhase: DebateStreamPhase;
   readonly currentSide: DebateSide | null;
+  readonly currentTurn: MatchTurnSpec | null;
   readonly judgeActive: boolean;
   readonly judgeReasoning: string;
   readonly panels: readonly SpeechPanel[];
@@ -80,6 +83,7 @@ export const initialRuntimeState: DebateRuntimeState = {
   mode: "quick",
   currentPhase: "CREATED",
   currentSide: null,
+  currentTurn: null,
   judgeActive: false,
   judgeReasoning: "",
   panels: [],
@@ -158,12 +162,16 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
   const withMatchId = captureMatchId(state, event);
   switch (event.type) {
     case "phase":
+      {
+        const currentTurn = findMatchTurn(withMatchId.mode, event.phase) ?? null;
       return {
         ...withMatchId,
-        status: isAgentPhase(event.phase) ? "streaming" : event.phase === "JUDGING" ? "judging" : withMatchId.status,
+        status: currentTurn ? "streaming" : event.phase === "JUDGING" ? "judging" : withMatchId.status,
         currentPhase: event.phase,
         currentSide: event.side,
+        currentTurn,
       };
+      }
     case "token":
       return appendToken(withMatchId, event.side, event.text, deriveSpeechPhase(withMatchId.currentPhase));
     case "turn":
@@ -177,6 +185,7 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
         cancelled: false,
         currentPhase: "JUDGING",
         currentSide: null,
+        currentTurn: null,
       };
     case "verdict":
       return {
@@ -187,6 +196,7 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
         cancelled: false,
         currentPhase: "FINISHED",
         currentSide: null,
+        currentTurn: null,
       };
     case "error":
       return { ...withMatchId, status: "error", cancelled: false, errorMessage: event.message };
@@ -199,7 +209,7 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
       // we should not flip back to a (potentially fabricated) finished state.
       if (withMatchId.cancelled || withMatchId.status === "cancelled") return withMatchId;
       if (withMatchId.verdict) {
-        return { ...withMatchId, status: "finished", currentPhase: "FINISHED", currentSide: null };
+        return { ...withMatchId, status: "finished", currentPhase: "FINISHED", currentSide: null, currentTurn: null };
       }
       // Server said done but produced no verdict and no error — surface a safe
       // error instead of a finish so callers cannot fabricate a draw.
@@ -210,6 +220,7 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
         errorMessage: withMatchId.errorMessage ?? "Match ended without a verdict",
         judgeActive: false,
         currentSide: null,
+        currentTurn: null,
       };
     default:
       return withMatchId;
@@ -243,6 +254,7 @@ function applyRejudgeSuccess(
     cancelled: false,
     currentPhase: "FINISHED",
     currentSide: null,
+    currentTurn: null,
     errorMessage: undefined,
   };
 }
@@ -262,7 +274,14 @@ function appendToken(
       panels: state.panels.map((panel) => (panel.id === id ? { ...panel, content: panel.content + text } : panel)),
     };
   }
-  const panel: SpeechPanel = { id, side, phase, content: text, sealed: false };
+  const panel: SpeechPanel = {
+    id,
+    side,
+    phase,
+    content: text,
+    sealed: false,
+    turn: findMatchTurn(state.mode, phase) ?? undefined,
+  };
   return { ...state, panels: [...state.panels, panel] };
 }
 
@@ -276,6 +295,7 @@ function sealTurn(state: DebateRuntimeState, turn: DebateStreamTurn): DebateRunt
     content: turn.content,
     sealed: true,
     model: turn.model ?? existing?.model,
+    turn: findMatchTurn(state.mode, turn.phase) ?? existing?.turn,
   };
   if (existing) {
     return {
@@ -287,14 +307,11 @@ function sealTurn(state: DebateRuntimeState, turn: DebateStreamTurn): DebateRunt
 }
 
 function isAgentPhase(phase: DebateStreamPhase): boolean {
-  return phase === "OPENING_A" || phase === "OPENING_B" || phase === "REBUTTAL_A" || phase === "REBUTTAL_B";
+  return findMatchTurn("quick", phase) !== undefined;
 }
 
 function deriveSpeechPhase(phase: DebateStreamPhase): SpeechPhase | null {
-  if (phase === "OPENING_A" || phase === "OPENING_B" || phase === "REBUTTAL_A" || phase === "REBUTTAL_B") {
-    return phase;
-  }
-  return null;
+  return isAgentPhase(phase) ? phase : null;
 }
 
 export function panelId(side: DebateSide, phase: SpeechPhase): string {
@@ -303,20 +320,11 @@ export function panelId(side: DebateSide, phase: SpeechPhase): string {
 
 // --- Display helpers --------------------------------------------------------
 
-export interface PhaseRound {
-  readonly key: SpeechPhase;
-  readonly label: string;
-  readonly side: DebateSide;
-  readonly round: 1 | 2;
-  readonly stage: "opening" | "rebuttal";
+export function currentFormatTurn(
+  state: Pick<DebateRuntimeState, "mode" | "currentPhase" | "currentTurn">,
+): MatchTurnSpec | null {
+  return state.currentTurn ?? findMatchTurn(state.mode, state.currentPhase) ?? null;
 }
-
-export const PHASE_ROUNDS: readonly PhaseRound[] = [
-  { key: "OPENING_A", label: "Opening A", side: "A", round: 1, stage: "opening" },
-  { key: "OPENING_B", label: "Opening B", side: "B", round: 1, stage: "opening" },
-  { key: "REBUTTAL_A", label: "Rebuttal A", side: "A", round: 2, stage: "rebuttal" },
-  { key: "REBUTTAL_B", label: "Rebuttal B", side: "B", round: 2, stage: "rebuttal" },
-];
 
 export function panelsForSide(state: DebateRuntimeState, side: DebateSide): readonly SpeechPanel[] {
   return state.panels.filter((panel) => panel.side === side);
@@ -335,14 +343,12 @@ export function statusLineFor(state: DebateRuntimeState): string {
     case "starting":
       return "Contacting the arena…";
     case "streaming": {
-      const phase = isAgentPhase(state.currentPhase)
-        ? PHASE_ROUNDS.find((round) => round.key === state.currentPhase)
-        : undefined;
+      const phase = currentFormatTurn(state);
       const side = state.currentSide;
       if (phase && side) {
         return side === "A"
-          ? `Agent A is speaking — Round ${phase.round} · ${phase.stage === "opening" ? "Opening" : "Rebuttal"}`
-          : `Agent B is speaking — Round ${phase.round} · ${phase.stage === "opening" ? "Opening" : "Rebuttal"}`;
+          ? `Agent A is speaking — Turn ${phase.order} · ${phase.role === "opening" ? "Opening" : "Response"}`
+          : `Agent B is speaking — Turn ${phase.order} · ${phase.role === "opening" ? "Opening" : "Response"}`;
       }
       return "Streaming…";
     }

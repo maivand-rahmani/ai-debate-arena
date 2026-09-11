@@ -33,7 +33,8 @@ describe("deriveMatchPlayback", () => {
 
   it("reveals the verdict only after the final continue action", () => {
     const playback = deriveMatchPlayback(state, 4);
-    expect(playback.focusedPanel?.id).toBe("B:REBUTTAL_B");
+    expect(playback.focusedPanel).toBeNull();
+    expect(playback.focusedIndex).toBe(4);
     expect(playback.nextIndex).toBeNull();
     expect(playback.canAdvance).toBe(false);
     expect(playback.holdTerminal).toBe(false);

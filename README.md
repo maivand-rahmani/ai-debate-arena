@@ -1,6 +1,6 @@
 # AI Debate Arena
 
-Two AI debaters argue a motion you set — opening statements, rebuttals, then an AI judge scores both sides and declares a winner.
+Two AI debaters argue a motion you set in six focused turns — two openings, then four targeted responses — before an AI judge scores both sides and declares a winner.
 Runs locally on Next.js; bring any OpenAI-compatible provider (OpenAI, OpenRouter, local Ollama).
 npm workspaces monorepo: `@arena/web` (the Next app) + `@arena/debate-engine`, `@arena/ai`, `@arena/types` packages (see `docs/architecture.md`).
 
@@ -26,8 +26,8 @@ printed or committed. Add a second provider, or reuse one for both sides.
 
 1. Setup screen: enter a motion in the topic field.
 2. Per side, pick a provider + model and a FOR/AGAINST position (positions auto-mirror).
-3. Keep mode on Quick (Standard/Hardcore are "coming soon") and hit **Start match**.
-4. Watch tokens stream into each corner's speech panel, then the judge panel evaluates.
+3. Keep mode on Quick (Standard/Hardcore are "coming soon") and hit **Start match**. Quick alternates six times, one decisive point at a time.
+4. Watch each speech in the broadcast caption, advance at your pace, then let the judge panel evaluate.
 5. Verdict: animated score reveal, winner highlight, reasoning, 8-field criteria breakdown.
 
 ## Commands
@@ -44,13 +44,13 @@ printed or committed. Add a second provider, or reuse one for both sides.
 ## Where things live
 
 - `apps/web/` — Next.js app (`src/{app,features,widgets,shared}`, `scripts/`)
-- `packages/debate-engine/` — phase machine, prompts, rubric, verdict, runner
+- `packages/debate-engine/` — match formats, prompts, rubric, verdict, runner
 - `packages/ai/` — model factory + safe errors · `packages/types/` — wire types
 - `TODO.md` — backlog and MVP definition of done
 - `docs/architecture.md` — workspaces, layers, data flow, extension points
-- `docs/debate-engine.md` — phase machine, stream contract, judge rubric
+- `docs/debate-engine.md` — match formats, stream contract, judge rubric
 - `docs/providers.md` — provider setup, endpoints, key safety
-- `docs/development.md` — checks, tests, adding a phase
+- `docs/development.md` — checks, tests, adding a match format
 
 ## Security
 

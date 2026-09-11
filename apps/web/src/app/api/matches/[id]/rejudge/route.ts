@@ -36,7 +36,7 @@ export async function POST(request: Request, context: RejudgeRouteContext): Prom
   if (!record) {
     return Response.json({ error: "Match not found" }, { status: 404 });
   }
-  if (record.terminal !== "completed" || record.transcript.length !== 4) {
+  if (record.terminal !== "completed" || record.transcript.length !== record.policy.rounds) {
     return Response.json({ error: "Match cannot be re-judged" }, { status: 409 });
   }
   const judgeRef = record.judge;

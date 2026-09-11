@@ -28,7 +28,7 @@ export interface AgentDraft {
 export const TOPIC_MAX_LENGTH = 140;
 
 export const MODE_OPTIONS: readonly { readonly id: MatchMode; readonly label: string; readonly hint: string; readonly enabled: boolean }[] = [
-  { id: "quick", label: "Quick", hint: "Crisp single-round clash.", enabled: true },
+  { id: "quick", label: "Quick", hint: "Six focused turns. One argument at a time.", enabled: true },
   { id: "standard", label: "Standard", hint: "Longer turns, deeper context.", enabled: false },
   { id: "hardcore", label: "Hardcore", hint: "Strict budget, no slack.", enabled: false },
 ];

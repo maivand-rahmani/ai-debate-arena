@@ -16,7 +16,7 @@ export interface MatchProfile {
   readonly mode: MatchMode;
   /** Only `quick` is enabled in the UI; other tiers stay server-rejected. */
   readonly enabled: boolean;
-  /** Total agent turns per match (2 per side in quick). */
+  /** Total agent turns per match, owned by the active match format. */
   readonly rounds: number;
   readonly agentMaxOutputTokens: number;
   readonly judgeMaxOutputTokens: number;
@@ -28,11 +28,11 @@ export const MATCH_PROFILES: Readonly<Record<MatchMode, MatchProfile>> = {
   quick: {
     mode: "quick",
     enabled: true,
-    rounds: 4,
+    rounds: 6,
     agentMaxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
     judgeMaxOutputTokens: JUDGE_MAX_OUTPUT_TOKENS,
-    historyTurns: 6,
-    maxContextCharsPerSide: 12000,
+    historyTurns: 8,
+    maxContextCharsPerSide: 18000,
   },
   standard: {
     mode: "standard",
@@ -100,4 +100,4 @@ export function getTokenPolicy(name: TokenPolicyName = "Quick"): TokenPolicy {
 }
 
 /* Match lifecycle: bounded wall-clock for a streamed match (client abort or timeout). */
-export const MATCH_TIMEOUT_MS = 300_000;
+export const MATCH_TIMEOUT_MS = 420_000;

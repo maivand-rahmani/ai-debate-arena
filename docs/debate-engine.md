@@ -6,23 +6,28 @@ The Next app consumes it through the `"."` barrel; golden fixtures go through
 `"./testing"`. Future `apps/api` + `apps/worker` will consume the same entry
 points without React/Next.
 
-## Phase machine
+## Match formats
 
-7 states in `packages/debate-engine/src/state.ts`, strictly linear (`NEXT_PHASE`):
+`packages/types/src/match-format.ts` owns the speaking order as data. A
+`MatchTurnSpec` has a stable `id`, speaking `side`, semantic `role`, display
+`order`, and presentation `label`. The runner, reducer, history, captions, and
+scene signal resolve that same descriptor instead of hard-coding phase names.
+
+The active Quick format is deliberately short and watchable:
 
 ```
-CREATED → OPENING_A → OPENING_B → REBUTTAL_A → REBUTTAL_B → JUDGING → FINISHED
+1 A opening → 2 B opening → 3 A response → 4 B response → 5 A response → 6 B response → judge
 ```
 
-`transitionPhase` throws on any other edge; `advanceDebate` steps once.
-`appendTurn` grows `turns` immutably; `attachVerdict` sets the verdict and
-forces `FINISHED`. Sides: `A` speaks in `OPENING_A`/`REBUTTAL_A`, `B` in the
-`_B` phases; each side holds a fixed `FOR`/`AGAINST` position.
+`state.ts` still exposes the old linear phase helpers for v0.3 transcripts and
+tests. They are compatibility support, not the source of truth for new runs.
+`appendTurn` remains immutable and `attachVerdict` still produces a finished
+state; each side keeps its fixed `FOR`/`AGAINST` position.
 
 ## Runner loop (`runDebate`, `packages/debate-engine/src/runner.ts`)
 
 Async generator with injectable `deps.callModel` (tests stub it; no network).
-Per agent phase: set state → emit `phase` → build system + user prompt →
+Per format-owned turn: set state → emit `phase` → build system + user prompt →
 `streamText` with `policy.agentMaxOutputTokens` → emit `token*` → append turn →
 emit `turn`. Then `judge-start` → `generateText` with
 `policy.judgeMaxOutputTokens` → `parseDebateVerdict` → `verdict` → `done`.
@@ -33,22 +38,23 @@ judge JSON emits `Judge returned invalid verdict` then `done`.
 
 | Policy   | agent out | judge out | rounds | maxContextChars | maxHistoryTurns |
 | -------- | --------- | --------- | ------ | --------------- | --------------- |
-| Quick    | 2000      | 2000      | 4      | 12000           | 6               |
-| Standard | 2000      | 2000      | 4      | 24000           | 10              |
-| Hardcore | 3000      | 2000      | 4      | 48000           | 16              |
+| Quick    | 3000      | 4000      | 6      | 18000           | 8               |
+| Standard | 3500      | 4500      | 4      | 24000           | 10              |
+| Hardcore | 5000      | 6000      | 4      | 48000           | 16              |
 
-v0.1 keeps the same 4 phases for all tiers; only budgets differ. UI gates
-non-Quick modes.
+The active Quick match has a seven-minute lifecycle bound. Standard and
+Hardcore remain disabled until each gets its own approved format and quality
+evidence.
 
 ## Prompt strategy
 
-The active prompt generation is version 2. The system prompt establishes a fixed
-side and position, asks for persuasion rather than a generic essay, prohibits
-invented evidence and opponent impersonation, and requires one self-contained
-speech. The user prompt includes the current stage, bounded transcript, a
-separate view of the opponent's arguments, and phase-specific instructions.
-Rebuttal turns must identify and answer an opponent claim before reinforcing the
-speaker's own case. Prompt context is built in
+The active prompt establishes a fixed side and position, asks for persuasion
+rather than a generic essay, prohibits invented evidence and opponent
+impersonation, and requires a 180–300-word speech. An opening makes one
+decisive argument. A response names one opponent claim and gives one focused
+counterclaim, rather than recapping the debate. The user prompt includes the
+format-owned turn, bounded transcript, and a separate view of the opponent's
+arguments. Prompt context is built in
 `packages/debate-engine/src/prompts/context.ts` and rendered by the dedicated
 agent prompt module.
 
@@ -70,7 +76,7 @@ network or disk:
 
 ## Stream contract (`POST /api/debate` → `application/x-ndjson`, one object/line)
 
-- `{"type":"phase","phase":"OPENING_A","side":"A"}`
+- `{"type":"phase","phase":"quick-a-opening","side":"A"}`
 - `{"type":"token","side":"A","text":"…"}`
 - `{"type":"turn","turn":{"id":"…","side":"A","phase":"OPENING_A","content":"…","model":"…","createdAt":"…"}}`
 - `{"type":"judge-start"}`
@@ -78,7 +84,8 @@ network or disk:
 - `{"type":"error","message":"…"}`
 - `{"type":"done"}`
 
-Order guarantee: `phase → token* → turn`, repeated for the 4 agent phases,
+Order guarantee: `phase → token* → turn`, repeated for every turn in the
+selected format (six for Quick),
 then `judge-start → verdict`, then `done`. On failure: `error` then `done`
 (`done` is always last). Client disconnect aborts `request.signal`; the route
 returns the generator (`events.return()`) so no further provider calls happen.

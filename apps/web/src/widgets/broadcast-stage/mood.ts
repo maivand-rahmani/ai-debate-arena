@@ -14,6 +14,7 @@
  */
 
 import type { DebateRuntimeState, SpeechPanel } from "@/features/run-debate/lib/reducer";
+import { findMatchTurn } from "@arena/types";
 
 export type ContenderMood =
   | "thinking"
@@ -52,11 +53,19 @@ const VERDICT_DRAW: ContenderMood = "confused";
  * Compute the active side's latest speech panel so we can derive a more
  * specific mood (e.g. long streaming token bursts → heated / panicking).
  */
-function latestPanel(panels: readonly SpeechPanel[], side: "A" | "B"): SpeechPanel | undefined {
+function latestPanel(
+  state: DebateRuntimeState,
+  side: "A" | "B",
+): SpeechPanel | undefined {
   let latest: SpeechPanel | undefined;
-  for (const panel of panels) {
+  let latestOrder = -1;
+  for (const panel of state.panels) {
     if (panel.side !== side) continue;
-    if (!latest || panel.phase >= latest.phase) latest = panel;
+    const order = findMatchTurn(state.mode, panel.phase)?.order ?? state.panels.indexOf(panel);
+    if (!latest || order >= latestOrder) {
+      latest = panel;
+      latestOrder = order;
+    }
   }
   return latest;
 }
@@ -147,7 +156,7 @@ function streamingMoodForSide(
   if (state.status === "judging") return "listening";
 
   const isActive = activeSide === side;
-  const panel = latestPanel(state.panels, side);
+  const panel = latestPanel(state, side);
 
   if (!isActive) {
     return "listening";

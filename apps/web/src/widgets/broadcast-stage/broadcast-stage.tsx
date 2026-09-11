@@ -81,9 +81,10 @@ export function BroadcastStage({
 
   const showCancelled = state.status === "cancelled";
   const showError = state.status === "error";
-  const showJudge = !playback?.holdTerminal && (state.status === "judging" || state.status === "finished");
+  const viewerIsReadingSpeech = playback?.focusedPanel !== null && playback?.focusedPanel !== undefined;
+  const showJudge = !viewerIsReadingSpeech && !playback?.holdTerminal && (state.status === "judging" || state.status === "finished");
   const showLiveCaption = shouldShowLiveCaptionStatus(state.status);
-  const showPlaybackCaption = showLiveCaption || playback?.holdTerminal;
+  const showPlaybackCaption = showLiveCaption || viewerIsReadingSpeech || playback?.holdTerminal;
   const broadcastLive = isBroadcastLiveStatus(state.status);
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;

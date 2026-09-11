@@ -30,14 +30,15 @@ export class InvalidTransitionError extends Error {
 }
 
 export function transitionPhase(state: DebateState, to: DebatePhase): DebateState {
-  if (!canTransition(state.phase, to)) {
-    throw new InvalidTransitionError(state.phase, to);
+  const from = state.phase as DebatePhase;
+  if (!canTransition(from, to)) {
+    throw new InvalidTransitionError(from, to);
   }
   return { ...state, phase: to };
 }
 
 export function advanceDebate(state: DebateState): DebateState {
-  const next = nextDebatePhase(state.phase);
+  const next = nextDebatePhase(state.phase as DebatePhase);
   if (!next) throw new Error("Debate is already finished");
   return transitionPhase(state, next);
 }

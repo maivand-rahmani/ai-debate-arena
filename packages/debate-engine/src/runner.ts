@@ -34,6 +34,7 @@ import type {
   DebateStreamTurn,
   DebateStreamVerdict,
 } from "@arena/types";
+import { getMatchFormat } from "@arena/types";
 
 /**
  * Canonical stream wire types (see `@arena/types`). The inline event body
@@ -254,13 +255,6 @@ export interface RunDebateDeps {
   readonly saveMatch?: (record: MatchRecord) => Promise<void> | void;
 }
 
-const AGENT_PHASES: ReadonlyArray<{ readonly phase: DebateTurn["phase"]; readonly side: DebateSide }> = [
-  { phase: DebatePhase.OPENING_A, side: "A" },
-  { phase: DebatePhase.OPENING_B, side: "B" },
-  { phase: DebatePhase.REBUTTAL_A, side: "A" },
-  { phase: DebatePhase.REBUTTAL_B, side: "B" },
-];
-
 export interface RunJudgeInput {
   readonly topic: string;
   readonly turns: readonly DebateTurn[];
@@ -473,15 +467,18 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
   };
 
   let state: DebateState = createDebateState();
+  const format = getMatchFormat(input.mode);
 
   try {
-    for (const { phase, side } of AGENT_PHASES) {
+    for (const turnSpec of format.turns) {
+      const { side } = turnSpec;
+      const phase = turnSpec.id;
       state = { ...state, phase };
       yield envelope({ type: "phase", phase, side });
 
       const agent = side === "A" ? input.agentA : input.agentB;
       const system = buildAgentSystemPrompt(side, agent.position, input.topic);
-      const context = buildPromptContext(config, state, side);
+      const context = buildPromptContext(config, state, side, turnSpec);
       const prompt = buildDebatePrompt(context);
 
       let result: ModelCallResult;

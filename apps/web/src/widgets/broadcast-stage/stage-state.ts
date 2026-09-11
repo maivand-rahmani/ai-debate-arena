@@ -19,6 +19,7 @@
  */
 
 import type { DebateSide } from "@arena/debate-engine";
+import { findMatchTurn, type MatchTurnSpec } from "@arena/types";
 import type { DebateRuntimeState, DebateRuntimeStatus } from "@/features/run-debate/lib/reducer";
 import { deriveMoods, type MoodView } from "./mood";
 import { deriveReaction, type ReactionView } from "./reaction";
@@ -55,6 +56,8 @@ export interface StageView {
   readonly judgeActivity: StageSideActivity;
   readonly moods: MoodView;
   readonly reaction: ReactionView | null;
+  /** Format-owned metadata for the active speaking turn, when present. */
+  readonly currentTurn?: MatchTurnSpec;
 }
 
 /** The broadcast controls stay live only while the match can still advance. */
@@ -70,7 +73,8 @@ export function shouldShowLiveCaptionStatus(status: DebateRuntimeStatus): boolea
 export function deriveStageView(state: DebateRuntimeState): StageView {
   const mode = computeMode(state);
   const camera = computeCamera(state, mode);
-  const round = computeRound(state);
+  const currentTurn = findMatchTurn(state.mode, state.currentPhase);
+  const round = computeRound(currentTurn);
   const activeSide = computeActiveSide(state, mode);
   const stageLabel = computeStageLabel(state, mode, round);
   const moods = deriveMoods(state);
@@ -100,6 +104,7 @@ export function deriveStageView(state: DebateRuntimeState): StageView {
         : "idle",
     moods,
     reaction,
+    currentTurn,
   };
 }
 
@@ -126,7 +131,8 @@ function computeCamera(state: DebateRuntimeState, mode: StageMode): StageCamera 
   if (mode === "verdict") return "verdict";
   if (mode === "judging") return "judge";
   if (mode === "speaking") {
-    if (state.currentPhase === "REBUTTAL_A" || state.currentPhase === "REBUTTAL_B") {
+    const turn = findMatchTurn(state.mode, state.currentPhase);
+    if (turn?.role === "response") {
       return "rebuttal";
     }
     if (state.currentSide === "A") return "a";
@@ -135,10 +141,9 @@ function computeCamera(state: DebateRuntimeState, mode: StageMode): StageCamera 
   return "idle";
 }
 
-function computeRound(state: DebateRuntimeState): StageRound {
-  const phase = state.currentPhase;
-  if (phase === "OPENING_A" || phase === "OPENING_B") return "1";
-  if (phase === "REBUTTAL_A" || phase === "REBUTTAL_B") return "2";
+function computeRound(turn: MatchTurnSpec | undefined): StageRound {
+  if (turn?.role === "opening") return "1";
+  if (turn?.role === "response") return "2";
   return "none";
 }
 

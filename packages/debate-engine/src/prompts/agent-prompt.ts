@@ -1,19 +1,24 @@
-import { DebatePhase, type DebatePosition, type DebateSide, type DebateTurn } from "../types";
+import { findMatchTurn, type MatchTurnSpec } from "@arena/types";
+import { type DebatePosition, type DebateSide, type DebateTurn } from "../types";
 import type { DebatePromptContext } from "./context";
 
-export const PHASE_INSTRUCTIONS: Readonly<Record<string, string>> = {
-  [DebatePhase.OPENING_A]:
-    "Open the case: state a clear thesis, develop two connected reasons, and explain why they matter for the motion.",
-  [DebatePhase.OPENING_B]:
-    "Open the case: state a clear thesis, develop two connected reasons, and explain why they matter for the motion.",
-  [DebatePhase.REBUTTAL_A]:
-    "Rebut the opponent first: identify their strongest specific claim, explain the flaw or missing trade-off, then strengthen your own case.",
-  [DebatePhase.REBUTTAL_B]:
-    "Rebut the opponent first: identify their strongest specific claim, explain the flaw or missing trade-off, then strengthen your own case.",
-};
+export function instructionForTurn(turn: MatchTurnSpec | undefined): string {
+  if (turn?.role === "opening") {
+    return "State your position and develop exactly one decisive argument. Explain its consequence for the motion; do not list several independent arguments or try to pre-rebut every possible objection.";
+  }
+  if (turn?.role === "response") {
+    return "Identify one specific claim from the opponent's most recent response, explain its flaw or missing trade-off, then make one focused counter-claim that advances your position. Do not summarize the whole debate or introduce a list of arguments.";
+  }
+  return "Advance your case with one clear claim and a direct response to the opponent where applicable.";
+}
 
-const DEFAULT_PHASE_INSTRUCTION =
-  "Advance your case with a clear claim, reasons, and a direct response to the opponent where applicable.";
+/** Legacy named phases remain available to callers while formats own new ids. */
+export const PHASE_INSTRUCTIONS: Readonly<Record<string, string>> = {
+  OPENING_A: instructionForTurn(findMatchTurn("quick", "OPENING_A")),
+  OPENING_B: instructionForTurn(findMatchTurn("quick", "OPENING_B")),
+  REBUTTAL_A: instructionForTurn(findMatchTurn("quick", "REBUTTAL_A")),
+  REBUTTAL_B: instructionForTurn(findMatchTurn("quick", "REBUTTAL_B")),
+};
 
 export function buildAgentSystemPrompt(side: DebateSide, position: DebatePosition, topic: string): string {
   return [
@@ -34,7 +39,8 @@ export function buildDebatePrompt(context: DebatePromptContext): string {
   const history = context.history.length
     ? context.history.map(formatTurnForPrompt).join("\n\n")
     : "(no previous turns)";
-  const phaseInstruction = PHASE_INSTRUCTIONS[context.phase] ?? DEFAULT_PHASE_INSTRUCTION;
+  const turn = context.turn ?? findMatchTurn("quick", context.phase);
+  const phaseInstruction = instructionForTurn(turn);
   const opponentTurns = context.history.filter((turn) => turn.side === opponentSide);
   const opponentSummary = opponentTurns.length
     ? opponentTurns.map(formatTurnForPrompt).join("\n\n")
@@ -42,7 +48,7 @@ export function buildDebatePrompt(context: DebatePromptContext): string {
 
   return [
     `Motion: "${context.topic}"`,
-    `Current stage: ${context.phase}`,
+    `Current turn: ${turn?.label ?? context.phase}`,
     `Your role: Debater ${side}, arguing ${position} the motion.`,
     "Transcript so far:",
     history,
@@ -50,7 +56,7 @@ export function buildDebatePrompt(context: DebatePromptContext): string {
     opponentSummary,
     "Your task:",
     phaseInstruction,
-    "Make the response specific to the transcript. In a rebuttal, name or accurately paraphrase the opponent's claim before answering it; do not merely repeat your opening. End with the consequence for the motion.",
+    "Write 180 to 300 words. Make the response specific to the transcript. In a response, name or accurately paraphrase the opponent's claim before answering it; do not merely repeat your opening. End with the consequence for the motion.",
     "Return only the speech. Do not include labels such as \"Debater A:\" or \"Rebuttal:\".",
   ].join("\n\n");
 }
@@ -59,11 +65,12 @@ export function buildAgentPrompt(
   side: DebateSide,
   position: DebatePosition,
   topic: string,
-  phase: DebatePhase,
+  phase: string,
 ): { system: string; instruction: string } {
+  const turn = findMatchTurn("quick", phase);
   return {
     system: buildAgentSystemPrompt(side, position, topic),
-    instruction: PHASE_INSTRUCTIONS[phase] ?? DEFAULT_PHASE_INSTRUCTION,
+    instruction: instructionForTurn(turn),
   };
 }
 
