@@ -12,6 +12,9 @@ import { exportJsonBlob, MatchActions, type RejudgeStatus } from "@/features/run
 import { CriteriaView } from "@/features/run-debate/ui/match-history/criteria-view";
 import { formatMatchDate, TERMINAL_LABEL, WINNER_LABEL } from "@/features/run-debate/ui/match-history/format-helpers";
 import { TranscriptThread } from "@/features/arena/match/transcript-thread";
+import { ChallengePanel } from "@/features/run-debate/ui/match-history/challenge-panel";
+import { EvidenceProofPanel } from "@/features/run-debate/ui/match-history/evidence-proof-panel";
+import { SourceCapturePanel } from "@/features/run-debate/ui/match-history/source-capture-panel";
 
 interface MatchPageProps {
   readonly params: Promise<{ readonly id: string }>;
@@ -56,6 +59,10 @@ export default function MatchPage({ params }: MatchPageProps) {
     exportJsonBlob(record, record.matchId);
   }, [record]);
 
+  const refreshRecord = useCallback(async () => {
+    setRecord(await fetchMatch(id));
+  }, [id]);
+
   const handleRejudge = useCallback(async () => {
     setRejudgeStatus("flying");
     setRejudgeError(undefined);
@@ -95,6 +102,7 @@ export default function MatchPage({ params }: MatchPageProps) {
             rejudgeError={rejudgeError}
             onExportJson={handleExportJson}
             onRejudge={handleRejudge}
+            onCaptured={refreshRecord}
           />
         )}
       </article>
@@ -108,12 +116,14 @@ function MatchBody({
   rejudgeError,
   onExportJson,
   onRejudge,
+  onCaptured,
 }: {
   readonly record: MatchRecord;
   readonly rejudgeStatus: RejudgeStatus;
   readonly rejudgeError: string | undefined;
   readonly onExportJson: () => void;
   readonly onRejudge: () => void;
+  readonly onCaptured: () => Promise<void>;
 }) {
   const canRejudge = record.terminal === "completed";
   return (
@@ -175,6 +185,10 @@ function MatchBody({
           </p>
         </section>
       )}
+
+      {record.terminal === "completed" ? <EvidenceProofPanel record={record} /> : null}
+      {record.terminal === "completed" ? <SourceCapturePanel record={record} onCaptured={onCaptured} /> : null}
+      {record.terminal === "completed" ? <ChallengePanel record={record} /> : null}
 
       <section className="match-page__section match-page__section--actions">
         <h2 className="match-page__section-title">Save &amp; inspect</h2>

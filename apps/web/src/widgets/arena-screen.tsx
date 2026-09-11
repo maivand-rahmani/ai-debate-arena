@@ -12,6 +12,7 @@ import {
 } from "@/shared/api/matches";
 import { useProviders } from "@/features/create-debate/use-providers";
 import type { MatchDraft } from "@/features/create-debate/draft";
+import { evidenceRequestFromPacket } from "@/features/create-debate/evidence-request";
 import { useDebateStream } from "@/features/run-debate/lib/use-debate-stream";
 import { isInMatch } from "@/features/run-debate/lib/reducer";
 import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match-history-drawer";
@@ -217,7 +218,7 @@ export default function ArenaScreen() {
 // --- Helpers ----------------------------------------------------------------
 
 function toRequest(draft: MatchDraft): DebateStreamRequest {
-  return {
+  const base: DebateStreamRequest = {
     topic: draft.topic.trim(),
     mode: "quick",
     agentA: {
@@ -231,6 +232,10 @@ function toRequest(draft: MatchDraft): DebateStreamRequest {
       position: draft.sideB.position,
     },
   };
+  // F10-06: attach the optional evidence packet (basename + contents only);
+  // omitted entirely when the packet is empty.
+  const evidence = evidenceRequestFromPacket(draft.evidence);
+  return evidence ? { ...base, evidence } : base;
 }
 
 function providerById(providers: readonly RedactedProvider[], id?: string): RedactedProvider | undefined {

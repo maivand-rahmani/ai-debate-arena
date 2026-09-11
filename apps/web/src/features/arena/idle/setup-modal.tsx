@@ -18,6 +18,8 @@ import { useProviders } from "@/features/create-debate/use-providers";
 import { ProvidersEmptyState } from "@/features/create-debate/providers-empty-state";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/shared/ui/modal";
 import { ManageProvidersModal } from "@/features/manage-providers";
+import { EvidencePacketControl } from "@/features/create-debate/evidence-packet-control";
+import { emptyEvidencePacket, type EvidencePacket } from "@/features/create-debate/evidence-packet";
 
 interface SetupModalProps {
   readonly open: boolean;
@@ -61,6 +63,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
       sideB: { providerId: b.id, model: b.model, position: "AGAINST" },
     };
   }, [userDraft, providers, status]);
+  const evidence = effectiveDraft.evidence ?? emptyEvidencePacket();
 
   const applyChange = (mutator: (current: MatchDraft) => MatchDraft) => {
     setUserDraft((current) => mutator(current ?? effectiveDraft));
@@ -121,6 +124,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
   const updateAPosition = (position: Position) => applyChange((current) => applyPositionChange(current, "A", position));
   const updateBPosition = (position: Position) =>
     applyChange((current) => applyPositionChange(current, "B", position, false));
+  const updateEvidence = (packet: EvidencePacket) => applyChange((current) => ({ ...current, evidence: packet }));
 
   const submit = () => {
     if (!ready) return;
@@ -187,6 +191,8 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
               onPositionChange={updateBPosition}
             />
           </div>
+
+          <EvidencePacketControl value={evidence} onChange={updateEvidence} />
 
           {sameModelMatchup ? (
             <p className="setup-form__baseline" role="status">

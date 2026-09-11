@@ -36,11 +36,29 @@ export interface DebateStreamAgentInput {
   readonly position: "FOR" | "AGAINST";
 }
 
+/**
+ * Optional user-supplied evidence item on the wire (F10-06). The browser
+ * sends basename + contents ONLY: ids, hashes, timestamps, statuses,
+ * provenance, and verification claims are assigned server-side.
+ */
+export interface DebateStreamEvidenceItem {
+  readonly source: "user_text" | "local_file";
+  readonly label: string;
+  readonly content: string;
+}
+
+export interface DebateStreamEvidence {
+  readonly version: 1;
+  readonly items: readonly DebateStreamEvidenceItem[];
+}
+
 export interface DebateStreamRequest {
   readonly topic: string;
   readonly mode: DebateStreamMode;
   readonly agentA: DebateStreamAgentInput;
   readonly agentB: DebateStreamAgentInput;
+  /** Omitted entirely when the packet is empty. */
+  readonly evidence?: DebateStreamEvidence;
 }
 
 /**

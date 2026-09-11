@@ -12,6 +12,7 @@
 
 import type { DebateStreamVerdict } from "./debate-stream";
 import type { MatchMode } from "@arena/types";
+import type { EvidenceBundle, MatchChallenge, ProofResult } from "@arena/types";
 
 // --- Public types -----------------------------------------------------------
 
@@ -82,12 +83,125 @@ export interface MatchRecord {
   readonly verdict: DebateStreamVerdict | null;
   readonly terminal: MatchTerminal;
   readonly terminalReason: string | null;
+  readonly evidence?: EvidenceBundle;
+  readonly challenges?: readonly MatchChallenge[];
   readonly metrics: {
     readonly turnsMs: readonly number[];
     readonly totalMs: number;
     readonly judgeMs?: number;
     readonly usage?: { readonly promptTokens: number; readonly completionTokens: number };
   };
+}
+
+export interface ChallengeRequest {
+  readonly version: 1;
+  readonly requestId: string;
+  readonly target: { readonly turnId: string; readonly claimText: string };
+  readonly evidenceIds: readonly string[];
+}
+
+export interface MatchProofRequest {
+  readonly version: 1;
+  readonly evidenceId: string;
+}
+
+export interface MatchSourceRequest {
+  readonly version: 1;
+  readonly requestId: string;
+  readonly adapterId: "srcadp_https";
+  readonly adapterVersion: "1.0.0";
+  readonly reference: string;
+  readonly label?: string;
+  readonly freshness: { readonly mode: "snapshot-only"; readonly maxAgeSeconds: 86400 };
+  readonly confirm: true;
+}
+
+export interface MatchSourceCapture { readonly sourceSnapshot?: unknown; readonly evidence?: unknown; }
+
+export async function requestMatchSource(id: string, input: { reference: string; label?: string }): Promise<MatchSourceCapture> {
+  const request: MatchSourceRequest = {
+    version: 1,
+    requestId: `src_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`,
+    adapterId: "srcadp_https", adapterVersion: "1.0.0", reference: input.reference,
+    ...(input.label ? { label: input.label } : {}),
+    freshness: { mode: "snapshot-only", maxAgeSeconds: 86400 }, confirm: true,
+  };
+  let response: Response;
+  try { response = await fetch(`/api/matches/${encodeURIComponent(id)}/sources`, { method: "POST", headers: { accept: "application/json", "content-type": "application/json" }, body: JSON.stringify(request) }); }
+  catch (error) { throw new MatchesApiError(toMessage(error), undefined, "missing"); }
+  let payload: unknown;
+  try { payload = await response.json(); } catch { throw new MatchesApiError("Source capture response was not valid JSON", response.status, "parse"); }
+  if (!response.ok) {
+    const message = payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string" ? (payload as { error: string }).error : `Source capture unavailable (${response.status})`;
+    throw new MatchesApiError(message, response.status, "http");
+  }
+  if (!payload || typeof payload !== "object") throw new MatchesApiError("Source capture response was incompatible", response.status, "incompatible");
+  return payload as MatchSourceCapture;
+}
+
+/** Request the deterministic proof for content saved in a completed match. */
+export async function requestMatchProof(id: string, evidenceId: string): Promise<ProofResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/matches/${encodeURIComponent(id)}/proofs`, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      body: JSON.stringify({ version: 1, evidenceId } satisfies MatchProofRequest),
+    });
+  } catch (error) {
+    throw new MatchesApiError(toMessage(error), undefined, "missing");
+  }
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new MatchesApiError("Proof response was not valid JSON", response.status, "parse");
+  }
+  if (!response.ok) {
+    const message = payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
+      ? (payload as { error: string }).error
+      : `Server responded ${response.status} ${response.statusText}`.trim();
+    throw new MatchesApiError(message, response.status, "http");
+  }
+  const proof = payload && typeof payload === "object" ? (payload as { proof?: unknown }).proof : undefined;
+  if (!proof || typeof proof !== "object") {
+    throw new MatchesApiError("Proof response was missing the proof", response.status, "incompatible");
+  }
+  const candidate = proof as Partial<ProofResult>;
+  if (candidate.evidenceId !== evidenceId || !["verified", "failed", "unavailable"].includes(candidate.status ?? "") || typeof candidate.verifiedAt !== "string") {
+    throw new MatchesApiError("Proof response was incompatible", response.status, "incompatible");
+  }
+  return proof as ProofResult;
+}
+
+export async function submitMatchChallenge(id: string, request: ChallengeRequest): Promise<MatchChallenge> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/matches/${encodeURIComponent(id)}/challenges`, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      body: JSON.stringify(request),
+    });
+  } catch (error) {
+    throw new MatchesApiError(toMessage(error), undefined, "missing");
+  }
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new MatchesApiError("Challenge response was not valid JSON", response.status, "parse");
+  }
+  if (!response.ok) {
+    const message = payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
+      ? (payload as { error: string }).error
+      : `Server responded ${response.status} ${response.statusText}`.trim();
+    throw new MatchesApiError(message, response.status, "http");
+  }
+  const challenge = payload && typeof payload === "object" ? (payload as { challenge?: unknown }).challenge : undefined;
+  if (!challenge || typeof challenge !== "object") {
+    throw new MatchesApiError("Challenge response was missing the challenge", response.status, "incompatible");
+  }
+  return challenge as MatchChallenge;
 }
 
 export interface RejudgeSuccess {

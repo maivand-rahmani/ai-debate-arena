@@ -281,6 +281,126 @@ describe("POST /api/debate", () => {
     expect(mock.requestCount).toBe(0);
   });
 
+  // --- User evidence packets (F10-06..08) --------------------------------
+
+  function validEvidence() {
+    return {
+      version: 1 as const,
+      items: [
+        { source: "user_text", label: "Pasted notes", content: "Solar costs fell 90%." },
+        { source: "local_file", label: "brief.md", content: "# Brief\nSupporting analysis." },
+      ],
+    };
+  }
+
+  it("accepts a valid evidence packet, runs the match, and persists a server-normalized snapshot", async () => {
+    mock.enqueue(
+      ...AGENT_TEXTS.map((text) => ({ kind: "text", text }) as const),
+      { kind: "text", text: VALID_VERDICT_JSON },
+      { kind: "text", text: VALID_VERDICT_JSON },
+    );
+
+    const res = await postDebate({ ...validBody(), evidence: validEvidence() });
+    expect(res.status).toBe(200);
+    const events = await readNdjson(res);
+    expect(count(events, "error")).toBe(0);
+    expect(count(events, "turn")).toBe(6);
+
+    expect(saveMatchMock).toHaveBeenCalledTimes(1);
+    const record = saveMatchMock.mock.calls[0]?.[0];
+    expect(record?.evidence?.schemaVersion).toBe(1);
+    expect(record?.evidence?.items).toHaveLength(2);
+    const [first, second] = record?.evidence?.items ?? [];
+    // Server-assigned identity/trust fields only — nothing client-controlled.
+    expect(first?.id).toMatch(/^ev_/);
+    expect(first?.provenance.origin).toBe("user");
+    expect(first?.provenance.kind).toBe("user-text");
+    expect(first?.status).toBe("unverified");
+    expect(first?.provenance.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(second?.provenance.kind).toBe("user-file");
+    expect(second?.provenance.reference).toBe("brief.md");
+    expect(JSON.stringify(record)).not.toMatch(/apiKey|baseUrl|sk-test/i);
+  });
+
+  it("rejects an evidence packet with unknown or forbidden client fields with a 400 before any model call", async () => {
+    for (const evidence of [
+      { ...validEvidence(), extra: 1 },
+      { version: 1, items: [{ ...validEvidence().items[0], id: "ev_client" }] },
+      { version: 1, items: [{ ...validEvidence().items[0], status: "verified" }] },
+      { version: 1, items: [{ ...validEvidence().items[0], contentHash: "a".repeat(64) }] },
+      { version: 1, items: [{ ...validEvidence().items[0], provenance: { kind: "user-text" } }] },
+      { version: 1, items: [{ ...validEvidence().items[0], url: "https://example.org" }] },
+      { version: 2, items: validEvidence().items },
+      { version: 1, items: [] },
+    ]) {
+      const res = await postDebate({ ...validBody(), evidence });
+      const body = await readErrorBody(res);
+      expect(body.status).toBe(400);
+      expect(typeof body.error).toBe("string");
+      expect(mock.requestCount).toBe(0);
+      expect(saveMatchMock).not.toHaveBeenCalled();
+    }
+  });
+
+  it("rejects oversized evidence (per-item UTF-8 bytes and total) with a 400 before any model call", async () => {
+    const oversizedItem = {
+      version: 1 as const,
+      items: [{ source: "user_text", label: "n", content: "a".repeat(4097) }],
+    };
+    const res = await postDebate({ ...validBody(), evidence: oversizedItem });
+    const body = await readErrorBody(res);
+    expect(body.status).toBe(400);
+    expect(mock.requestCount).toBe(0);
+
+    const oversizedTotal = {
+      version: 1 as const,
+      items: Array.from({ length: 5 }, () => ({
+        source: "user_text",
+        label: "n",
+        content: "a".repeat(4000),
+      })),
+    };
+    const resTotal = await postDebate({ ...validBody(), evidence: oversizedTotal });
+    expect(resTotal.status).toBe(400);
+    expect(mock.requestCount).toBe(0);
+  });
+
+  it("rejects path-like local_file labels and non-plain-text content with a 400", async () => {
+    for (const item of [
+      { source: "local_file", label: "C:\\notes.txt", content: "text" },
+      { source: "local_file", label: "dir/notes.txt", content: "text" },
+      { source: "user_text", label: "n", content: "bad\u0000null" },
+    ]) {
+      const res = await postDebate({ ...validBody(), evidence: { version: 1, items: [item] } });
+      expect(res.status).toBe(400);
+      expect(mock.requestCount).toBe(0);
+    }
+  });
+
+  it("rejects a request body over the bounded limit with a 400 before any model call", async () => {
+    const bigPadding = "x".repeat(70 * 1024);
+    const res = await postDebate({ ...validBody(), topic: bigPadding });
+    const body = await readErrorBody(res);
+    expect(body.status).toBe(400);
+    expect(mock.requestCount).toBe(0);
+    expect(saveMatchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy evidence-free requests unchanged", async () => {
+    mock.enqueue(
+      ...AGENT_TEXTS.map((text) => ({ kind: "text", text }) as const),
+      { kind: "text", text: VALID_VERDICT_JSON },
+      { kind: "text", text: VALID_VERDICT_JSON },
+    );
+    const res = await postDebate(validBody());
+    expect(res.status).toBe(200);
+    const events = await readNdjson(res);
+    expect(count(events, "error")).toBe(0);
+    expect(count(events, "turn")).toBe(6);
+    const record = saveMatchMock.mock.calls[0]?.[0];
+    expect(record?.evidence).toBeUndefined();
+  });
+
   it("surfaces a provider HTTP 500 mid-run as a single error plus done, then closes the stream", async () => {
     mock.enqueue(
       { kind: "text", text: AGENT_TEXTS[0] },
