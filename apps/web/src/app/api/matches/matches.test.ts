@@ -14,6 +14,7 @@ import { afterEach, beforeAll, beforeEach, afterAll, describe, expect, it, vi } 
 import type { MatchRecord } from "@arena/debate-engine";
 import { runDebate } from "@arena/debate-engine";
 import { exportMatchJson } from "../../../features/run-debate/server/export";
+import { MAX_JSON_BODY_BYTES } from "../../../shared/api/bounded-body";
 import { getProvider } from "../../../shared/config/provider-store";
 import { loadMatchRecord, saveMatchRecord } from "../../../shared/config/match-store";
 import { GET as listMatches } from "./route";
@@ -274,6 +275,57 @@ describe("POST /api/matches/[id]/rejudge", () => {
     expect(stored?.judgedAt).toBeUndefined();
     expect(stored?.metrics.judgeMs).toBeUndefined();
   });
+
+  it("preserves challenges, evidence events, and source audits through rejudge and export (F10-09/F10-10)", async () => {
+    const record = await seedCompletedMatch("m-5");
+    const withHistory: MatchRecord = {
+      ...record,
+      challenges: [
+        {
+          id: "chl_1",
+          requestId: "req-1",
+          matchId: "m-5",
+          status: "resolved",
+          side: "A",
+          targetTurnId: record.transcript[0]!.id,
+          targetClaimText: "A opening.",
+          claimId: "clm_1",
+          evidenceIds: [],
+          createdAt: "2026-01-01T00:02:00.000Z",
+          updatedAt: "2026-01-01T00:03:00.000Z",
+        },
+      ],
+      evidenceEvents: [
+        { eventVersion: 1, matchId: "m-5", seq: 1, type: "challenge-requested", challengeId: "chl_1", claimId: "clm_1", requestId: "req-1" },
+      ],
+      sourceAudits: [
+        {
+          schemaVersion: 1,
+          id: "srcaudit_1",
+          matchId: "m-5",
+          adapterId: "srcadp_test",
+          adapterVersion: "1.0.0",
+          outcome: "granted",
+          consentId: "consent-1",
+          accessedAt: "2026-01-01T00:01:00.000Z",
+        },
+      ],
+    };
+    await saveMatchRecord(withHistory);
+
+    mock.enqueue({ kind: "text", text: VERDICT_B_JSON });
+    const res = await rejudgeMatch(new Request("http://localhost/api/matches/m-5/rejudge", { method: "POST" }), params("m-5"));
+    expect(res.status).toBe(200);
+
+    const stored = await loadMatchRecord("m-5");
+    expect(stored?.challenges).toEqual(withHistory.challenges);
+    expect(stored?.evidenceEvents).toEqual(withHistory.evidenceEvents);
+    expect(stored?.sourceAudits).toEqual(withHistory.sourceAudits);
+    // Export JSON carries the full history verbatim.
+    const exported = JSON.parse(exportMatchJson(stored!)) as MatchRecord;
+    expect(exported.challenges).toEqual(withHistory.challenges);
+    expect(exported.sourceAudits).toEqual(withHistory.sourceAudits);
+  });
 });
 
 function postImport(body: unknown): Promise<Response> {
@@ -374,5 +426,103 @@ describe("POST /api/matches/import", () => {
     expect(findCredentialLikeFields({ usage: { promptTokens: 5, completionTokens: 6 } })).toEqual([]);
     expect(findCredentialLikeFields({ secret: "", token: 0 })).toEqual([]);
     expect(findCredentialLikeFields("plain")).toEqual([]);
+  });
+
+  it("rejects an oversized body with 400 before parsing or persistence", async () => {
+    const seeded = await seedCompletedMatch("m-over");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const exported = JSON.parse(exportMatchJson(seeded)) as Record<string, unknown>;
+      // Valid JSON, but over the bounded-body cap: must be rejected BEFORE
+      // parsing (and therefore before the credential scan or any write).
+      const oversize = `${JSON.stringify(exported).slice(0, -1)},"padding":"${"x".repeat(MAX_JSON_BODY_BYTES)}"}`;
+      expect(oversize.length).toBeGreaterThan(MAX_JSON_BODY_BYTES);
+
+      const res = await postImport(oversize);
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toMatch(/too large/i);
+
+      // Nothing persisted: the stored record is byte-for-byte the seeded one.
+      expect(await loadMatchRecord("m-over")).toEqual(seeded);
+      // The oversized payload (with its padding) is never echoed into logs.
+      const logged = [...warnSpy.mock.calls, ...errorSpy.mock.calls].map((entry) => String(entry[0])).join("\n");
+      expect(logged).not.toContain("padding");
+      expect(logged).not.toContain("sk-test");
+    } finally {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("rejects malformed JSON with 400 and stores nothing", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await postImport("{not-json");
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe("Invalid JSON body");
+      expect(await loadMatchRecord("m-junk")).toBeNull();
+      const logged = [...warnSpy.mock.calls, ...errorSpy.mock.calls].map((entry) => String(entry[0])).join("\n");
+      expect(logged).not.toContain("not-json");
+    } finally {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("rejects a schema-valid record with a store-unsafe match id as 400", async () => {
+    const seeded = await seedCompletedMatch("m-1");
+    const exported = JSON.parse(exportMatchJson(seeded)) as Record<string, unknown>;
+    const res = await postImport({ ...exported, matchId: "../evil" });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toMatch(/invalid match id/i);
+    expect(await loadMatchRecord("m-1")).toEqual(seeded);
+  });
+
+  it("serializes concurrent import and rejudge so the stored record never interleaves", async () => {
+    const seeded = await seedCompletedMatch("m-1");
+    const exported = JSON.parse(exportMatchJson(seeded)) as Record<string, unknown>;
+    mock.enqueue({ kind: "text", text: VERDICT_B_JSON });
+
+    const [imported, rejudged] = await Promise.all([
+      postImport(exported),
+      rejudgeMatch(new Request("http://localhost/api/matches/m-1/rejudge", { method: "POST" }), params("m-1")),
+    ]);
+    expect(imported.status).toBe(200);
+    expect(rejudged.status).toBe(200);
+    // Exactly one judge HTTP call: the re-judge ran once under the lock.
+    expect(mock.requestCount).toBe(1);
+
+    // The final record is always one complete write: either the fresh import
+    // (seed verdict, never judged) or the re-judged record (new verdict) —
+    // never a mix of both.
+    const stored = await loadMatchRecord("m-1");
+    if (!stored) throw new Error("expected the record to be stored");
+    expect(stored.transcript).toHaveLength(6);
+    expect(stored.transcript.map((turn) => turn.content)).toEqual(AGENT_TEXTS);
+    if (stored.judgedAt === undefined) {
+      expect(stored.verdict).toEqual(seeded.verdict);
+    } else {
+      expect(stored.verdict?.winner).toBe("B");
+    }
+  });
+
+  it("serializes concurrent duplicate imports of the same id", async () => {
+    const seeded = await seedCompletedMatch("m-1");
+    const exported = JSON.parse(exportMatchJson(seeded)) as Record<string, unknown>;
+    const responses = await Promise.all([
+      postImport({ ...exported, matchId: "foreign-x" }),
+      postImport({ ...exported, matchId: "foreign-x" }),
+      postImport({ ...exported, matchId: "foreign-x" }),
+    ]);
+    for (const res of responses) {
+      expect(res.status).toBe(200);
+    }
+
+    const stored = await loadMatchRecord("foreign-x");
+    expect(stored?.matchId).toBe("foreign-x");
+    expect(stored?.transcript).toHaveLength(6);
+    expect(stored?.verdict).toEqual(seeded.verdict);
   });
 });
