@@ -21,6 +21,7 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 ### Quick format foundation (2026-09-11)
 - Quick now runs six alternating, focused turns: two openings followed by two response exchanges. Prompts require 180–300 visible words, one decisive argument for an opening, and one named opponent claim plus a focused counterclaim for a response.
 - `MatchFormat`/`MatchTurnSpec` make speaking order shared data across the engine, stream, reducer, captions, history, progress timeline, and broadcast stage. New modes can change their turn count and order without a project-wide phase rewrite.
+- Match records now fall back to the gitignored workspace `.data/matches` store when the default user-home directory is blocked, and Recents reads both stores while preserving an explicit `AI_DEBATE_ARENA_MATCH_DIR` override.
 - Broadcast scene signals now expose the active turn's metadata to camera and lighting directors. Existing response framing stays intact while future directors can make precise format-aware choices.
 - Re-judging now validates against the saved match policy's turn count, so legacy four-turn records and new six-turn Quick records both remain eligible.
 - Responses-only judge models now fall back from schema output to schema-free streaming JSON, then to a plain Responses call when the stream is empty. The fallback leaves sampling defaults to the provider instead of forcing an unsupported temperature.

@@ -24,12 +24,14 @@ npm -w @arena/ai run typecheck       # single-package check
 
 ## Latest verification
 
-The current Quick format work was verified on 2026-09-11: 435 web tests and
+The current Quick format work was verified on 2026-09-11: 317 web tests and
 110 debate-engine tests pass; the touched workspace typechecks and production
 Next build pass; and a live smoke match generated and displayed all six Quick
-turns. The remaining F4-43 check is provider-backed persistence from the
-user's own terminal, because the Codex sandbox cannot write to
-`C:\Users\PC\.ai-debate-arena`.
+turns. Match persistence uses the normal
+`C:\Users\PC\.ai-debate-arena\matches` store and automatically falls back to
+the gitignored `.data/matches` directory when the home store is blocked. The
+remaining F4-43 check is the owner's final browser confirmation that the new
+match appears in Recents.
 
 ## 3D visual changes
 
