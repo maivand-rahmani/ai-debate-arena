@@ -1,6 +1,8 @@
 import type { DebateTurn } from "../types";
 import { buildCriteriaFieldList, buildRubricPhrase, RUBRIC_VERSIONS, type RubricVersion } from "../rubric";
 import { JUDGE_MAX_CONTEXT_CHARS } from "../token-policy";
+import { evidenceBlockLines } from "./evidence-block";
+import type { EvidenceBundle } from "@arena/types";
 
 export const JUDGE_SYSTEM_PROMPT = [
   "You are the final, impartial judge of a formal debate.",
@@ -14,6 +16,12 @@ export interface BuildJudgePromptOptions {
   readonly rubricVersion?: RubricVersion;
   /** Maximum characters of transcript context sent to the judge. */
   readonly maxTranscriptChars?: number;
+  /**
+   * Untrusted user evidence (F10-06..08), rendered as delimited data between
+   * the transcript and the scoring instructions. Never part of the system
+   * prompt.
+   */
+  readonly evidence?: EvidenceBundle;
 }
 
 export function buildJudgePrompt(
@@ -23,15 +31,17 @@ export function buildJudgePrompt(
 ): string {
   const rubricVersion = options?.rubricVersion ?? "2";
   const maxTranscriptChars = options?.maxTranscriptChars ?? JUDGE_MAX_CONTEXT_CHARS;
-  if (rubricVersion === "1") return buildLegacyJudgePrompt(topic, turns, maxTranscriptChars);
+  if (rubricVersion === "1") return buildLegacyJudgePrompt(topic, turns, maxTranscriptChars, options?.evidence);
   const rubric = RUBRIC_VERSIONS[rubricVersion] ?? RUBRIC_VERSIONS["2"];
   const transcript = renderTranscript(turns, maxTranscriptChars);
+  const evidenceLines = evidenceBlockLines(options?.evidence);
 
   return [
     `Motion: "${topic}"`,
     "You are judging the complete transcript below. Compare Debater A and Debater B directly and independently.",
     "Transcript:",
     transcript,
+    ...evidenceLines,
     "Score each side with integers from 0 to 100. Use the full range when justified: 90-100 is exceptional and decisive; 70-89 is strong with minor gaps; 50-69 is plausible but limited; below 50 is weak, unsupported, evasive, contradictory, or off-topic.",
     "Evaluate these criteria for each side: argument quality (clear thesis, logical reasons, meaningful support), rebuttal quality (accurately identifies and answers the opponent's strongest points), consistency (stable claims without contradictions), and relevance (stays focused on the motion and the actual exchange).",
     "Direct engagement with the opponent is mandatory: a side that does not answer the opposing case cannot receive a top overall score.",
@@ -45,12 +55,19 @@ export function buildJudgePrompt(
 }
 
 /** Preserve the v1 prompt for historical evaluation and stored comparisons. */
-function buildLegacyJudgePrompt(topic: string, turns: readonly DebateTurn[], maxTranscriptChars: number): string {
+function buildLegacyJudgePrompt(
+  topic: string,
+  turns: readonly DebateTurn[],
+  maxTranscriptChars: number,
+  evidence?: EvidenceBundle,
+): string {
   const transcript = renderTranscript(turns, maxTranscriptChars, (turn) => `[${turn.side} / ${turn.phase}]: `);
+  const evidenceLines = evidenceBlockLines(evidence);
   return [
     `You are the judge of a formal debate on the topic: "${topic}".`,
     "Full transcript:",
     transcript,
+    ...evidenceLines,
     "Compare both sides and score each side as an integer 0-100 for scoreA and scoreB using this rubric: " +
       `${buildRubricPhrase()}.`,
     "Also provide criteria as integers 0-100 each: argumentQualityA, argumentQualityB, rebuttalA, rebuttalB, consistencyA, consistencyB, relevanceA, relevanceB.",

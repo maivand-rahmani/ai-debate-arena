@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { extractJsonObject, isDegenerateVerdict, normalizeVerdictWinner, parseDebateVerdict } from "../src/verdict";
+import { debateVerdictSchema } from "../src/verdict";
+import { EVIDENCE_LIMITS } from "../src/evidence-contract";
+import { CONTRACT_VERSION, matchRecordSchema } from "../src/contract";
 
 const criteria = {
   argumentQualityA: 80,
@@ -38,6 +41,111 @@ describe("parseDebateVerdict", () => {
   it("rejects invalid verdicts", () => {
     expect(parseDebateVerdict('{"winner":"X","scoreA":80,"scoreB":70,"reasoning":"bad"}').success).toBe(false);
     expect(parseDebateVerdict("not json").success).toBe(false);
+  });
+});
+
+describe("verdict evidence references (F10-03)", () => {
+  function verdictWithRefs() {
+    return {
+      winner: "A" as const,
+      scoreA: 82,
+      scoreB: 74,
+      criteria,
+      reasoning: "A argued better",
+      claimIds: ["clm_1", "clm_2"],
+      evidenceIds: ["ev_1"],
+    };
+  }
+
+  it("accepts legacy verdicts without refs unchanged", () => {
+    const legacy = {
+      winner: "A" as const,
+      scoreA: 82,
+      scoreB: 74,
+      criteria,
+      reasoning: "A argued better",
+    };
+    expect(debateVerdictSchema.safeParse(legacy).success).toBe(true);
+    const parsed = parseDebateVerdict(JSON.stringify(legacy));
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.claimIds).toBeUndefined();
+      expect(parsed.data.evidenceIds).toBeUndefined();
+      expect(parsed.data).toEqual(legacy);
+    }
+  });
+
+  it("accepts valid refs at the schema level", () => {
+    expect(debateVerdictSchema.safeParse(verdictWithRefs()).success).toBe(true);
+  });
+
+  it("passes refs through parseDebateVerdict", () => {
+    const parsed = parseDebateVerdict(JSON.stringify(verdictWithRefs()));
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.claimIds).toEqual(["clm_1", "clm_2"]);
+      expect(parsed.data.evidenceIds).toEqual(["ev_1"]);
+    }
+  });
+
+  it("rejects malformed refs at the schema level", () => {
+    expect(
+      debateVerdictSchema.safeParse({ ...verdictWithRefs(), claimIds: ["bad id!"] }).success,
+    ).toBe(false);
+    expect(
+      debateVerdictSchema.safeParse({ ...verdictWithRefs(), evidenceIds: [42] }).success,
+    ).toBe(false);
+    expect(debateVerdictSchema.safeParse({ ...verdictWithRefs(), claimIds: [] }).success).toBe(true);
+  });
+
+  it("rejects oversized ref arrays", () => {
+    const tooMany = Array.from({ length: EVIDENCE_LIMITS.refsPerEntity + 1 }, (_, i) => `clm_${i}`);
+    expect(
+      debateVerdictSchema.safeParse({ ...verdictWithRefs(), claimIds: tooMany }).success,
+    ).toBe(false);
+  });
+
+  it("accepts records with evidence-extended verdicts and rejects invalid ones", () => {
+    const record = {
+      version: CONTRACT_VERSION,
+      matchId: "match-vref-1",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "2026-01-01T00:01:00.000Z",
+      topic: "Should AI be regulated?",
+      mode: "quick",
+      sides: {
+        A: { providerName: "Provider One", modelId: "m1", position: "FOR" },
+        B: { providerName: "Provider Two", modelId: "m2", position: "AGAINST" },
+      },
+      policy: {
+        mode: "quick",
+        enabled: true,
+        rounds: 4,
+        agentMaxOutputTokens: 2000,
+        judgeMaxOutputTokens: 2000,
+        historyTurns: 6,
+        maxContextCharsPerSide: 12000,
+      },
+      promptVersions: { agent: "1", judge: "1" },
+      rubricVersion: "1",
+      transcript: [],
+      verdict: { ...verdictWithRefs(), criteria },
+      terminal: "completed",
+      terminalReason: null,
+      metrics: { turnsMs: [12], totalMs: 100 },
+    };
+    expect(matchRecordSchema.safeParse(record).success).toBe(true);
+    expect(matchRecordSchema.safeParse({ ...record, verdict: null }).success).toBe(true);
+    expect(
+      matchRecordSchema.safeParse({ ...record, verdict: { ...verdictWithRefs(), claimIds: ["bad id!"] } })
+        .success,
+    ).toBe(false);
+    expect(
+      matchRecordSchema.safeParse({
+        ...record,
+        verdict: { ...verdictWithRefs(), evidenceIds: ["x".repeat(EVIDENCE_LIMITS.idChars + 1)] },
+      }).success,
+    ).toBe(false);
   });
 });
 

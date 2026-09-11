@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { DebatePhase, MATCH_PROFILES, type MatchRecord } from "@arena/debate-engine";
-import { runDebate, type DebateStreamEvent, type ModelCallArgs } from "../src/runner";
+import { runDebate, runJudge, type DebateStreamEvent, type ModelCallArgs } from "../src/runner";
+import { UNTRUSTED_EVIDENCE_BEGIN, UNTRUSTED_EVIDENCE_END } from "../src/prompts";
+import { normalizeUserEvidencePacket } from "../src/evidence-contract";
+import type { EvidenceBundle } from "@arena/types";
 
 const verdictJson = JSON.stringify({
   winner: "A",
@@ -601,5 +604,148 @@ describe("runDebate token metrics (F7-13)", () => {
       { callModel: async () => ({ text: verdictJson, chunks: [] }) },
     );
     expect(result.usage).toEqual({ promptTokens: 0, completionTokens: 0 });
+  });
+});
+
+describe("runDebate with user evidence (F10-06..08)", () => {
+  function evidenceBundle(): EvidenceBundle {
+    const result = normalizeUserEvidencePacket({
+      version: 1,
+      items: [{ source: "local_file", label: "brief.md", content: "# Brief\nSupporting analysis." }],
+    });
+    if (!result.success) throw new Error(`fixture failed: ${result.error}`);
+    return result.data;
+  }
+
+  it("passes evidence into all six agent prompts and the judge prompt, never into system prompts", async () => {
+    const agentPrompts: string[] = [];
+    const agentSystems: string[] = [];
+    const judgePrompts: string[] = [];
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(
+      { ...quickInput(), evidence: evidenceBundle() },
+      {
+        callModel: async (args) => {
+          if (args.kind === "judge") {
+            judgePrompts.push(args.prompt);
+            return { text: verdictJson, chunks: [] };
+          }
+          agentPrompts.push(args.prompt);
+          agentSystems.push(args.system);
+          return { text: "agent text", chunks: [] };
+        },
+        saveMatch: noopSave,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(agentPrompts).toHaveLength(6);
+    for (const prompt of agentPrompts) {
+      expect(prompt).toContain(UNTRUSTED_EVIDENCE_BEGIN);
+      expect(prompt).toContain(UNTRUSTED_EVIDENCE_END);
+      expect(prompt).toContain("Supporting analysis.");
+    }
+    for (const system of agentSystems) {
+      expect(system).not.toContain("UNTRUSTED EVIDENCE");
+      expect(system).not.toContain("Supporting analysis.");
+    }
+    expect(judgePrompts).toHaveLength(1);
+    expect(judgePrompts[0]).toContain(UNTRUSTED_EVIDENCE_BEGIN);
+
+    // Evidence-free behavior unchanged: same event sequence shape.
+    const types = events.map((event) => event.type);
+    expect(types[types.length - 1]).toBe("done");
+    expect(types.filter((type) => type === "turn")).toHaveLength(6);
+  });
+
+  it("persists the canonical evidence snapshot on the match record", async () => {
+    const saved: MatchRecord[] = [];
+    for await (const event of runDebate(
+      { ...quickInput(), evidence: evidenceBundle() },
+      {
+        callModel: agentSuccess,
+        matchId: "match-ev",
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+      },
+    )) {
+      expect(event.type).not.toBe("error");
+    }
+
+    expect(saved).toHaveLength(1);
+    const record = saved[0]!;
+    expect(record.terminal).toBe("completed");
+    expect(record.evidence?.schemaVersion).toBe(1);
+    expect(record.evidence?.items).toHaveLength(1);
+    expect(record.evidence?.items[0]?.provenance.origin).toBe("user");
+    expect(record.evidence?.items[0]?.status).toBe("unverified");
+    expect(record.evidence?.claims).toEqual([]);
+  });
+
+  it("keeps evidence-free runs legacy-shaped: no evidence field, no evidence in prompts", async () => {
+    const saved: MatchRecord[] = [];
+    const prompts: string[] = [];
+    for await (const event of runDebate(quickInput(), {
+      callModel: async (args) => {
+        prompts.push(args.prompt);
+        return agentSuccess(args);
+      },
+      matchId: "match-plain",
+      saveMatch: async (record) => {
+        saved.push(record);
+      },
+    })) {
+      expect(event.type).not.toBe("error");
+    }
+
+    expect(prompts.every((prompt) => !prompt.includes("UNTRUSTED EVIDENCE"))).toBe(true);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.evidence).toBeUndefined();
+    expect(JSON.stringify(saved[0])).not.toContain("UNTRUSTED EVIDENCE");
+  });
+
+  it("treats an empty evidence bundle as no evidence", async () => {
+    const saved: MatchRecord[] = [];
+    const prompts: string[] = [];
+    for await (const event of runDebate(
+      { ...quickInput(), evidence: { schemaVersion: 1, claims: [], items: [], challenges: [], responses: [], proofs: [], sourceSnapshots: [] } },
+      {
+        callModel: async (args) => {
+          prompts.push(args.prompt);
+          return agentSuccess(args);
+        },
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+      },
+    )) {
+      expect(event.type).not.toBe("error");
+    }
+    expect(prompts.every((prompt) => !prompt.includes("UNTRUSTED EVIDENCE"))).toBe(true);
+    expect(saved[0]!.evidence).toBeUndefined();
+  });
+
+  it("runJudge renders stored evidence for re-judges", async () => {
+    const prompts: string[] = [];
+    await runJudge(
+      {
+        topic: "Topic",
+        turns: [],
+        providerId: "p",
+        model: "m",
+        evidence: evidenceBundle(),
+      },
+      {
+        callModel: async (args) => {
+          prompts.push(args.prompt);
+          return { text: verdictJson, chunks: [] };
+        },
+      },
+    );
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain(UNTRUSTED_EVIDENCE_BEGIN);
+    expect(prompts[0]).toContain("Supporting analysis.");
   });
 });

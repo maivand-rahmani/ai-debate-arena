@@ -1,4 +1,4 @@
-import type { MatchTurnSpec } from "@arena/types";
+import type { MatchTurnSpec, EvidenceBundle } from "@arena/types";
 import type { DebateConfig, DebatePosition, DebateState, DebateTurn } from "../types";
 
 export interface DebatePromptContext {
@@ -11,6 +11,8 @@ export interface DebatePromptContext {
   readonly opponentSide?: "A" | "B";
   readonly position?: DebatePosition;
   readonly history: readonly DebateTurn[];
+  /** Untrusted user evidence (F10-06); rendered into user prompts only. */
+  readonly evidence?: EvidenceBundle;
 }
 
 export interface AgentContextLimits {
@@ -64,5 +66,6 @@ export function buildPromptContext(
     opponentSide: side === "A" ? "B" : "A",
     position: agent.position ?? (side === "A" ? "FOR" : "AGAINST"),
     history,
+    evidence: config.evidence,
   };
 }

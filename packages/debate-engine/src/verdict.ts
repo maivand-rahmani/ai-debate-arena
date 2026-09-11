@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { DebateCriteria, DebateVerdict } from "./types";
+import { verdictEvidenceRefsSchema } from "./evidence-contract";
 
 const scoreField = z.number().finite().min(0).max(100);
 const criteriaField = z.number().finite().min(0).max(100);
@@ -15,21 +16,27 @@ export const debateCriteriaSchema = z.object({
   relevanceB: criteriaField,
 });
 
-export const debateVerdictSchema = z.object({
-  winner: z.enum(["A", "B", "DRAW"]),
-  scoreA: scoreField,
-  scoreB: scoreField,
-  criteria: debateCriteriaSchema,
-  reasoning: z.string().trim().min(1),
-});
+export const debateVerdictSchema = z
+  .object({
+    winner: z.enum(["A", "B", "DRAW"]),
+    scoreA: scoreField,
+    scoreB: scoreField,
+    criteria: debateCriteriaSchema,
+    reasoning: z.string().trim().min(1),
+  })
+  // v0.4 additive (F10-03): optional claim/evidence references the verdict
+  // rests on. Absent on legacy verdicts; never required.
+  .extend(verdictEvidenceRefsSchema.shape);
 
-const debateVerdictInputSchema = z.object({
-  winner: z.enum(["A", "B", "DRAW"]),
-  scoreA: z.number().finite().min(0).max(100),
-  scoreB: z.number().finite().min(0).max(100),
-  criteria: debateCriteriaSchema.partial().optional(),
-  reasoning: z.string().trim().min(1),
-});
+const debateVerdictInputSchema = z
+  .object({
+    winner: z.enum(["A", "B", "DRAW"]),
+    scoreA: z.number().finite().min(0).max(100),
+    scoreB: z.number().finite().min(0).max(100),
+    criteria: debateCriteriaSchema.partial().optional(),
+    reasoning: z.string().trim().min(1),
+  })
+  .extend(verdictEvidenceRefsSchema.shape);
 
 export type VerdictParseResult =
   | { readonly success: true; readonly data: DebateVerdict }
@@ -98,6 +105,9 @@ export function parseDebateVerdict(input: unknown): VerdictParseResult {
     scoreB: parsed.data.scoreB,
     criteria: { ...defaults, ...parsed.data.criteria },
     reasoning: parsed.data.reasoning,
+    // Optional F10-03 refs pass through untouched; absent stays absent.
+    ...(parsed.data.claimIds !== undefined ? { claimIds: parsed.data.claimIds } : {}),
+    ...(parsed.data.evidenceIds !== undefined ? { evidenceIds: parsed.data.evidenceIds } : {}),
   };
   return { success: true, data };
 }

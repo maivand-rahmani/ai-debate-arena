@@ -5,6 +5,17 @@ export * from "./verdict";
 export * from "./rubric";
 export * from "./contract";
 export * from "./token-policy";
+// v0.4 evidence/capability contracts (runtime Zod schemas + validators).
+export * from "./evidence-contract";
+// v0.4 bounded post-match challenge contracts + runner.
+export * from "./challenge-contract";
+export * from "./challenge-runner";
+// v0.4 F10-09/F10-10 safe source-adapter foundation (contracts + pure ingest).
+export * from "./source-adapter-contract";
+export * from "./source-adapter-ingest";
+// v0.4 F10-16/F10-17/F10-18 sandbox adapter contracts + pure proof adapters.
+export * from "./sandbox-adapter-contract";
+export * from "./proof-adapters/content-hash-proof";
 // Runner (pure orchestration: runDebate/runJudge + stream envelope + usage
 // math). `callModel` is a required injected dep; `saveMatch` is optional.
 // NOTE: "./runner" re-exports the canonical `DebateStream*` wire types from
@@ -26,4 +37,40 @@ export type {
   DebateStreamTurn,
   DebateStreamVerdict,
   DebateStreamVerdictCriteria,
+} from "@arena/types";
+// v0.4 canonical evidence/capability/event shapes (zero-dep `@arena/types`;
+// runtime schemas live in `./evidence-contract`).
+export type {
+  CapabilityRequest,
+  ChallengeAdjudication,
+  ChallengeAgentResponse,
+  ChallengeEvidenceAssessment,
+  ChallengeState,
+  Claim,
+  Challenge,
+  ChallengeResponse,
+  EvidenceBundle,
+  EvidenceEvent,
+  EvidenceEventBody,
+  EvidenceItem,
+  EvidenceStatus,
+  MatchChallenge,
+  Provenance,
+  ProofResult,
+  SandboxAdapterManifest,
+  SandboxAdapterRequest,
+  SandboxAdapterResult,
+  SandboxAdapterStatus,
+  SandboxCleanupReceipt,
+  SandboxResourceLimits,
+  SandboxResourceUsage,
+  SandboxCapabilities,
+  SandboxPermission,
+  SourceAccessAudit,
+  SourceAdapterKind,
+  SourceAdapterManifest,
+  SourceAdapterRequest,
+  SourceConsent,
+  SourceFreshnessPolicy,
+  SourceSnapshot,
 } from "@arena/types";
