@@ -61,7 +61,7 @@ export function useDebateStream(options: UseDebateStreamOptions = {}): UseDebate
     abortRef.current = null;
     userCancelledRef.current = false;
 
-    dispatch({ type: "start", topic: request.topic });
+    dispatch({ type: "start", topic: request.topic, mode: request.mode });
 
     const handle = openDebateStream(request);
     abortRef.current = handle.abort;

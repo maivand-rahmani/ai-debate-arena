@@ -19,14 +19,30 @@ import {
   type DebateVerdict,
 } from "./types";
 import { isDegenerateVerdict, normalizeVerdictWinner, parseDebateVerdict } from "./verdict";
-import { JUDGE_MAX_CONTEXT_CHARS, MATCH_PROFILES, type MatchProfile } from "./token-policy";
+import {
+  JUDGE_MAX_CONTEXT_CHARS,
+  MATCH_PROFILES,
+  STANDARD_MAX_MOVES,
+  STANDARD_SPEECH_COST,
+  STANDARD_TOOL_COST,
+  resolveStandardLimits,
+  type MatchProfile,
+  type StandardLimitsInput,
+} from "./token-policy";
 import { RUBRIC_VERSION, type RubricVersion } from "./rubric";
 import {
   CONTRACT_VERSION,
   type MatchMode,
   type MatchRecord,
   type MatchTerminal,
+  type StandardToolEventRecord,
 } from "./contract";
+import type { StandardToolExecutor } from "./standard";
+import type {
+  StandardAgentSession,
+  StandardAgentSessionFactory,
+  StandardAgentToolEvent,
+} from "./standard-agent";
 import type {
   DebateStreamEvent,
   DebateStreamEventBody,
@@ -34,7 +50,7 @@ import type {
   DebateStreamTurn,
   DebateStreamVerdict,
 } from "@arena/types";
-import { getMatchFormat } from "@arena/types";
+import { getMatchFormat, standardOpeningTurn, standardRoundTurn, type MatchTurnSpec } from "@arena/types";
 
 /**
  * Canonical stream wire types (see `@arena/types`). The inline event body
@@ -161,6 +177,12 @@ export interface RunDebateInput {
   readonly agentA: RunnerAgentInput;
   readonly agentB: RunnerAgentInput;
   readonly judge?: { readonly providerId: string; readonly model: string };
+  /**
+   * Optional Standard resource/tool bounds. Omitted fields fall back to the
+   * engine defaults; bounds are validated by {@link resolveStandardLimits}.
+   * Ignored for Quick.
+   */
+  readonly standardLimits?: StandardLimitsInput;
 }
 
 export interface RunnerSideInput {
@@ -253,6 +275,13 @@ export interface RunDebateDeps {
   readonly profile?: MatchProfile;
   readonly sides?: { readonly A: RunnerSideInput; readonly B: RunnerSideInput };
   readonly saveMatch?: (record: MatchRecord) => Promise<void> | void;
+  readonly runTool?: StandardToolExecutor;
+  /**
+   * SDK-neutral Standard agent sessions. Required by Standard mode: the host
+   * binds its model SDK (and native tool-calling loop) here, one match-long
+   * session per side. Ignored by Quick.
+   */
+  readonly createStandardAgentSession?: StandardAgentSessionFactory;
 }
 
 export interface RunJudgeInput {
@@ -265,6 +294,7 @@ export interface RunJudgeInput {
   readonly maxContextChars?: number;
   /** Rubric generation for the judge prompt. Defaults to `"1"` (legacy prompt). */
   readonly rubricVersion?: RubricVersion;
+  readonly toolEvents?: readonly StandardToolEventRecord[];
 }
 
 export interface RunJudgeDeps {
@@ -299,6 +329,7 @@ export async function runJudge(input: RunJudgeInput, deps: RunJudgeDeps = {}): P
   const judgePrompt = buildJudgePrompt(input.topic, input.turns, {
     rubricVersion: input.rubricVersion,
     maxTranscriptChars: input.maxContextChars,
+    toolEvents: input.toolEvents,
   });
   const hasTurns = input.turns.length > 0;
   const total: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
@@ -385,6 +416,24 @@ function toStreamTurn(turn: DebateTurn): DebateStreamTurn {
   };
 }
 
+/**
+ * Turns one normalized session tool event into the persisted/public record the
+ * runner owns: fresh call id, timestamp, and bounded output/error text.
+ */
+function toStandardToolRecord(side: DebateSide, event: StandardAgentToolEvent): StandardToolEventRecord {
+  return {
+    callId: randomUUID(),
+    side,
+    tool: event.tool,
+    query: event.query,
+    output: event.output.slice(0, 6000),
+    ok: event.ok,
+    ...(event.error ? { error: event.error.slice(0, 240) } : {}),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+
 export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}): AsyncGenerator<DebateStreamEvent> {
   const callModel = deps.callModel;
   if (!callModel) throw new Error("callModel is required");
@@ -401,6 +450,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
   let terminalReason: string | null = null;
   let saved = false;
   let seq = 0;
+  const toolEvents: StandardToolEventRecord[] = [];
 
   const envelope = <T extends DebateStreamEventBody>(event: T): DebateStreamEvent => ({
     ...event,
@@ -430,6 +480,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       promptVersions: { agent: AGENT_PROMPT_VERSION, judge: JUDGE_PROMPT_VERSION },
       rubricVersion: RUBRIC_VERSION,
       transcript: transcript.map((turn) => ({ ...turn })),
+      toolEvents: toolEvents.length ? toolEvents.map((event) => ({ ...event })) : undefined,
       verdict,
       terminal,
       terminalReason,
@@ -468,55 +519,234 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
 
   let state: DebateState = createDebateState();
   const format = getMatchFormat(input.mode);
+  const standardLimits = resolveStandardLimits(input.standardLimits);
+  const standardCredits: Record<DebateSide, number> = {
+    A: standardLimits.startingCredits,
+    B: standardLimits.startingCredits,
+  };
+  let standardMoveCount = 0;
+  const sideOrder: readonly DebateSide[] = ["A", "B"];
+  // One match-long session per side, created lazily on that side's first move
+  // and reused for the rest of the match.
+  const standardSessions: Partial<Record<DebateSide, StandardAgentSession>> = {};
+
+  function standardSessionFor(side: DebateSide): StandardAgentSession {
+    const existing = standardSessions[side];
+    if (existing) return existing;
+    const factory = deps.createStandardAgentSession;
+    if (!factory) throw new Error("Standard mode requires a createStandardAgentSession dependency");
+    const agent = side === "A" ? input.agentA : input.agentB;
+    const session = factory({
+      matchId,
+      topic: input.topic,
+      side,
+      position: agent.position,
+      providerId: agent.providerId,
+      model: agent.model,
+      maxOutputTokens: profile.agentMaxOutputTokens,
+      sessionKey: sessionKeyForMatchSlot(matchId, side === "A" ? "agent-a" : "agent-b"),
+    });
+    standardSessions[side] = session;
+    return session;
+  }
+
+  /**
+   * Plays one Standard move through the side's private match-long session. The
+   * runner owns the observation handed in, the credit charge, the public
+   * event envelopes, persistence, and the resulting turn; the session owns the
+   * observe → tool loop → speak decision.
+   */
+  async function* playStandardMove(
+    side: DebateSide,
+    spec: MatchTurnSpec,
+    closingRound: boolean,
+  ): AsyncGenerator<DebateStreamEvent, { readonly ready: boolean }> {
+    const phase = spec.id;
+    state = { ...state, phase };
+    yield envelope({ type: "phase", phase, side });
+
+    const agent = side === "A" ? input.agentA : input.agentB;
+    const turnStartMs = Date.now();
+    const credits = standardCredits[side];
+    // Reserve one credit for the public speech, then buy tools two credits at a
+    // time up to the per-move cap. A side that cannot afford a speech never
+    // reaches this function; the lifecycle forces it to close.
+    const maxAffordableTools = Math.max(
+      0,
+      Math.min(standardLimits.maxToolsPerMove, Math.floor((credits - STANDARD_SPEECH_COST) / STANDARD_TOOL_COST)),
+    );
+
+    let move: Awaited<ReturnType<StandardAgentSession["move"]>>;
+    try {
+      if (!deps.runTool) throw new Error("Standard tool executor is not configured");
+      move = await standardSessionFor(side).move({
+        topic: input.topic,
+        observation: state.turns,
+        phase,
+        side,
+        position: agent.position,
+        credits,
+        speechCost: STANDARD_SPEECH_COST,
+        toolCost: STANDARD_TOOL_COST,
+        maxToolsPerMove: standardLimits.maxToolsPerMove,
+        maxAffordableTools,
+        toolTimeoutMs: standardLimits.toolTimeoutMs,
+        closingRound,
+        publicToolEvents: [...toolEvents],
+        runTool: deps.runTool,
+        abortSignal: deps.abortSignal,
+      });
+    } catch (error) {
+      turnsMs.push(Date.now() - turnStartMs);
+      throw error;
+    }
+    turnsMs.push(Date.now() - turnStartMs);
+
+    if (move.toolEvents.length > maxAffordableTools) {
+      throw new Error("Standard session used more tool calls than the move allowed");
+    }
+
+    // Charge actual usage: every reported tool event plus the one speech.
+    standardCredits[side] = credits - move.toolEvents.length * STANDARD_TOOL_COST - STANDARD_SPEECH_COST;
+    addUsage(usageTotal, move.usage);
+
+    const records = move.toolEvents.map((event) => toStandardToolRecord(side, event));
+    toolEvents.push(...records);
+    for (const record of records) {
+      yield envelope({
+        type: "tool-start",
+        tool: { callId: record.callId, side, tool: record.tool, query: record.query, createdAt: record.createdAt },
+      });
+      yield envelope({
+        type: "tool-result",
+        result: {
+          callId: record.callId,
+          side,
+          tool: record.tool,
+          query: record.query,
+          ok: record.ok,
+          output: record.output,
+          ...(record.error ? { error: record.error } : {}),
+          createdAt: record.createdAt,
+        },
+      });
+    }
+
+    const chunks = (move.chunks ?? []).filter((chunk) => chunk.length > 0);
+    if (chunks.length > 0) {
+      for (const text of chunks) yield envelope({ type: "token", side, text });
+    } else if (move.speech) {
+      yield envelope({ type: "token", side, text: move.speech });
+    }
+
+    const turn: DebateTurn = {
+      id: randomUUID(),
+      agentId: side,
+      side,
+      phase,
+      content: move.speech,
+      model: agent.model,
+      createdAt: new Date().toISOString(),
+    };
+    state = appendTurn(state, turn);
+    transcript.push(turn);
+    yield envelope({ type: "turn", turn: toStreamTurn(turn) });
+    standardMoveCount += 1;
+    return { ready: move.ready === true };
+  }
+
+  /**
+   * Standard lifecycle. Both sides always open, then paired open rounds
+   * continue while neither is ready. When both are ready the match ends; when
+   * only one is ready, one paired answer round follows so neither side loses
+   * the right to reply. A side that cannot afford a speech is forced to close
+   * after the opponent's move. The move ceiling is only an emergency brake.
+   */
+  async function* runStandardLifecycle(): AsyncGenerator<DebateStreamEvent> {
+    for (const side of sideOrder) {
+      if (standardMoveCount >= STANDARD_MAX_MOVES) break;
+      yield* playStandardMove(side, standardOpeningTurn(side), false);
+    }
+
+    const ready: Record<DebateSide, boolean> = { A: false, B: false };
+    let closingRound = false;
+    let round = 0;
+    while (standardMoveCount < STANDARD_MAX_MOVES) {
+      round += 1;
+      let forcedClose = false;
+      for (const side of sideOrder) {
+        if (standardMoveCount >= STANDARD_MAX_MOVES) {
+          forcedClose = true;
+          break;
+        }
+        if (standardCredits[side] < STANDARD_SPEECH_COST) {
+          // Depleted: forced to close, but the opponent still gets its move in
+          // this round before the match stops.
+          forcedClose = true;
+          continue;
+        }
+        const outcome = yield* playStandardMove(side, standardRoundTurn(side, round), closingRound);
+        if (!closingRound) ready[side] = outcome.ready;
+      }
+      if (closingRound) break;
+      if (forcedClose) break;
+      if (ready.A && ready.B) break;
+      if (ready.A || ready.B) closingRound = true;
+    }
+  }
 
   try {
-    for (const turnSpec of format.turns) {
-      const { side } = turnSpec;
-      const phase = turnSpec.id;
-      state = { ...state, phase };
-      yield envelope({ type: "phase", phase, side });
+    if (input.mode === "standard") {
+      yield* runStandardLifecycle();
+    } else {
+      for (const turnSpec of format.turns) {
+        const { side } = turnSpec;
+        const phase = turnSpec.id;
+        state = { ...state, phase };
+        yield envelope({ type: "phase", phase, side });
 
-      const agent = side === "A" ? input.agentA : input.agentB;
-      const system = buildAgentSystemPrompt(side, agent.position, input.topic);
-      const context = buildPromptContext(config, state, side, turnSpec);
-      const prompt = buildDebatePrompt(context);
+        const agent = side === "A" ? input.agentA : input.agentB;
+        const system = buildAgentSystemPrompt(side, agent.position, input.topic);
+        const context = buildPromptContext(config, state, side, turnSpec);
+        const prompt = buildDebatePrompt(context);
 
-      let result: ModelCallResult;
-      const turnStartMs = Date.now();
-      try {
-        result = await callModel({
-          kind: "agent",
-          providerId: agent.providerId,
-          modelId: agent.model,
-          system,
-          prompt,
-          maxOutputTokens: profile.agentMaxOutputTokens,
-          abortSignal: deps.abortSignal,
-          sessionKey: sessionKeyForMatchSlot(matchId, side === "A" ? "agent-a" : "agent-b"),
-        });
-      } catch (error) {
+        let result: ModelCallResult;
+        const turnStartMs = Date.now();
+        try {
+          result = await callModel({
+            kind: "agent",
+            providerId: agent.providerId,
+            modelId: agent.model,
+            system,
+            prompt,
+            maxOutputTokens: profile.agentMaxOutputTokens,
+            abortSignal: deps.abortSignal,
+            sessionKey: sessionKeyForMatchSlot(matchId, side === "A" ? "agent-a" : "agent-b"),
+          });
+        } catch (error) {
+          turnsMs.push(Date.now() - turnStartMs);
+          return yield* failWith(toSafeErrorMessage(error));
+        }
         turnsMs.push(Date.now() - turnStartMs);
-        return yield* failWith(toSafeErrorMessage(error));
-      }
-      turnsMs.push(Date.now() - turnStartMs);
-      addUsage(usageTotal, result.usage);
+        addUsage(usageTotal, result.usage);
 
-      for (const text of result.chunks) {
-        if (text) yield envelope({ type: "token", side, text });
-      }
+        for (const text of result.chunks) {
+          if (text) yield envelope({ type: "token", side, text });
+        }
 
-      const turn: DebateTurn = {
-        id: randomUUID(),
-        agentId: side,
-        side,
-        phase,
-        content: result.text,
-        model: agent.model,
-        createdAt: new Date().toISOString(),
-      };
-      state = appendTurn(state, turn);
-      transcript.push(turn);
-      yield envelope({ type: "turn", turn: toStreamTurn(turn) });
+        const turn: DebateTurn = {
+          id: randomUUID(),
+          agentId: side,
+          side,
+          phase,
+          content: result.text,
+          model: agent.model,
+          createdAt: new Date().toISOString(),
+        };
+        state = appendTurn(state, turn);
+        transcript.push(turn);
+        yield envelope({ type: "turn", turn: toStreamTurn(turn) });
+      }
     }
 
     state = { ...state, phase: DebatePhase.JUDGING };
@@ -534,6 +764,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           model: judge.model,
           maxOutputTokens: profile.judgeMaxOutputTokens,
           maxContextChars: JUDGE_MAX_CONTEXT_CHARS,
+          toolEvents,
         },
         {
           callModel,

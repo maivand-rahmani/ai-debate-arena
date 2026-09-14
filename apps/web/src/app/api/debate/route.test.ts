@@ -233,8 +233,9 @@ describe("POST /api/debate", () => {
     expect(mock.requestCount).toBe(0);
   });
 
-  it("rejects a contract-valid but disabled standard mode with a 400 {error} shape", async () => {
-    const res = await postDebate({ ...validBody(), mode: "standard" });
+  it("rejects a contract-valid but disabled mode with a 400 {error} shape", async () => {
+    // Standard is enabled for the live agentic match; hardcore remains disabled.
+    const res = await postDebate({ ...validBody(), mode: "hardcore" });
     const body = await readErrorBody(res);
     expect(body.status).toBe(400);
     expect(typeof body.error).toBe("string");

@@ -28,6 +28,25 @@ interface SetupModalProps {
 }
 
 /**
+ * Standard's optional settings are added to the draft by the wire lane. Keep
+ * this view tolerant while that lane evolves; Quick does not need the extra
+ * object at all.
+ */
+interface StandardDraftFields {
+  readonly startingCredits?: number;
+  readonly maxToolsPerMove?: number;
+  readonly toolTimeoutMs?: number;
+}
+
+type SetupDraft = MatchDraft & { readonly standard?: StandardDraftFields };
+
+const STANDARD_BUDGET_DEFAULTS = {
+  startingCredits: 12,
+  maxToolsPerMove: 2,
+  toolTimeoutMs: 8_000,
+} as const;
+
+/**
  * The match-setup dialog opened from the idle hero. Reuses the
  * existing draft helpers + provider semantics from
  * `@/features/create-debate/draft` so the validation, position
@@ -46,10 +65,10 @@ export function SetupModal({ open, onClose, onStart, busy = false, errorMessage 
 function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModalProps, "open">) {
   const titleId = useId();
   const { status, providers, errorMessage: providerError, reload } = useProviders();
-  const [userDraft, setUserDraft] = useState<MatchDraft | null>(null);
+  const [userDraft, setUserDraft] = useState<SetupDraft | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
 
-  const effectiveDraft = useMemo<MatchDraft>(() => {
+  const effectiveDraft = useMemo<SetupDraft>(() => {
     if (userDraft !== null) return userDraft;
     if (status !== "ready" || providers.length === 0) return emptyDraft();
     const a = providers[0];
@@ -62,7 +81,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
     };
   }, [userDraft, providers, status]);
 
-  const applyChange = (mutator: (current: MatchDraft) => MatchDraft) => {
+  const applyChange = (mutator: (current: SetupDraft) => SetupDraft) => {
     setUserDraft((current) => mutator(current ?? effectiveDraft));
   };
 
@@ -121,6 +140,28 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
   const updateAPosition = (position: Position) => applyChange((current) => applyPositionChange(current, "A", position));
   const updateBPosition = (position: Position) =>
     applyChange((current) => applyPositionChange(current, "B", position, false));
+  const updateMode = (mode: MatchDraft["mode"]) =>
+    applyChange((current) => ({
+      ...current,
+      mode,
+      ...(mode === "standard" && !current.standard ? { standard: STANDARD_BUDGET_DEFAULTS } : {}),
+    }));
+  const standardBudget = standardBudgetFor(effectiveDraft);
+  const updateStandardBudget = (
+    field: keyof typeof STANDARD_BUDGET_DEFAULTS,
+    rawValue: string,
+    min: number,
+    max: number,
+    multiplier = 1,
+  ) => {
+    const parsed = Number.parseInt(rawValue, 10);
+    if (!Number.isFinite(parsed)) return;
+    const value = Math.min(max, Math.max(min, parsed)) * multiplier;
+    applyChange((current) => ({
+      ...current,
+      standard: { ...standardBudgetFor(current), [field]: value },
+    }));
+  };
 
   const submit = () => {
     if (!ready) return;
@@ -132,7 +173,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
       <ModalHeader
         eyebrow="New debate"
         title="Set the motion. Pick the contenders."
-        sub="Choose a topic, the two positions, and the models. The stage and Judge power on when you press Start."
+        sub="Choose a topic, positions, models, and a mode. Standard lets each agent research before it speaks."
       />
       <ModalBody>
         <form
@@ -198,7 +239,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
             <span className="setup-form__eyebrow">02 · Match mode</span>
             <div className="setup-form__mode-row" role="radiogroup" aria-label="Match mode">
               {MODE_OPTIONS.map((mode) => {
-                const active = mode.id === "quick";
+                const active = mode.id === effectiveDraft.mode;
                 return (
                   <button
                     key={mode.id}
@@ -206,6 +247,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
                     role="radio"
                     aria-checked={active}
                     disabled={!mode.enabled}
+                    onClick={() => mode.enabled && updateMode(mode.id)}
                     className={`setup-form__mode-btn${active ? " is-active" : ""}`}
                   >
                     <span className="setup-form__mode-btn-title">{mode.label}</span>
@@ -218,6 +260,50 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
               })}
             </div>
           </section>
+
+          {effectiveDraft.mode === "standard" ? (
+            <section className="setup-form__budgets" aria-labelledby="standard-budget-title">
+              <div className="setup-form__budgets-head">
+                <div>
+                  <span className="setup-form__eyebrow">03 · Standard budget</span>
+                  <h3 id="standard-budget-title">Same rules for both.</h3>
+                </div>
+                <span className="setup-form__budgets-chip">Equal budgets</span>
+              </div>
+              <p className="setup-form__budgets-copy">
+                Both agents get these exact limits. Credits last across the match; the tool limit resets on each move.
+              </p>
+              <div className="setup-form__budget-grid">
+                <BudgetField
+                  id="standard-starting-credits"
+                  label="Starting credits"
+                  value={standardBudget.startingCredits}
+                  min={1}
+                  max={64}
+                  suffix="credits"
+                  onChange={(value) => updateStandardBudget("startingCredits", value, 1, 64)}
+                />
+                <BudgetField
+                  id="standard-tools-per-move"
+                  label="Tools per move"
+                  value={standardBudget.maxToolsPerMove}
+                  min={0}
+                  max={4}
+                  suffix="max"
+                  onChange={(value) => updateStandardBudget("maxToolsPerMove", value, 0, 4)}
+                />
+                <BudgetField
+                  id="standard-tool-timeout"
+                  label="Tool timeout"
+                  value={standardBudget.toolTimeoutMs / 1_000}
+                  min={1}
+                  max={60}
+                  suffix="sec"
+                  onChange={(value) => updateStandardBudget("toolTimeoutMs", value, 1, 60, 1_000)}
+                />
+              </div>
+            </section>
+          ) : null}
 
           {errorMessage ? (
             <p className="setup-form__error" role="alert">
@@ -261,6 +347,51 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
       <ManageProvidersModal open={manageOpen} onClose={() => setManageOpen(false)} />
     </>
   );
+}
+
+interface BudgetFieldProps {
+  readonly id: string;
+  readonly label: string;
+  readonly value: number;
+  readonly min: number;
+  readonly max: number;
+  readonly suffix: string;
+  readonly onChange: (value: string) => void;
+}
+
+function BudgetField({ id, label, value, min, max, suffix, onChange }: BudgetFieldProps) {
+  return (
+    <label className="setup-form__field" htmlFor={id}>
+      <span>{label}</span>
+      <span className="setup-form__budget-input-wrap">
+        <input
+          id={id}
+          type="number"
+          inputMode="numeric"
+          min={min}
+          max={max}
+          step={1}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="setup-form__input setup-form__budget-input"
+        />
+        <span className="setup-form__budget-suffix" aria-hidden="true">{suffix}</span>
+      </span>
+    </label>
+  );
+}
+
+function standardBudgetFor(draft: SetupDraft) {
+  return {
+    startingCredits: boundedValue(draft.standard?.startingCredits, STANDARD_BUDGET_DEFAULTS.startingCredits, 1, 64),
+    maxToolsPerMove: boundedValue(draft.standard?.maxToolsPerMove, STANDARD_BUDGET_DEFAULTS.maxToolsPerMove, 0, 4),
+    toolTimeoutMs: boundedValue(draft.standard?.toolTimeoutMs, STANDARD_BUDGET_DEFAULTS.toolTimeoutMs, 1_000, 60_000),
+  };
+}
+
+function boundedValue(value: number | undefined, fallback: number, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 interface ContenderCardProps {

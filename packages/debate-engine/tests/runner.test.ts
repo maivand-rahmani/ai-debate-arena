@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { DebatePhase, MATCH_PROFILES, type MatchRecord } from "@arena/debate-engine";
 import { runDebate, type DebateStreamEvent, type ModelCallArgs } from "../src/runner";
+import type {
+  StandardAgentMoveInput,
+  StandardAgentMoveResult,
+  StandardAgentSessionFactory,
+} from "../src/standard-agent";
 
 const verdictJson = JSON.stringify({
   winner: "A",
@@ -22,6 +27,31 @@ const verdictJson = JSON.stringify({
 // Unit tests inject persistence; the default writer (match-store on disk) must
 // never run here.
 const noopSave = async (): Promise<void> => {};
+
+type MovePlan = (
+  side: "A" | "B",
+  sideMoveIndex: number,
+  input: StandardAgentMoveInput,
+) => StandardAgentMoveResult | Promise<StandardAgentMoveResult>;
+
+const judgeCall = async (args: ModelCallArgs) =>
+  args.kind === "judge"
+    ? { text: verdictJson, chunks: [] as string[] }
+    : { text: "agent text", chunks: [] as string[] };
+
+function fakeSessions(plan: MovePlan) {
+  const counts: Record<"A" | "B", number> = { A: 0, B: 0 };
+  const moveInputs: StandardAgentMoveInput[] = [];
+  const factory: StandardAgentSessionFactory = (input) => ({
+    async move(moveInput) {
+      const index = counts[input.side];
+      counts[input.side] += 1;
+      moveInputs.push(moveInput);
+      return plan(input.side, index, moveInput);
+    },
+  });
+  return { factory, moveInputs };
+}
 
 describe("runDebate", () => {
   it("emits six format-owned Quick turns, then judge-start, verdict, and done", async () => {
@@ -68,6 +98,93 @@ describe("runDebate", () => {
       expect(verdictEvent.verdict.winner).toBe("A");
       expect(verdictEvent.verdict.criteria.argumentQualityA).toBe(85);
     }
+  });
+
+  it("keeps open Standard rounds going while neither side is ready and stops at the move ceiling", async () => {
+    const events: DebateStreamEvent[] = [];
+    const { factory } = fakeSessions((side, index) => ({ speech: `${side}${index}`, ready: false, toolEvents: [] }));
+    for await (const event of runDebate(standardInput(), {
+      saveMatch: noopSave,
+      callModel: judgeCall,
+      runTool: async () => ({ ok: true, output: "unused" }),
+      createStandardAgentSession: factory,
+    })) events.push(event);
+
+    const phases = events.flatMap((event) => (event.type === "phase" ? [event.phase] : []));
+    expect(events.filter((event) => event.type === "turn")).toHaveLength(12);
+    expect(phases).toEqual([
+      "standard-a-opening", "standard-b-opening",
+      "standard-a-round-1", "standard-b-round-1",
+      "standard-a-round-2", "standard-b-round-2",
+      "standard-a-round-3", "standard-b-round-3",
+      "standard-a-round-4", "standard-b-round-4",
+      "standard-a-round-5", "standard-b-round-5",
+    ]);
+    expect(events.at(-1)?.type).toBe("done");
+  });
+
+  it("forces a depleted side to close after the opponent's final move", async () => {
+    const events: DebateStreamEvent[] = [];
+    const { factory } = fakeSessions((side, index, input): StandardAgentMoveResult => {
+      if (side === "A") {
+        const tools = Array.from({ length: input.maxAffordableTools }, (_, i) => ({
+          tool: "web_search" as const,
+          query: `a-${index}-${i}`,
+          output: `result ${index}-${i}`,
+          ok: true,
+        }));
+        return { speech: `A${index}`, ready: false, toolEvents: tools };
+      }
+      return { speech: `B${index}`, ready: false, toolEvents: [] };
+    });
+    for await (const event of runDebate(standardInput(), {
+      saveMatch: noopSave,
+      callModel: judgeCall,
+      runTool: async () => ({ ok: true, output: "result" }),
+      createStandardAgentSession: factory,
+    })) {
+      events.push(event);
+    }
+
+    const turnEvents = events.flatMap((event) => (event.type === "turn" ? [event.turn] : []));
+    const toolStarts = events.flatMap((event) => (event.type === "tool-start" ? [event.tool.side] : []));
+    const phases = events.flatMap((event) => (event.type === "phase" ? [event.phase] : []));
+
+    // A burns two tools per move and runs out of credits well before the
+    // emergency ceiling; B still receives its final move in the closing round.
+    expect(turnEvents.length).toBeLessThan(12);
+    expect(turnEvents.filter((turn) => turn.side === "A").length).toBeLessThan(
+      turnEvents.filter((turn) => turn.side === "B").length,
+    );
+    expect(turnEvents.at(-1)?.side).toBe("B");
+    expect(toolStarts).toEqual(["A", "A", "A", "A"]);
+    expect(phases).not.toContain("standard-a-round-4");
+    expect(events.at(-1)?.type).toBe("done");
+  });
+
+
+  it("keeps Quick as a fixed six-turn format with no ready or credit handling", async () => {
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(quickInput(), {
+      saveMatch: noopSave,
+      callModel: async (args) => {
+        if (args.kind === "judge") return { text: verdictJson, chunks: [] };
+        // A Standard-style action payload is treated as plain Quick speech.
+        return { text: JSON.stringify({ action: "speak", content: "hello", ready: true }), chunks: ["a", "b"] };
+      },
+    })) events.push(event);
+
+    const phases = events.flatMap((event) => (event.type === "phase" ? [event.phase] : []));
+    expect(phases).toEqual([
+      "quick-a-opening",
+      "quick-b-opening",
+      "quick-a-response-1",
+      "quick-b-response-1",
+      "quick-a-response-2",
+      "quick-b-response-2",
+    ]);
+    expect(events.filter((event) => event.type === "turn")).toHaveLength(6);
+    expect(events.some((event) => event.type === "tool-start" || event.type === "tool-result")).toBe(false);
   });
 
   it("emits error then done when the model fails", async () => {
@@ -356,6 +473,15 @@ function quickInput() {
   };
 }
 
+function standardInput() {
+  return {
+    topic: "Should cities restrict short-term rentals?",
+    mode: "standard" as const,
+    agentA: { providerId: "p1", model: "m1", position: "FOR" as const },
+    agentB: { providerId: "p2", model: "m2", position: "AGAINST" as const },
+  };
+}
+
 async function agentSuccess(args: ModelCallArgs) {
   if (args.kind === "judge") return { text: verdictJson, chunks: [] as string[] };
   return { text: "agent text", chunks: [] as string[] };
@@ -601,5 +727,125 @@ describe("runDebate token metrics (F7-13)", () => {
       { callModel: async () => ({ text: verdictJson, chunks: [] }) },
     );
     expect(result.usage).toEqual({ promptTokens: 0, completionTokens: 0 });
+  });
+});
+
+describe("runDebate Standard budget configuration", () => {
+  it("threads custom starting credits and per-move tool cap into the session", async () => {
+    const { factory, moveInputs } = fakeSessions((side, index, input): StandardAgentMoveResult => {
+      if (side === "A") {
+        const tools = Array.from({ length: input.maxAffordableTools }, (_, i) => ({
+          tool: "web_search" as const,
+          query: `source-${index}-${i}`,
+          output: "result",
+          ok: true,
+        }));
+        return { speech: `A${index}`, ready: index >= 1, toolEvents: tools };
+      }
+      return { speech: `B${index}`, ready: true, toolEvents: [] };
+    });
+
+    for await (const event of runDebate(
+      { ...standardInput(), standardLimits: { startingCredits: 64, maxToolsPerMove: 4 } },
+      {
+        saveMatch: noopSave,
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "result" }),
+        createStandardAgentSession: factory,
+      },
+    )) {
+      void event;
+    }
+
+    const aMoves = moveInputs.filter((input) => input.side === "A");
+    // Opening: four tools (2 credits each) + speech (1) = 9 charged.
+    expect(aMoves[0]?.credits).toBe(64);
+    expect(aMoves[0]?.maxToolsPerMove).toBe(4);
+    expect(aMoves[0]?.maxAffordableTools).toBe(4);
+    expect(aMoves[1]?.credits).toBe(55);
+  });
+
+  it("honors maxToolsPerMove 0 by forcing an immediate speech and running no tools", async () => {
+    const events: DebateStreamEvent[] = [];
+    const { factory, moveInputs } = fakeSessions((side, index) => ({ speech: `${side}${index}`, ready: true, toolEvents: [] }));
+    for await (const event of runDebate(
+      { ...standardInput(), standardLimits: { maxToolsPerMove: 0 } },
+      {
+        saveMatch: noopSave,
+        callModel: judgeCall,
+        runTool: async () => {
+          throw new Error("tools must not run when maxToolsPerMove is 0");
+        },
+        createStandardAgentSession: factory,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(moveInputs.every((input) => input.maxToolsPerMove === 0)).toBe(true);
+    expect(moveInputs.every((input) => input.maxAffordableTools === 0)).toBe(true);
+    expect(events.some((event) => event.type === "tool-start" || event.type === "tool-result")).toBe(false);
+  });
+
+  it("forwards the configured tool timeout to the session and its executor", async () => {
+    const timeouts: Array<number | undefined> = [];
+    const { factory, moveInputs } = fakeSessions(async (side, index, input): Promise<StandardAgentMoveResult> => {
+      if (side === "A" && index === 0) {
+        const result = await input.runTool("web_search", { query: "source", timeoutMs: input.toolTimeoutMs }, input.abortSignal);
+        timeouts.push(input.toolTimeoutMs);
+        return {
+          speech: "A0",
+          ready: false,
+          toolEvents: [{ tool: "web_search", query: "source", output: result.output, ok: result.ok }],
+        };
+      }
+      return { speech: `${side}${index}`, ready: true, toolEvents: [] };
+    });
+
+    for await (const event of runDebate(
+      { ...standardInput(), standardLimits: { toolTimeoutSeconds: 5 } },
+      {
+        saveMatch: noopSave,
+        callModel: judgeCall,
+        runTool: async (_tool, toolInput) => {
+          timeouts.push(toolInput.timeoutMs);
+          return { ok: true, output: "result" };
+        },
+        createStandardAgentSession: factory,
+      },
+    )) {
+      void event;
+    }
+
+    expect(moveInputs.every((input) => input.toolTimeoutMs === 5_000)).toBe(true);
+    expect(timeouts).toEqual([5_000, 5_000]);
+  });
+
+  it("rejects out-of-bounds Standard limits before running the match", async () => {
+    const generator = runDebate(
+      { ...standardInput(), standardLimits: { startingCredits: 0 } },
+      { saveMatch: noopSave, callModel: agentSuccess, runTool: async () => ({ ok: true, output: "unused" }) },
+    );
+    await expect(generator.next()).rejects.toThrow(/startingCredits/);
+  });
+
+  it("ignores Standard limits in Quick and keeps the fixed six-turn format", async () => {
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(
+      { ...quickInput(), standardLimits: { startingCredits: 1, maxToolsPerMove: 0, toolTimeoutSeconds: 1 } },
+      {
+        saveMatch: noopSave,
+        callModel: async (args) => {
+          if (args.kind === "judge") return { text: verdictJson, chunks: [] };
+          return { text: JSON.stringify({ action: "speak", content: "quick", ready: true }), chunks: ["a"] };
+        },
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(events.filter((event) => event.type === "turn")).toHaveLength(6);
+    expect(events.some((event) => event.type === "tool-start" || event.type === "tool-result")).toBe(false);
+    expect(events.at(-1)?.type).toBe("done");
   });
 });

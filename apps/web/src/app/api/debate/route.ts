@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { runDebate } from "@arena/debate-engine";
-import { webCallModel, webSaveMatch } from "@/features/run-debate/server/web-adapter";
+import { webCallModel, webRunStandardTool, webSaveMatch } from "@/features/run-debate/server/web-adapter";
+import { createWebStandardAgentSession } from "@/features/run-debate/server/standard-agent-adapter";
 import { matchConfigSchema } from "@arena/debate-engine";
 import { getProvider } from "@/shared/config/provider-store";
 import { MATCH_PROFILES, MATCH_TIMEOUT_MS } from "@arena/debate-engine";
@@ -19,8 +20,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.success) {
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
-  // Only quick is enabled; other contract modes stay server-rejected.
-  if (parsed.data.mode !== "quick") {
+  if (!MATCH_PROFILES[parsed.data.mode].enabled) {
     return Response.json({ error: "Unsupported mode" }, { status: 400 });
   }
 
@@ -40,6 +40,8 @@ export async function POST(request: Request): Promise<Response> {
   const events = runDebate(parsed.data, {
     callModel: webCallModel,
     saveMatch: webSaveMatch,
+    runTool: webRunStandardTool,
+    createStandardAgentSession: createWebStandardAgentSession,
     abortSignal: signal,
     matchId,
     profile: MATCH_PROFILES[parsed.data.mode],

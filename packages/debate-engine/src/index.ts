@@ -12,6 +12,10 @@ export * from "./token-policy";
 // named exports take precedence over the star export, and both resolve to
 // the identical canonical types, so no name is silently dropped.
 export * from "./runner";
+export * from "./standard";
+// SDK-neutral Standard agent session port. The local server binds its model
+// SDK adapter to this interface; the engine never imports a model SDK.
+export * from "./standard-agent";
 // Canonical wire + streaming primitives (zero-dep `@arena/types`). The
 // explicit `MatchMode` pin takes precedence over the star-exported
 // `MatchMode` from both `./contract` and `./token-policy` (identical

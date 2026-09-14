@@ -2,6 +2,8 @@ export { AGENT_PROMPT_VERSION, JUDGE_PROMPT_VERSION } from "./versions";
 export {
   buildAgentPrompt,
   buildAgentSystemPrompt,
+  buildStandardAgentActionPrompt,
+  buildStandardAgentSystemPrompt,
   buildDebatePrompt,
   PHASE_INSTRUCTIONS,
 } from "./agent-prompt";

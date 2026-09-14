@@ -90,6 +90,35 @@ describe("versioned contracts", () => {
     expect(matchConfigSchema.safeParse({ ...validConfig(), mode: "hardcore" }).success).toBe(true);
   });
 
+  it("accepts in-bounds Standard limits and rejects out-of-range values", () => {
+    const base = { ...validConfig(), mode: "standard" as const };
+    expect(matchConfigSchema.safeParse({ ...base, standardLimits: {} }).success).toBe(true);
+    expect(
+      matchConfigSchema.safeParse({
+        ...base,
+        standardLimits: { startingCredits: 64, maxToolsPerMove: 0, toolTimeoutSeconds: 60 },
+      }).success,
+    ).toBe(true);
+    expect(
+      matchConfigSchema.safeParse({
+        ...base,
+        standardLimits: { startingCredits: 1, maxToolsPerMove: 4, toolTimeoutSeconds: 1 },
+      }).success,
+    ).toBe(true);
+
+    for (const standardLimits of [
+      { startingCredits: 0 },
+      { startingCredits: 65 },
+      { startingCredits: 1.5 },
+      { maxToolsPerMove: -1 },
+      { maxToolsPerMove: 5 },
+      { toolTimeoutSeconds: 0 },
+      { toolTimeoutSeconds: 61 },
+    ]) {
+      expect(matchConfigSchema.safeParse({ ...base, standardLimits }).success).toBe(false);
+    }
+  });
+
   it("rejects an empty topic, unknown mode, and missing agent", () => {
     expect(matchConfigSchema.safeParse({ ...validConfig(), topic: "  " }).success).toBe(false);
     expect(matchConfigSchema.safeParse({ ...validConfig(), mode: "marathon" }).success).toBe(false);

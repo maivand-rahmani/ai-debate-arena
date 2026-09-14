@@ -65,6 +65,17 @@ export interface TranscriptTurnRecord {
   readonly createdAt: string;
 }
 
+export interface StandardToolEventRecord {
+  readonly callId: string;
+  readonly side: "A" | "B";
+  readonly tool: "web_search" | "fetch_url" | "run_code";
+  readonly query: string;
+  readonly output: string;
+  readonly ok: boolean;
+  readonly error?: string;
+  readonly createdAt: string;
+}
+
 export interface MatchRecord {
   readonly version: number;
   readonly matchId: string;
@@ -79,6 +90,7 @@ export interface MatchRecord {
   readonly promptVersions: MatchPromptVersions;
   readonly rubricVersion: string;
   readonly transcript: readonly TranscriptTurnRecord[];
+  readonly toolEvents?: readonly StandardToolEventRecord[];
   readonly verdict: DebateStreamVerdict | null;
   readonly terminal: MatchTerminal;
   readonly terminalReason: string | null;

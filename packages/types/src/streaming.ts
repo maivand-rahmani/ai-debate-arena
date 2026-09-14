@@ -29,6 +29,27 @@ export interface DebateStreamTurn {
   readonly createdAt: string;
 }
 
+export type DebateStreamToolName = "web_search" | "fetch_url" | "run_code";
+
+export interface DebateStreamToolCall {
+  readonly callId: string;
+  readonly side: DebateSide;
+  readonly tool: DebateStreamToolName;
+  readonly query: string;
+  readonly createdAt: string;
+}
+
+export interface DebateStreamToolResult {
+  readonly callId: string;
+  readonly side: DebateSide;
+  readonly tool: DebateStreamToolName;
+  readonly query: string;
+  readonly ok: boolean;
+  readonly output: string;
+  readonly error?: string;
+  readonly createdAt: string;
+}
+
 export interface DebateStreamVerdictCriteria {
   readonly argumentQualityA: number;
   readonly argumentQualityB: number;
@@ -52,6 +73,8 @@ export type DebateStreamEventBody =
   | { readonly type: "phase"; readonly phase: DebateStreamPhase; readonly side: DebateSide | null }
   | { readonly type: "token"; readonly side: DebateSide; readonly text: string }
   | { readonly type: "turn"; readonly turn: DebateStreamTurn }
+  | { readonly type: "tool-start"; readonly tool: DebateStreamToolCall }
+  | { readonly type: "tool-result"; readonly result: DebateStreamToolResult }
   | { readonly type: "judge-start" }
   | { readonly type: "verdict"; readonly verdict: DebateStreamVerdict }
   | { readonly type: "error"; readonly message: string }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyProviderChange, emptyDraft, isDraftReady, isSameModelMatchup, type MatchDraft } from "./draft";
+import { applyProviderChange, emptyDraft, isDraftReady, isSameModelMatchup, toDebateRequest, type MatchDraft } from "./draft";
 import type { RedactedProvider } from "@/shared/api/providers";
 
 const alpha: RedactedProvider = {
@@ -73,5 +73,54 @@ describe("same-model matchups", () => {
 
     expect(isSameModelMatchup(draft)).toBe(true);
     expect(isDraftReady(draft)).toBe(true);
+  });
+});
+
+describe("toDebateRequest", () => {
+  const readyDraft = (mode: MatchDraft["mode"]): MatchDraft => ({
+    topic: "  Should cities ban private cars?  ",
+    mode,
+    sideA: { providerId: "alpha", model: "alpha-default", position: "FOR" },
+    sideB: { providerId: "beta", model: "beta-default", position: "AGAINST" },
+  });
+
+  it("keeps Quick request bodies unchanged with no Standard limits", () => {
+    const request = toDebateRequest(readyDraft("quick"));
+    expect(request).toEqual({
+      topic: "Should cities ban private cars?",
+      mode: "quick",
+      agentA: { providerId: "alpha", model: "alpha-default", position: "FOR" },
+      agentB: { providerId: "beta", model: "beta-default", position: "AGAINST" },
+    });
+    expect(request).not.toHaveProperty("standardLimits");
+  });
+
+  it("attaches Standard limits for Standard and converts the tool timeout to seconds", () => {
+    const request = toDebateRequest({
+      ...readyDraft("standard"),
+      standard: { startingCredits: 20, maxToolsPerMove: 3, toolTimeoutMs: 8_000 },
+    });
+
+    expect(request.standardLimits).toEqual({
+      startingCredits: 20,
+      maxToolsPerMove: 3,
+      toolTimeoutSeconds: 8,
+    });
+  });
+
+  it("never sends Standard limits for Quick/Hardcore even when the draft carries them", () => {
+    for (const mode of ["quick", "hardcore"] as const) {
+      const request = toDebateRequest({
+        ...readyDraft(mode),
+        standard: { startingCredits: 20, maxToolsPerMove: 3, toolTimeoutMs: 8_000 },
+      });
+      expect(request).not.toHaveProperty("standardLimits");
+    }
+  });
+
+  it("omits limits for a Standard draft without a configured budget so server defaults apply", () => {
+    const request = toDebateRequest(readyDraft("standard"));
+    expect(request.mode).toBe("standard");
+    expect(request).not.toHaveProperty("standardLimits");
   });
 });

@@ -3,6 +3,7 @@ import {
   JUDGE_PROMPT_VERSION,
   MATCH_TIMEOUT_MS,
   RUBRIC_VERSION,
+  STANDARD_MAX_MOVES,
   type DebateTurn,
   type MatchRecord,
 } from "@arena/debate-engine";
@@ -53,7 +54,16 @@ async function rejudgeLocked(request: Request, id: string): Promise<Response> {
   if (!record) {
     return Response.json({ error: "Match not found" }, { status: 404 });
   }
-  if (record.terminal !== "completed" || record.transcript.length !== record.policy.rounds) {
+  // Quick/Hardcore are fixed-length: only a full transcript of exactly
+  // `policy.rounds` turns is re-judgeable. Standard is variable-length, so
+  // instead of equality it only needs a non-empty transcript within the
+  // emergency max-move ceiling (STANDARD_MAX_MOVES); a completed Standard
+  // record can legitimately end well before that ceiling.
+  const withinTranscriptBound =
+    record.mode === "standard"
+      ? record.transcript.length > 0 && record.transcript.length <= STANDARD_MAX_MOVES
+      : record.transcript.length === record.policy.rounds;
+  if (record.terminal !== "completed" || !withinTranscriptBound) {
     return Response.json({ error: "Match cannot be re-judged" }, { status: 409 });
   }
   const judgeRef = record.judge;
@@ -77,6 +87,7 @@ async function rejudgeLocked(request: Request, id: string): Promise<Response> {
         providerId: judgeRef.providerId,
         model: judgeRef.model,
         maxOutputTokens: record.policy.judgeMaxOutputTokens,
+        toolEvents: record.toolEvents,
       },
       { callModel: webCallModel, abortSignal: signal, sessionKey: sessionKeyForMatchSlot(id, "judge") },
     );

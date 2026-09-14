@@ -6,6 +6,7 @@ import {
   parseDebateVerdict,
 } from "../src/verdict";
 import type { DebateVerdict } from "../src/types";
+import type { StandardToolCall } from "../src/standard";
 import {
   getGoldenFixture,
   type GoldenFixtureId,
@@ -348,6 +349,79 @@ describe("judge output-shape behavior", () => {
     expect(result.calls).toBe(2);
     expect(result.verdict).toBeNull();
     expect(result.error).toBe("Judge returned invalid verdict");
+  });
+});
+
+describe("Standard judge decisive-evidence requirements", () => {
+  const TOOL_EVENTS: readonly StandardToolCall[] = [
+    {
+      callId: "call-a-1",
+      side: "A",
+      tool: "web_search",
+      query: "congestion charge per-capita emissions",
+      output: "Per-capita emissions fell 18% after the congestion charge took effect.",
+      ok: true,
+      createdAt: "2026-09-04T00:00:02.000Z",
+    },
+    {
+      callId: "call-b-1",
+      side: "B",
+      tool: "web_search",
+      query: "congestion charge small business revenue",
+      output: "",
+      ok: false,
+      error: "provider rate limit",
+      createdAt: "2026-09-04T00:00:03.000Z",
+    },
+  ];
+
+  function standardPrompt(toolEvents?: readonly StandardToolCall[]): string {
+    const fixture = getGoldenFixture("clear-A");
+    return buildJudgePrompt(fixture.topic, fixture.turns, { toolEvents });
+  }
+
+  it("requires decisive backed evidence and separates unsupported claims", () => {
+    const prompt = standardPrompt(TOOL_EVENTS);
+    expect(prompt).toContain("Decisive evidence");
+    expect(prompt).toContain(
+      "Treat a claim as backed only when a recorded tool result directly supports it",
+    );
+    expect(prompt).toContain("count bare assertions");
+    expect(prompt).toContain("failed lookups");
+    expect(prompt).toContain("results used for a different claim as unsupported");
+  });
+
+  it("requires citing the public tool evidence without exposing private reasoning", () => {
+    const prompt = standardPrompt(TOOL_EVENTS);
+    expect(prompt).toContain("Reasoning must cite the public tool evidence");
+    expect(prompt).toContain("by side, tool, and query");
+    expect(prompt).toContain("never invent evidence or reveal hidden or private reasoning");
+  });
+
+  it("renders each public tool result with its side, tool, status, and output", () => {
+    const prompt = standardPrompt(TOOL_EVENTS);
+    expect(prompt).toContain("Visible tool evidence:");
+    expect(prompt).toContain("[A · web_search · success] congestion charge per-capita emissions");
+    expect(prompt).toContain(
+      "Per-capita emissions fell 18% after the congestion charge took effect.",
+    );
+    expect(prompt).toContain("[B · web_search · failed] congestion charge small business revenue");
+    expect(prompt).toContain("Error: provider rate limit");
+  });
+
+  it("omits the decisive-evidence requirements for Quick (no tool events)", () => {
+    const prompt = standardPrompt();
+    expect(prompt).not.toContain("Decisive evidence");
+    expect(prompt).not.toContain("public tool evidence");
+    expect(prompt).not.toContain("Visible tool evidence:");
+  });
+
+  it("treats an empty tool-event list as no evidence for Quick compatibility", () => {
+    const prompt = standardPrompt([]);
+    expect(prompt).toContain("Visible tool evidence:");
+    expect(prompt).toContain("(no tool evidence was recorded)");
+    expect(prompt).not.toContain("Decisive evidence");
+    expect(prompt).not.toContain("public tool evidence");
   });
 });
 

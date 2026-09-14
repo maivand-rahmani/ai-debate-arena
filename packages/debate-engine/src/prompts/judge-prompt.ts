@@ -1,4 +1,5 @@
 import type { DebateTurn } from "../types";
+import type { StandardToolCall } from "../standard";
 import { buildCriteriaFieldList, buildRubricPhrase, RUBRIC_VERSIONS, type RubricVersion } from "../rubric";
 import { JUDGE_MAX_CONTEXT_CHARS } from "../token-policy";
 
@@ -14,6 +15,7 @@ export interface BuildJudgePromptOptions {
   readonly rubricVersion?: RubricVersion;
   /** Maximum characters of transcript context sent to the judge. */
   readonly maxTranscriptChars?: number;
+  readonly toolEvents?: readonly StandardToolCall[];
 }
 
 export function buildJudgePrompt(
@@ -26,6 +28,17 @@ export function buildJudgePrompt(
   if (rubricVersion === "1") return buildLegacyJudgePrompt(topic, turns, maxTranscriptChars);
   const rubric = RUBRIC_VERSIONS[rubricVersion] ?? RUBRIC_VERSIONS["2"];
   const transcript = renderTranscript(turns, maxTranscriptChars);
+  const toolEvents = options?.toolEvents;
+  const hasToolEvidence = Boolean(toolEvents?.length);
+  const evidence = toolEvents?.length
+    ? toolEvents.map((event) => `[${event.side} · ${event.tool} · ${event.ok ? "success" : "failed"}] ${event.query}\n${event.output}${event.error ? `\nError: ${event.error}` : ""}`).join("\n\n")
+    : "(no tool evidence was recorded)";
+  const evidenceGuidance = hasToolEvidence
+    ? [
+        "Decisive evidence: before scoring, identify which claims each side supported with the visible tool results above and which remained unsupported assertions. Treat a claim as backed only when a recorded tool result directly supports it; count bare assertions, overstated findings, failed lookups, and results used for a different claim as unsupported.",
+        "Reasoning must cite the public tool evidence that decided the exchange by side, tool, and query, name the side that produced each result, and explain how it changed the comparison. Cite only the public tool results shown above; never invent evidence or reveal hidden or private reasoning.",
+      ]
+    : [];
 
   return [
     `Motion: "${topic}"`,
@@ -39,6 +52,8 @@ export function buildJudgePrompt(
     "A rebuttal that ignores the opponent or only restates the speaker's own case must score below 50 for rebuttal quality. Do not reward confident wording without reasoning.",
     "Set winner to A or B according to the overall scores. Set winner to DRAW whenever the scores are within 2 points of each other. The winner field must agree with the scores.",
     "Reasoning must be concise but specific: name the decisive strength and weakness for each side, including whether the rebuttals actually answered the opposing claims.",
+    ...(options?.toolEvents ? ["Visible tool evidence:", evidence] : []),
+    ...evidenceGuidance,
     `Return STRICT JSON only with integer fields ${buildCriteriaFieldList()} and no markdown, commentary, or extra keys. Use this exact shape:`,
     '{"winner":"A","scoreA":78,"scoreB":64,"criteria":{"argumentQualityA":80,"argumentQualityB":66,"rebuttalA":76,"rebuttalB":62,"consistencyA":79,"consistencyB":65,"relevanceA":78,"relevanceB":63},"reasoning":"Side A answered the strongest opposing claim and supported its position more clearly; Side B relied more on repetition and unsupported assertions."}',
   ].join("\n\n");

@@ -12,12 +12,14 @@
  */
 
 import type { DebateSide } from "@arena/debate-engine";
-import { findMatchTurn, type MatchTurnSpec } from "@arena/types";
+import { findMatchTurn, type MatchMode, type MatchTurnSpec } from "@arena/types";
 import type {
   DebateStreamEvent,
   DebateStreamPhase,
   DebateStreamTurn,
   DebateStreamVerdict,
+  DebateStreamToolCall,
+  DebateStreamToolResult,
 } from "@/shared/api/debate-stream";
 
 // --- Public types -----------------------------------------------------------
@@ -49,13 +51,14 @@ export type DebateRuntimeStatus =
 export interface DebateRuntimeState {
   readonly status: DebateRuntimeStatus;
   readonly topic?: string;
-  readonly mode: "quick";
+  readonly mode: MatchMode;
   readonly currentPhase: DebateStreamPhase;
   readonly currentSide: DebateSide | null;
   readonly currentTurn: MatchTurnSpec | null;
   readonly judgeActive: boolean;
   readonly judgeReasoning: string;
   readonly panels: readonly SpeechPanel[];
+  readonly standardEvents: readonly StandardTimelineEvent[];
   readonly verdict?: DebateStreamVerdict;
   readonly errorMessage?: string;
   /**
@@ -78,6 +81,10 @@ export interface DebateRuntimeState {
   readonly cancelled: boolean;
 }
 
+export type StandardTimelineEvent =
+  | { readonly type: "tool-start"; readonly tool: DebateStreamToolCall }
+  | { readonly type: "tool-result"; readonly result: DebateStreamToolResult };
+
 export const initialRuntimeState: DebateRuntimeState = {
   status: "idle",
   mode: "quick",
@@ -87,6 +94,7 @@ export const initialRuntimeState: DebateRuntimeState = {
   judgeActive: false,
   judgeReasoning: "",
   panels: [],
+  standardEvents: [],
   matchId: undefined,
   judgedAt: undefined,
   cancelled: false,
@@ -95,7 +103,7 @@ export const initialRuntimeState: DebateRuntimeState = {
 // --- Actions ----------------------------------------------------------------
 
 export type DebateRuntimeAction =
-  | { readonly type: "start"; readonly topic: string }
+  | { readonly type: "start"; readonly topic: string; readonly mode?: MatchMode }
   | { readonly type: "stream-event"; readonly event: DebateStreamEvent }
   | { readonly type: "stream-error"; readonly message: string }
   /** Internal silent cleanup — does not surface a cancelled screen. */
@@ -118,6 +126,7 @@ export function reduceDebateRuntime(
         ...initialRuntimeState,
         status: "starting",
         topic: action.topic,
+        mode: action.mode ?? "quick",
       };
     case "stream-event":
       return applyStreamEvent(state, action.event);
@@ -174,6 +183,10 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
       }
     case "token":
       return appendToken(withMatchId, event.side, event.text, deriveSpeechPhase(withMatchId.currentPhase));
+    case "tool-start":
+      return { ...withMatchId, standardEvents: [...withMatchId.standardEvents, event] };
+    case "tool-result":
+      return { ...withMatchId, standardEvents: [...withMatchId.standardEvents, event] };
     case "turn":
       return sealTurn(withMatchId, event.turn);
     case "judge-start":
@@ -280,7 +293,7 @@ function appendToken(
     phase,
     content: text,
     sealed: false,
-    turn: findMatchTurn(state.mode, phase) ?? undefined,
+    turn: findMatchTurn(state.mode, phase) ?? findMatchTurn("quick", phase) ?? undefined,
   };
   return { ...state, panels: [...state.panels, panel] };
 }
@@ -295,7 +308,7 @@ function sealTurn(state: DebateRuntimeState, turn: DebateStreamTurn): DebateRunt
     content: turn.content,
     sealed: true,
     model: turn.model ?? existing?.model,
-    turn: findMatchTurn(state.mode, turn.phase) ?? existing?.turn,
+    turn: findMatchTurn(state.mode, turn.phase) ?? findMatchTurn("quick", turn.phase) ?? existing?.turn,
   };
   if (existing) {
     return {
@@ -307,7 +320,7 @@ function sealTurn(state: DebateRuntimeState, turn: DebateStreamTurn): DebateRunt
 }
 
 function isAgentPhase(phase: DebateStreamPhase): boolean {
-  return findMatchTurn("quick", phase) !== undefined;
+  return findMatchTurn("quick", phase) !== undefined || phase.startsWith("standard-");
 }
 
 function deriveSpeechPhase(phase: DebateStreamPhase): SpeechPhase | null {

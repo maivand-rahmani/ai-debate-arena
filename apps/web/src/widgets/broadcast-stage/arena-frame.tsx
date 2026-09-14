@@ -5,6 +5,7 @@ import { CanvasGate } from "./3d";
 import { BroadcastStage, type BroadcastStageProps } from "./broadcast-stage";
 import { deriveSceneSignal } from "./3d/scene-signal";
 import { ArenaHud } from "./arena-hud";
+import { StandardEventTimeline } from "@/features/arena/match/standard-event-timeline";
 
 /**
  * The v0.3 broadcast surface. Mounts the 3D arena via {@link CanvasGate}
@@ -51,6 +52,7 @@ export function ArenaFrame(props: BroadcastStageProps) {
         <BroadcastStage {...props} />
       </CanvasGate>
       <ArenaHud {...props} />
+      <StandardEventTimeline state={props.state} />
     </section>
   );
 }

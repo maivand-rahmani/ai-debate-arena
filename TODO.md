@@ -109,19 +109,19 @@ Standard Mode becomes playable through the locally run web product. During a liv
 
 ### First playable slice
 
-- [ ] Introduce one lightweight, persistent agent session per contender with its model, side, objective, working context, tool loadout, and match-local resources.
-- [ ] Add a small tool registry shared by both contenders.
-- [ ] Add the iterative agent action loop: observe the match, choose the next action, execute zero or more tools, consume their results, adapt, and then deliver the public move.
-- [ ] Keep Agent A and Agent B independent for the whole match; neither receives the other's private working context.
-- [ ] Replace Standard's fixed turn list with the opening + open-round + closing lifecycle.
-- [ ] Let each contender return a continue/ready intent so match length emerges from play.
-- [ ] Add a generous match-local resource pool and basic action costs to guarantee a natural ending.
-- [ ] Add `web_search` so a contender can find relevant sources without the user pasting URLs.
-- [ ] Add `fetch_url` so a contender can inspect a selected source.
-- [ ] Add `run_code` for useful calculations, data checks, and executable demonstrations.
-- [ ] Stream tool-start, tool-result, evidence, and failure events into the existing match UI.
-- [ ] Show compact evidence cards with source, excerpt/result, producing contender, and related claim.
-- [ ] Give the judge the transcript plus tool-produced evidence and require the verdict to reference important evidence.
+- [x] Introduce one lightweight, persistent agent session per contender with its model, side, objective, working context, tool loadout, and match-local resources.
+- [x] Add a small tool registry shared by both contenders.
+- [x] Add the iterative agent action loop: observe the match, choose the next action, execute zero or more tools, consume their results, adapt, and then deliver the public move.
+- [x] Keep Agent A and Agent B independent for the whole match; neither receives the other's private working context.
+- [x] Replace Standard's fixed turn list with the opening + open-round + closing lifecycle.
+- [x] Let each contender return a continue/ready intent so match length emerges from play.
+- [x] Add a generous match-local resource pool and basic action costs to guarantee a natural ending.
+- [x] Add `web_search` so a contender can find relevant sources without the user pasting URLs.
+- [x] Add `fetch_url` so a contender can inspect a selected source.
+- [x] Add `run_code` for useful calculations, data checks, and executable demonstrations.
+- [x] Stream tool-start, tool-result, evidence, and failure events into the existing match UI.
+- [x] Show compact evidence cards with source, excerpt/result, producing contender, and related claim.
+- [x] Give the judge the transcript plus tool-produced evidence and require the verdict to reference important evidence.
 - [ ] Give both contenders the same configurable tool and time budget for a fair comparison.
 
 ### v0.4 release gate

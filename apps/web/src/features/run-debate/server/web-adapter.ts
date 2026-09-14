@@ -5,11 +5,15 @@ import { buildAiModel, toSafeErrorMessage } from "@arena/ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 import {
   debateVerdictSchema,
+  getStandardTool,
   toModelUsage,
   type MatchRecord,
   type ModelCallArgs,
   type ModelCallResult,
   type ModelUsage,
+  type StandardToolInput,
+  type StandardToolName,
+  type StandardToolResult,
 } from "@arena/debate-engine";
 import { getProvider } from "@/shared/config/provider-store";
 import { saveMatchRecord } from "@/shared/config/match-store";
@@ -20,7 +24,7 @@ import { saveMatchRecord } from "@/shared/config/match-store";
  * `shared/api/llm/model.ts`, kept inline so the runner adapter owns the
  * whole web seam in one file.)
  */
-async function createWebModel(
+export async function createWebModel(
   providerId: string,
   modelId?: string,
   sessionKey?: string,
@@ -116,6 +120,21 @@ export async function webCallModel(args: ModelCallArgs): Promise<ModelCallResult
     }
   }
   return callAgentWithStreamingFallback(model, args);
+}
+
+/**
+ * Server-owned Standard tool dispatcher. Executor implementations live in the
+ * engine's Standard tool registry so they can be tested portably; the browser
+ * only receives the bounded `StandardToolResult`.
+ */
+export async function webRunStandardTool(
+  tool: StandardToolName,
+  input: StandardToolInput,
+  signal?: AbortSignal,
+): Promise<StandardToolResult> {
+  const definition = getStandardTool(tool);
+  if (!definition) return { ok: false, output: "Unknown tool", error: "Unknown tool" };
+  return definition.execute(input, signal);
 }
 
 async function callAgentWithStreamingFallback(

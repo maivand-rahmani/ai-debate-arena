@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, afterAll, describe, expect, it, vi } from "vitest";
 import type { MatchRecord } from "@arena/debate-engine";
-import { runDebate } from "@arena/debate-engine";
+import { MATCH_PROFILES, runDebate, STANDARD_MAX_MOVES } from "@arena/debate-engine";
 import { exportMatchJson } from "../../../features/run-debate/server/export";
 import { getProvider } from "../../../shared/config/provider-store";
 import { loadMatchRecord, saveMatchRecord } from "../../../shared/config/match-store";
@@ -125,6 +125,31 @@ async function seedCompletedMatch(matchId: string): Promise<MatchRecord> {
   expect(saved).toHaveLength(1);
   await saveMatchRecord(saved[0]!);
   return saved[0]!;
+}
+
+/** Seeds a completed Standard record with a variable-length transcript. */
+async function seedStandardMatch(matchId: string, transcriptLength: number): Promise<MatchRecord> {
+  const base = await seedCompletedMatch(matchId);
+  const transcript = Array.from({ length: transcriptLength }, (_, index) => {
+    const side = index % 2 === 0 ? ("A" as const) : ("B" as const);
+    return {
+      id: `standard-move-${index + 1}`,
+      agentId: side,
+      side,
+      phase: "standard-opening",
+      content: `Move ${index + 1}.`,
+      model: "mock-model",
+      createdAt: new Date(0).toISOString(),
+    };
+  });
+  const record: MatchRecord = {
+    ...base,
+    mode: "standard",
+    policy: { ...MATCH_PROFILES.standard },
+    transcript,
+  };
+  await saveMatchRecord(record);
+  return record;
 }
 
 async function seedErrorMatch(matchId: string): Promise<MatchRecord> {
@@ -273,6 +298,36 @@ describe("POST /api/matches/[id]/rejudge", () => {
     expect(stored?.verdict?.winner).toBe("A");
     expect(stored?.judgedAt).toBeUndefined();
     expect(stored?.metrics.judgeMs).toBeUndefined();
+  });
+
+  it("re-judges a completed Standard record shorter than the max-move ceiling", async () => {
+    await seedStandardMatch("s-1", 4);
+    mock.enqueue({ kind: "text", text: VERDICT_B_JSON });
+
+    const res = await rejudgeMatch(new Request("http://localhost/api/matches/s-1/rejudge", { method: "POST" }), params("s-1"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; winner: string; terminal: string };
+    expect(body.id).toBe("s-1");
+    expect(body.winner).toBe("B");
+    expect(body.terminal).toBe("completed");
+    expect(mock.requestCount).toBe(1);
+    expect((await loadMatchRecord("s-1"))?.transcript).toHaveLength(4);
+  });
+
+  it("returns 409 for a completed Standard record with an empty transcript", async () => {
+    await seedStandardMatch("s-2", 0);
+
+    const res = await rejudgeMatch(new Request("http://localhost/api/matches/s-2/rejudge", { method: "POST" }), params("s-2"));
+    expect(res.status).toBe(409);
+    expect(mock.requestCount).toBe(0);
+  });
+
+  it("returns 409 for a completed Standard record over the max-move ceiling", async () => {
+    await seedStandardMatch("s-3", STANDARD_MAX_MOVES + 1);
+
+    const res = await rejudgeMatch(new Request("http://localhost/api/matches/s-3/rejudge", { method: "POST" }), params("s-3"));
+    expect(res.status).toBe(409);
+    expect(mock.requestCount).toBe(0);
   });
 });
 

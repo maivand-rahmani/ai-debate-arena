@@ -82,6 +82,29 @@ describe("reduceDebateRuntime done handling", () => {
   });
 });
 
+describe("Standard public tool timeline", () => {
+  it("keeps tool selection and result visible in server event order without exposing private text", () => {
+    let state = reduceDebateRuntime(initialRuntimeState, { type: "start", topic: "Topic", mode: "standard" });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "phase", phase: "standard-a-opening", side: "A" },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-start", tool: { callId: "call-1", side: "A", tool: "web_search", query: "current facts", createdAt: "now" } },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-result", result: { callId: "call-1", side: "A", tool: "web_search", query: "current facts", ok: true, output: "A bounded result", createdAt: "later" } },
+    });
+
+    expect(state.mode).toBe("standard");
+    expect(state.standardEvents.map((event) => event.type)).toEqual(["tool-start", "tool-result"]);
+    expect(state.standardEvents[1]?.type === "tool-result" && state.standardEvents[1].result.output).toBe("A bounded result");
+    expect(state.panels).toHaveLength(0);
+  });
+});
+
 describe("reduceDebateRuntime cancel handling", () => {
   it("cancels an actively streaming match and preserves streamed panels + topic + phase", () => {
     let state = reduceDebateRuntime(

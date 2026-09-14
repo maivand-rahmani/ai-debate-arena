@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RedactedProvider } from "@/shared/api/providers";
-import type { DebateStreamRequest } from "@/shared/api/debate-stream";
 import {
   fetchMatch,
   fetchMatchList,
@@ -11,7 +10,7 @@ import {
   type MatchSummary,
 } from "@/shared/api/matches";
 import { useProviders } from "@/features/create-debate/use-providers";
-import type { MatchDraft } from "@/features/create-debate/draft";
+import { toDebateRequest, type MatchDraft } from "@/features/create-debate/draft";
 import { useDebateStream } from "@/features/run-debate/lib/use-debate-stream";
 import { isInMatch } from "@/features/run-debate/lib/reducer";
 import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match-history-drawer";
@@ -76,7 +75,7 @@ export default function ArenaScreen() {
       setMatchDraft(draft);
       setRejudgeStatus("idle");
       setRejudgeError(undefined);
-      start(toRequest(draft));
+      start(toDebateRequest(draft));
     },
     [start],
   );
@@ -215,23 +214,6 @@ export default function ArenaScreen() {
 }
 
 // --- Helpers ----------------------------------------------------------------
-
-function toRequest(draft: MatchDraft): DebateStreamRequest {
-  return {
-    topic: draft.topic.trim(),
-    mode: "quick",
-    agentA: {
-      providerId: draft.sideA.providerId,
-      model: draft.sideA.model,
-      position: draft.sideA.position,
-    },
-    agentB: {
-      providerId: draft.sideB.providerId,
-      model: draft.sideB.model,
-      position: draft.sideB.position,
-    },
-  };
-}
 
 function providerById(providers: readonly RedactedProvider[], id?: string): RedactedProvider | undefined {
   if (!id) return undefined;

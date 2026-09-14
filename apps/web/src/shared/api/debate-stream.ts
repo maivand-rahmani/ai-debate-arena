@@ -14,7 +14,11 @@ import type {
   DebateStreamPhase,
   DebateStreamTerminal,
   DebateStreamVerdict,
+  DebateStreamToolCall,
+  DebateStreamToolResult,
 } from "@arena/types";
+import type { MatchMode } from "@arena/types";
+import type { StandardLimitsInput } from "@arena/debate-engine";
 
 // Canonical wire primitives (structurally identical to `@arena/types`).
 // The remaining client shapes below (Turn/EventBody/Event/Envelope) stay
@@ -26,9 +30,11 @@ export type {
   DebateStreamTerminal,
   DebateStreamVerdict,
   DebateStreamVerdictCriteria,
+  DebateStreamToolCall,
+  DebateStreamToolResult,
 } from "@arena/types";
 
-export type DebateStreamMode = "quick";
+export type DebateStreamMode = MatchMode;
 
 export interface DebateStreamAgentInput {
   readonly providerId: string;
@@ -41,6 +47,12 @@ export interface DebateStreamRequest {
   readonly mode: DebateStreamMode;
   readonly agentA: DebateStreamAgentInput;
   readonly agentB: DebateStreamAgentInput;
+  /**
+   * Optional Standard-only resource/tool limits. Omitted for Quick/Hardcore,
+   * so their request bodies are unchanged; the engine applies its defaults for
+   * any field left out.
+   */
+  readonly standardLimits?: StandardLimitsInput;
 }
 
 /**
@@ -56,7 +68,7 @@ export interface DebateStreamEnvelope {
 export interface DebateStreamTurn {
   readonly id: string;
   readonly side: DebateSide;
-  readonly phase: Exclude<DebateStreamPhase, "CREATED" | "FINISHED">;
+  readonly phase: DebateStreamPhase;
   readonly content: string;
   readonly model: string;
   readonly createdAt?: string;
@@ -66,6 +78,8 @@ export type DebateStreamEventBody =
   | { readonly type: "phase"; readonly phase: DebateStreamPhase; readonly side: DebateSide | null }
   | { readonly type: "token"; readonly side: DebateSide; readonly text: string }
   | { readonly type: "turn"; readonly turn: DebateStreamTurn }
+  | { readonly type: "tool-start"; readonly tool: DebateStreamToolCall }
+  | { readonly type: "tool-result"; readonly result: DebateStreamToolResult }
   | { readonly type: "judge-start" }
   | { readonly type: "verdict"; readonly verdict: DebateStreamVerdict }
   | { readonly type: "error"; readonly message: string }
@@ -204,16 +218,6 @@ async function* runStream(
 
 // --- Internal helpers -------------------------------------------------------
 
-const STREAM_PHASES: ReadonlySet<DebateStreamPhase> = new Set([
-  "CREATED",
-  "OPENING_A",
-  "OPENING_B",
-  "REBUTTAL_A",
-  "REBUTTAL_B",
-  "JUDGING",
-  "FINISHED",
-]);
-
 function parseLine(line: string): DebateStreamEvent | null {
   let parsed: unknown;
   try {
@@ -230,7 +234,7 @@ function normalizeEvent(input: Record<string, unknown>): DebateStreamEvent | nul
   const envelope = readEnvelope(input);
   switch (type) {
     case "phase": {
-      const phase = typeof input.phase === "string" && STREAM_PHASES.has(input.phase as DebateStreamPhase)
+      const phase = typeof input.phase === "string" && input.phase.length > 0
         ? (input.phase as DebateStreamPhase)
         : "CREATED";
       const rawSide = input.side;
@@ -247,6 +251,14 @@ function normalizeEvent(input: Record<string, unknown>): DebateStreamEvent | nul
     case "turn": {
       if (!input.turn || typeof input.turn !== "object") return null;
       return { type: "turn", turn: input.turn as DebateStreamTurn, ...envelope };
+    }
+    case "tool-start": {
+      if (!input.tool || typeof input.tool !== "object") return null;
+      return { type: "tool-start", tool: input.tool as DebateStreamToolCall, ...envelope };
+    }
+    case "tool-result": {
+      if (!input.result || typeof input.result !== "object") return null;
+      return { type: "tool-result", result: input.result as DebateStreamToolResult, ...envelope };
     }
     case "judge-start":
       return { type: "judge-start", ...envelope };
