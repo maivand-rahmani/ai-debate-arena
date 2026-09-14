@@ -9,10 +9,9 @@ import type { RedactedProvider } from "@/shared/api/providers";
 import type { DebateStreamRequest } from "@/shared/api/debate-stream";
 import type { StandardLimitsInput } from "@arena/debate-engine";
 import type { MatchMode } from "@arena/types";
+import { SIDE_POSITIONS } from "@/shared/config/sides";
 
 export type { MatchMode };
-
-export type Position = "FOR" | "AGAINST";
 
 /**
  * Standard-only budget controls collected in the setup form. Tool timeout is
@@ -37,7 +36,6 @@ export interface MatchDraft {
 export interface AgentDraft {
   readonly providerId: string;
   readonly model: string;
-  readonly position: Position;
 }
 
 export const TOPIC_MAX_LENGTH = 140;
@@ -52,8 +50,8 @@ export function emptyDraft(): MatchDraft {
   return {
     topic: "",
     mode: "quick",
-    sideA: { providerId: "", model: "", position: "FOR" },
-    sideB: { providerId: "", model: "", position: "AGAINST" },
+    sideA: { providerId: "", model: "" },
+    sideB: { providerId: "", model: "" },
   };
 }
 
@@ -73,27 +71,9 @@ export function isSameModelMatchup(draft: MatchDraft): boolean {
 }
 
 /**
- * When the user changes a side's position, auto-mirror the opposite side. The
- * caller can opt out by passing `mirror: false` (e.g. when re-syncing after a
- * provider change).
+ * Swaps a side's provider and keeps a user-typed model. Only auto-fills the
+ * model when it is empty or merely the previous provider's default.
  */
-export function applyPositionChange(draft: MatchDraft, side: "A" | "B", position: Position, mirror = true): MatchDraft {
-  if (side === "A") {
-    const nextB = mirror && position === "FOR" ? "AGAINST" : mirror && position === "AGAINST" ? "FOR" : draft.sideB.position;
-    return {
-      ...draft,
-      sideA: { ...draft.sideA, position },
-      sideB: { ...draft.sideB, position: nextB },
-    };
-  }
-  const nextA = mirror && position === "FOR" ? "AGAINST" : mirror && position === "AGAINST" ? "FOR" : draft.sideA.position;
-  return {
-    ...draft,
-    sideB: { ...draft.sideB, position },
-    sideA: { ...draft.sideA, position: nextA },
-  };
-}
-
 export function applyProviderChange(
   draft: MatchDraft,
   side: "A" | "B",
@@ -146,6 +126,10 @@ export function validateDraft(draft: MatchDraft): readonly ValidationIssue[] {
 /**
  * Builds the `POST /api/debate` request for a draft.
  *
+ * Side positions are fixed by the product (A argues FOR, B argues AGAINST), so
+ * they are always taken from {@link SIDE_POSITIONS} rather than the draft.
+ * Any stale/legacy draft position data is ignored here.
+ *
  * Standard budget overrides are attached only for Standard, and only the
  * fields the shared engine understands: the engine contract takes whole
  * seconds, so the UI's milliseconds are converted here. Quick and Hardcore
@@ -158,12 +142,12 @@ export function toDebateRequest(draft: MatchDraft): DebateStreamRequest {
     agentA: {
       providerId: draft.sideA.providerId,
       model: draft.sideA.model,
-      position: draft.sideA.position,
+      position: SIDE_POSITIONS.A,
     },
     agentB: {
       providerId: draft.sideB.providerId,
       model: draft.sideB.model,
-      position: draft.sideB.position,
+      position: SIDE_POSITIONS.B,
     },
     ...(draft.mode === "standard" && draft.standard ? { standardLimits: toStandardLimits(draft.standard) } : {}),
   };

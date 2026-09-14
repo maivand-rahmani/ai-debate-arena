@@ -50,6 +50,47 @@ export interface DebateStreamToolResult {
   readonly createdAt: string;
 }
 
+/**
+ * Public per-side Standard resource accounting at one point in a match. The
+ * runner is the sole author; clients render it instead of re-deriving credits
+ * from transcript and tool counts.
+ */
+export interface DebateStreamSideResources {
+  readonly side: DebateSide;
+  readonly creditsRemaining: number;
+  /** Total public tool calls this side has used across the match. */
+  readonly toolsUsed: number;
+  /** Tool calls folded into this side's most recent move. */
+  readonly toolsUsedThisMove: number;
+  readonly maxToolsPerMove: number;
+  /** Hard per-tool timeout in milliseconds. */
+  readonly toolTimeoutMs: number;
+  /** True when the side can no longer afford a public speech. */
+  readonly depleted: boolean;
+}
+
+/**
+ * Public Standard match snapshot: both sides' remaining resources plus the
+ * shared limits/status that bound the match. Emitted after each Standard move
+ * so viewers see authoritative accounting instead of a local estimate.
+ */
+export interface DebateStreamStandardState {
+  readonly startingCredits: number;
+  /** Credits charged for one public speech. */
+  readonly speechCost: number;
+  /** Credits charged for one tool call. */
+  readonly toolCost: number;
+  /** Emergency ceiling on total public moves, not the normal game clock. */
+  readonly maxMoves: number;
+  readonly movesUsed: number;
+  readonly moveLimitReached: boolean;
+  readonly closingRound: boolean;
+  readonly sides: {
+    readonly A: DebateStreamSideResources;
+    readonly B: DebateStreamSideResources;
+  };
+}
+
 export interface DebateStreamVerdictCriteria {
   readonly argumentQualityA: number;
   readonly argumentQualityB: number;
@@ -75,6 +116,7 @@ export type DebateStreamEventBody =
   | { readonly type: "turn"; readonly turn: DebateStreamTurn }
   | { readonly type: "tool-start"; readonly tool: DebateStreamToolCall }
   | { readonly type: "tool-result"; readonly result: DebateStreamToolResult }
+  | { readonly type: "standard-state"; readonly state: DebateStreamStandardState }
   | { readonly type: "judge-start" }
   | { readonly type: "verdict"; readonly verdict: DebateStreamVerdict }
   | { readonly type: "error"; readonly message: string }

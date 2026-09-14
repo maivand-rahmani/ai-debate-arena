@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import Link from "next/link";
 import { fetchMatchList, type MatchSummary, MatchesApiError } from "@/shared/api/matches";
-import { formatMatchDate, TERMINAL_LABEL, WINNER_LABEL } from "./format-helpers";
+import { MatchSummaryRow } from "./match-summary-row";
+import { useMatchListDetails } from "./use-match-list-details";
 
 interface MatchHistoryDrawerProps {
   readonly open: boolean;
@@ -27,6 +27,7 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [list, setList] = useState<readonly MatchSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const details = useMatchListDetails(list);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
@@ -133,7 +134,13 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
           ) : (
             <ul className="drawer-shell__list" aria-label="Saved matches">
               {list.map((summary) => (
-                <DrawerRow key={summary.id} summary={summary} />
+                <li key={summary.id}>
+                  <MatchSummaryRow
+                    summary={summary}
+                    record={details.get(summary.id)}
+                    className="drawer-shell__row history-match-row"
+                  />
+                </li>
               ))}
             </ul>
           )}
@@ -144,36 +151,5 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
         </footer>
       </aside>
     </div>
-  );
-}
-
-function DrawerRow({ summary }: { summary: MatchSummary }) {
-  return (
-    <li>
-      <Link
-        href={`/matches/${encodeURIComponent(summary.id)}`}
-        className="drawer-shell__row"
-      >
-        <span className="drawer-shell__row-text">
-          <span className="drawer-shell__row-topic">{summary.topic}</span>
-          <span className="drawer-shell__row-meta">
-            {formatMatchDate(summary.date)} · {summary.mode === "quick" ? "Quick" : summary.mode} · {TERMINAL_LABEL[summary.terminal]}
-          </span>
-        </span>
-        <span
-          className={`drawer-shell__row-badge drawer-shell__row-badge--${
-            summary.winner === "A" ? "a" : summary.winner === "B" ? "b" : "draw"
-          }`}
-        >
-          {summary.winner === null
-            ? "Pending"
-            : summary.winner === "DRAW"
-              ? WINNER_LABEL.DRAW
-              : summary.winner === "A"
-                ? WINNER_LABEL.A
-                : WINNER_LABEL.B}
-        </span>
-      </Link>
-    </li>
   );
 }

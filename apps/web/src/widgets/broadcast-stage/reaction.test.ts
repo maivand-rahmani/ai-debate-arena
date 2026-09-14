@@ -70,6 +70,13 @@ describe("deriveReaction — terminal states", () => {
   it("returns nothing when the verdict is missing on finished", () => {
     expect(deriveReaction({ ...initialRuntimeState, status: "finished" })).toBeNull();
   });
+
+  it("holds the winner-specific verdict reaction until the terminal frame", () => {
+    const state = { ...initialRuntimeState, status: "finished" as const, verdict };
+    expect(deriveReaction(state, { side: "A" }, false)).toBeNull();
+    expect(deriveReaction(state, null, false)).toBeNull();
+    expect(deriveReaction(state, null, true)).toEqual(REACTIONS["verdict-landed"]);
+  });
 });
 
 describe("deriveReaction — streaming states", () => {

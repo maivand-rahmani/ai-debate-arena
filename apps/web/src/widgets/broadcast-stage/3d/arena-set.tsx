@@ -34,7 +34,7 @@ export function ArenaFloor() {
     <group>
       <mesh position={[0, -0.01, 0]} rotation-x={-Math.PI / 2} receiveShadow>
         <planeGeometry args={[arenaFloor.size[0], arenaFloor.size[1]]} />
-        <meshStandardMaterial color={PALETTE.walnutBlackened} roughness={0.88} metalness={0.08} />
+        <meshStandardMaterial color={PALETTE.stageFloor} roughness={0.88} metalness={0.08} />
       </mesh>
 
       {/* Low-contrast floor inlays give the camera a premium studio floor cue. */}
@@ -150,7 +150,7 @@ export function ArenaCyclorama() {
         receiveShadow
       >
         <cylinderGeometry args={[cycloramaRadius, cycloramaRadius, height, Math.max(32, cycloramaSegments), 1, true, -Math.PI / 2, Math.PI]} />
-        <meshStandardMaterial color={PALETTE.cream} side={THREE.BackSide} roughness={0.9} metalness={0.02} />
+        <meshStandardMaterial color={PALETTE.stageCyclorama} side={THREE.BackSide} roughness={0.9} metalness={0.02} />
       </mesh>
 
       {/* Narrow acoustic ribs and a horizontal light slot add depth to the wall. */}
@@ -202,7 +202,7 @@ function PracticalFixture({ position, accent }: { readonly position: readonly [n
     <group position={position}>
       <mesh castShadow>
         <cylinderGeometry args={[0.115, 0.14, 0.13, 12]} />
-        <meshStandardMaterial color={PALETTE.walnutBlackened} roughness={0.35} metalness={0.72} />
+        <meshStandardMaterial color={PALETTE.blackenedMetal} roughness={0.35} metalness={0.72} />
       </mesh>
       <mesh position={[0, -0.075, 0]} rotation-x={Math.PI / 2}>
         <circleGeometry args={[0.075, 12]} />
@@ -226,7 +226,7 @@ export function ArenaTruss() {
         <CuboidCollider args={[size[0] / 2, size[1] / 2, size[2] / 2]} position={position} />
         <mesh position={position} castShadow>
           <boxGeometry args={size} />
-          <meshStandardMaterial color={PALETTE.walnutBlackened} roughness={0.46} metalness={0.62} />
+          <meshStandardMaterial color={PALETTE.blackenedMetal} roughness={0.46} metalness={0.62} />
         </mesh>
       </RigidBody>
 

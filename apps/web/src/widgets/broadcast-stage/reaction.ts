@@ -18,7 +18,12 @@
  */
 
 import type { DebateRuntimeState } from "@/features/run-debate/lib/reducer";
-import { findMatchTurn } from "@arena/types";
+import { findMatchTurn, type DebateSide } from "@arena/types";
+
+/** Minimal viewer-presented speech shape (structurally a `StageFocus`). */
+export interface PresentedSpeech {
+  readonly side: DebateSide;
+}
 
 export type ReactionId =
   | "cooking"
@@ -50,7 +55,18 @@ export const REACTIONS: Readonly<Record<ReactionId, ReactionView>> = {
 const COOKING_LENGTH = 400;
 const PANICKING_LENGTH = 1500;
 
-export function deriveReaction(state: DebateRuntimeState): ReactionView | null {
+/**
+ * @param presented   Viewer-selected speech (when the audience is still
+ *                    reading a speech rather than the terminal surface).
+ * @param isTerminalFrame  False while the final speech is held. When false,
+ *                    winner-specific verdict reactions stay hidden even if the
+ *                    runtime already finished judging.
+ */
+export function deriveReaction(
+  state: DebateRuntimeState,
+  presented: PresentedSpeech | null = null,
+  isTerminalFrame = true,
+): ReactionView | null {
   // Priority order: terminal events first, then per-turn heuristics.
   if (state.status === "error") {
     return REACTIONS["argument-stopped"];
@@ -59,6 +75,9 @@ export function deriveReaction(state: DebateRuntimeState): ReactionView | null {
     return REACTIONS.timeout;
   }
   if (state.status === "finished") {
+    // The verdict sticker is a winner-specific effect: hold it until the
+    // viewer has advanced past the final speech to the terminal frame.
+    if (presented !== null || !isTerminalFrame) return null;
     const verdict = state.verdict;
     if (!verdict) return null;
     const margin = Math.abs(verdict.scoreA - verdict.scoreB);

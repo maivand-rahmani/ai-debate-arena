@@ -12,6 +12,7 @@
 import type { DebateSide } from "@arena/types";
 import type {
   DebateStreamPhase,
+  DebateStreamStandardState,
   DebateStreamTerminal,
   DebateStreamVerdict,
   DebateStreamToolCall,
@@ -27,6 +28,8 @@ import type { StandardLimitsInput } from "@arena/debate-engine";
 // degrades gracefully instead of crashing.
 export type {
   DebateStreamPhase,
+  DebateStreamSideResources,
+  DebateStreamStandardState,
   DebateStreamTerminal,
   DebateStreamVerdict,
   DebateStreamVerdictCriteria,
@@ -80,6 +83,7 @@ export type DebateStreamEventBody =
   | { readonly type: "turn"; readonly turn: DebateStreamTurn }
   | { readonly type: "tool-start"; readonly tool: DebateStreamToolCall }
   | { readonly type: "tool-result"; readonly result: DebateStreamToolResult }
+  | { readonly type: "standard-state"; readonly state: DebateStreamStandardState }
   | { readonly type: "judge-start" }
   | { readonly type: "verdict"; readonly verdict: DebateStreamVerdict }
   | { readonly type: "error"; readonly message: string }
@@ -259,6 +263,10 @@ function normalizeEvent(input: Record<string, unknown>): DebateStreamEvent | nul
     case "tool-result": {
       if (!input.result || typeof input.result !== "object") return null;
       return { type: "tool-result", result: input.result as DebateStreamToolResult, ...envelope };
+    }
+    case "standard-state": {
+      if (!input.state || typeof input.state !== "object") return null;
+      return { type: "standard-state", state: input.state as DebateStreamStandardState, ...envelope };
     }
     case "judge-start":
       return { type: "judge-start", ...envelope };

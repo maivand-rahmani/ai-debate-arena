@@ -48,12 +48,11 @@ export function ArenaHud(props: ArenaHudProps) {
     onNewMatch,
     onEndMatch,
     onOpenHistory,
-    reactionsMuted,
-    onToggleMute,
+    reactionsMuted = false,
     playback,
   } = props;
 
-  const view = deriveStageView(state);
+  const view = deriveStageView(state, playback?.focusedPanel ?? null);
 
   const showCancelled = state.status === "cancelled";
   const showError = state.status === "error";
@@ -74,7 +73,7 @@ export function ArenaHud(props: ArenaHudProps) {
       {...view.rootDataAttributes}
       aria-label="Live debate broadcast"
     >
-      {/* Top banner — interactive (history / mute / end buttons) */}
+      {/* Top banner — idle history and quiet live end-match affordance. */}
       <div className="arena-hud__top">
         <BroadcastBanner
           topic={topic}
@@ -82,8 +81,6 @@ export function ArenaHud(props: ArenaHudProps) {
           status={state.status}
           onEndMatch={broadcastLive ? onEndMatch : undefined}
           onOpenHistory={onOpenHistory}
-          reactionsMuted={reactionsMuted}
-          onToggleMute={onToggleMute}
         />
       </div>
 
@@ -93,6 +90,10 @@ export function ArenaHud(props: ArenaHudProps) {
         <div className="arena-hud__round arena-hud__round--progress">
           <MatchProgress state={state} viewingPhase={playback?.focusedPanel?.phase} />
         </div>
+      ) : null}
+
+      {state.status === "streaming" && !playback?.focusedPanel && view.activeSide ? (
+        <LiveMatchCallout side={view.activeSide} responseRole={view.currentTurn?.role} />
       ) : null}
 
       {/* Floating reaction overlay (aria-hidden, decorative). */}
@@ -105,6 +106,9 @@ export function ArenaHud(props: ArenaHudProps) {
       {/* Dim the 3D scene so the captions stay the focal point. The
           overlay is invisible when no match is in flight. */}
       {broadcastLive ? <div className="arena-hud__scrim" aria-hidden="true" /> : null}
+
+      {/* The contender rails are owned by ArenaFrame, which omits them on the
+          terminal frame so they can never cover the verdict surface. */}
 
       {/* Live caption — the new single bottom-center speech surface. */}
       {showPlaybackCaption ? (
@@ -148,6 +152,32 @@ export function ArenaHud(props: ArenaHudProps) {
           </div>
         )
       ) : null}
+    </div>
+  );
+}
+
+function LiveMatchCallout({
+  side,
+  responseRole,
+}: {
+  readonly side: "A" | "B";
+  readonly responseRole?: "opening" | "response";
+}) {
+  const name = side === "A" ? "Ember" : "Vesper";
+  const role = side === "A" ? "Challenger" : "Advocate";
+  const next = side === "A" ? "Vesper" : "Ember";
+  const phase = responseRole === "response" ? "rebuttal" : "opening";
+
+  return (
+    <div className={`live-match-callout live-match-callout--${side.toLowerCase()}`} aria-live="polite">
+      <span className="live-match-callout__eyebrow">Now on air</span>
+      <strong className="live-match-callout__speaker">
+        {name}<span>{role}</span>
+      </strong>
+      <span className="live-match-callout__next">
+        <span>Next response</span>
+        <b>{next} answers the {phase}</b>
+      </span>
     </div>
   );
 }

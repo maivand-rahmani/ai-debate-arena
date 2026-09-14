@@ -49,7 +49,7 @@ function BroadcastPanel({
     <group position={position}>
       <mesh position={[0, 0, -0.045]} castShadow receiveShadow>
         <boxGeometry args={[size[0] + 0.16, size[1] + 0.14, 0.08]} />
-        <meshStandardMaterial color={PALETTE.walnutBlackened} roughness={0.38} metalness={0.58} />
+        <meshStandardMaterial color={PALETTE.blackenedMetal} roughness={0.38} metalness={0.58} />
       </mesh>
       <mesh>
         {/* The panel faces +Z toward the spectator camera. The old π rotation
@@ -101,7 +101,7 @@ function BannerStructure({
           </mesh>
           <mesh position={[0, -frameHeight / 2 - 0.08, 0]} castShadow>
             <boxGeometry args={[bar * 2.4, 0.08, frameDepth * 1.8]} />
-            <meshStandardMaterial color={PALETTE.walnutBlackened} roughness={0.36} metalness={0.68} />
+            <meshStandardMaterial color={PALETTE.blackenedMetal} roughness={0.36} metalness={0.68} />
           </mesh>
         </group>
       ))}

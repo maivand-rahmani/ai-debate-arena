@@ -4,6 +4,7 @@ import { webCallModel, webRunStandardTool, webSaveMatch } from "@/features/run-d
 import { createWebStandardAgentSession } from "@/features/run-debate/server/standard-agent-adapter";
 import { matchConfigSchema } from "@arena/debate-engine";
 import { getProvider } from "@/shared/config/provider-store";
+import { SIDE_POSITIONS } from "@/shared/config/sides";
 import { MATCH_PROFILES, MATCH_TIMEOUT_MS } from "@arena/debate-engine";
 
 export const runtime = "nodejs";
@@ -24,30 +25,38 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Unsupported mode" }, { status: 400 });
   }
 
+  // Sides are fixed by the product: A argues FOR, B argues AGAINST. Normalize
+  // here too so a stale/legacy client can never swap the verdict's sides.
+  const config = {
+    ...parsed.data,
+    agentA: { ...parsed.data.agentA, position: SIDE_POSITIONS.A },
+    agentB: { ...parsed.data.agentB, position: SIDE_POSITIONS.B },
+  };
+
   // Fail fast on unknown provider ids: the API contract reports bad input as
   // 400 instead of surfacing it as a mid-stream error event.
   const [configA, configB] = await Promise.all([
-    getProvider(parsed.data.agentA.providerId),
-    getProvider(parsed.data.agentB.providerId),
+    getProvider(config.agentA.providerId),
+    getProvider(config.agentB.providerId),
   ]);
   if (!configA || !configB) {
-    const missing = !configA ? parsed.data.agentA.providerId : parsed.data.agentB.providerId;
+    const missing = !configA ? config.agentA.providerId : config.agentB.providerId;
     return Response.json({ error: `Unknown provider: ${missing}` }, { status: 400 });
   }
 
   const matchId = randomUUID();
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(MATCH_TIMEOUT_MS)]);
-  const events = runDebate(parsed.data, {
+  const events = runDebate(config, {
     callModel: webCallModel,
     saveMatch: webSaveMatch,
     runTool: webRunStandardTool,
     createStandardAgentSession: createWebStandardAgentSession,
     abortSignal: signal,
     matchId,
-    profile: MATCH_PROFILES[parsed.data.mode],
+    profile: MATCH_PROFILES[config.mode],
     sides: {
-      A: { providerName: configA.name, modelId: parsed.data.agentA.model, position: parsed.data.agentA.position },
-      B: { providerName: configB.name, modelId: parsed.data.agentB.model, position: parsed.data.agentB.position },
+      A: { providerName: configA.name, modelId: config.agentA.model, position: SIDE_POSITIONS.A },
+      B: { providerName: configB.name, modelId: config.agentB.model, position: SIDE_POSITIONS.B },
     },
   });
   const stream = new ReadableStream<Uint8Array>({

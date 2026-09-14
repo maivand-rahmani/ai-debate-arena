@@ -20,6 +20,7 @@ export function IdleHero({ onStart, onOpenHistory, recentCount = 0, busy = false
   return (
     <section className="idle-hero" aria-label="Arena idle" data-reduced-motion={reducedMotion || undefined}>
       <div className="idle-hero__inner">
+        <p className="idle-hero__eyebrow">Model versus model · live arena</p>
         <h1 className="idle-hero__title">AI Debate Arena</h1>
         <p className="idle-hero__sub">Two capable models. One question. Watch the evidence change the argument.</p>
 

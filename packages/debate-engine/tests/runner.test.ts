@@ -849,3 +849,135 @@ describe("runDebate Standard budget configuration", () => {
     expect(events.at(-1)?.type).toBe("done");
   });
 });
+
+describe("runDebate Standard public resource snapshots", () => {
+  it("emits one post-turn snapshot per move with authoritative per-side accounting", async () => {
+    const events: DebateStreamEvent[] = [];
+    const { factory } = fakeSessions((side, index, input): StandardAgentMoveResult => {
+      if (side === "A" && index === 0) {
+        const tools = Array.from({ length: input.maxAffordableTools }, (_, i) => ({
+          tool: "web_search" as const,
+          query: `a-${i}`,
+          output: "result",
+          ok: true,
+        }));
+        return { speech: "A0", ready: false, toolEvents: tools };
+      }
+      return { speech: `${side}${index}`, ready: true, toolEvents: [] };
+    });
+
+    for await (const event of runDebate(
+      { ...standardInput(), standardLimits: { startingCredits: 12, maxToolsPerMove: 2, toolTimeoutSeconds: 5 } },
+      {
+        saveMatch: noopSave,
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "result" }),
+        createStandardAgentSession: factory,
+      },
+    )) {
+      events.push(event);
+    }
+
+    const types = events.map((event) => event.type);
+    // Existing tool → token → turn order is intact; each snapshot directly
+    // follows the turn it accounts for.
+    for (let i = 0; i < types.length; i += 1) {
+      if (types[i] !== "turn") continue;
+      expect(types[i + 1]).toBe("standard-state");
+    }
+    expect(types.filter((type) => type === "turn").length).toBe(
+      types.filter((type) => type === "standard-state").length,
+    );
+
+    const snapshots = events.flatMap((event) => (event.type === "standard-state" ? [event.state] : []));
+    expect(snapshots.length).toBeGreaterThan(0);
+
+    const opening = snapshots[0]!;
+    expect(opening.startingCredits).toBe(12);
+    expect(opening.speechCost).toBe(1);
+    expect(opening.toolCost).toBe(2);
+    expect(opening.maxMoves).toBe(12);
+    expect(opening.movesUsed).toBe(1);
+    expect(opening.moveLimitReached).toBe(false);
+    expect(opening.closingRound).toBe(false);
+    // A spent two tools (2 credits each) plus one speech.
+    expect(opening.sides.A.creditsRemaining).toBe(7);
+    expect(opening.sides.A.toolsUsed).toBe(2);
+    expect(opening.sides.A.toolsUsedThisMove).toBe(2);
+    expect(opening.sides.A.maxToolsPerMove).toBe(2);
+    expect(opening.sides.A.toolTimeoutMs).toBe(5_000);
+    expect(opening.sides.A.depleted).toBe(false);
+    // B has not moved yet at the moment A's opening snapshot lands.
+    expect(opening.sides.B.creditsRemaining).toBe(12);
+    expect(opening.sides.B.toolsUsed).toBe(0);
+
+    // Later snapshots carry cumulative tool usage, not just the last move.
+    const last = snapshots.at(-1)!;
+    expect(last.sides.A.toolsUsed).toBe(2);
+  });
+
+  it("exposes a depleted side and the emergency move ceiling as limit status", async () => {
+    const depletedEvents: DebateStreamEvent[] = [];
+    const { factory: depletedFactory } = fakeSessions((side, index, input): StandardAgentMoveResult => {
+      if (side === "A") {
+        const tools = Array.from({ length: input.maxAffordableTools }, (_, i) => ({
+          tool: "web_search" as const,
+          query: `a-${i}`,
+          output: "result",
+          ok: true,
+        }));
+        return { speech: `A${index}`, ready: true, toolEvents: tools };
+      }
+      return { speech: `B${index}`, ready: true, toolEvents: [] };
+    });
+
+    for await (const event of runDebate(
+      { ...standardInput(), standardLimits: { startingCredits: 3, maxToolsPerMove: 1 } },
+      {
+        saveMatch: noopSave,
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "result" }),
+        createStandardAgentSession: depletedFactory,
+      },
+    )) {
+      depletedEvents.push(event);
+    }
+
+    const depletedSnapshots = depletedEvents.flatMap((event) =>
+      event.type === "standard-state" ? [event.state] : [],
+    );
+    expect(depletedSnapshots.at(-1)?.sides.A.depleted).toBe(true);
+    expect(depletedSnapshots.at(-1)?.sides.A.creditsRemaining).toBe(0);
+
+    const ceilingEvents: DebateStreamEvent[] = [];
+    const { factory: ceilingFactory } = fakeSessions((side, index) => ({
+      speech: `${side}${index}`,
+      ready: false,
+      toolEvents: [],
+    }));
+    for await (const event of runDebate(standardInput(), {
+      saveMatch: noopSave,
+      callModel: judgeCall,
+      runTool: async () => ({ ok: true, output: "result" }),
+      createStandardAgentSession: ceilingFactory,
+    })) {
+      ceilingEvents.push(event);
+    }
+
+    const ceilingSnapshots = ceilingEvents.flatMap((event) =>
+      event.type === "standard-state" ? [event.state] : [],
+    );
+    const final = ceilingSnapshots.at(-1)!;
+    expect(final.movesUsed).toBe(12);
+    expect(final.moveLimitReached).toBe(true);
+    expect(final.sides.A.depleted).toBe(false);
+  });
+
+  it("never emits a Standard resource snapshot for Quick", async () => {
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(quickInput(), { saveMatch: noopSave, callModel: agentSuccess })) {
+      events.push(event);
+    }
+    expect(events.some((event) => event.type === "standard-state")).toBe(false);
+  });
+});

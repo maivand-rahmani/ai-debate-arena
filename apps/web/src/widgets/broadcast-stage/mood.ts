@@ -14,7 +14,15 @@
  */
 
 import type { DebateRuntimeState, SpeechPanel } from "@/features/run-debate/lib/reducer";
-import { findMatchTurn } from "@arena/types";
+import { findMatchTurn, type DebateSide } from "@arena/types";
+
+/**
+ * Minimal viewer-presented speech shape. `StageFocus` / `SpeechPanel` are both
+ * structurally compatible, so callers can forward their focus object directly.
+ */
+export interface PresentedSpeech {
+  readonly side: DebateSide;
+}
 
 export type ContenderMood =
   | "thinking"
@@ -70,7 +78,18 @@ function latestPanel(
   return latest;
 }
 
-export function deriveMoods(state: DebateRuntimeState): MoodView {
+/**
+ * @param presented   Viewer-selected speech (when the audience is still
+ *                    reading a speech rather than the terminal surface).
+ * @param isTerminalFrame  False while the final speech is held. When false,
+ *                    the verdict outcome (victory/defeat moods) must stay
+ *                    hidden even if the runtime already finished judging.
+ */
+export function deriveMoods(
+  state: DebateRuntimeState,
+  presented: PresentedSpeech | null = null,
+  isTerminalFrame = true,
+): MoodView {
   // Terminal / non-speaking states first — they win over per-turn heuristics.
   if (state.status === "error") {
     return {
@@ -85,6 +104,21 @@ export function deriveMoods(state: DebateRuntimeState): MoodView {
       a: "defeated",
       b: "defeated",
       judge: "stoic",
+    };
+  }
+
+  // While the viewer is presenting a speech — or the match has finished but
+  // the terminal frame has not been reached — the contenders keep speech-level
+  // moods instead of revealing the verdict outcome early.
+  if (
+    (state.status === "judging" || state.status === "finished") &&
+    (presented !== null || !isTerminalFrame)
+  ) {
+    const active = presented?.side ?? null;
+    return {
+      a: active === "A" ? "confident" : "listening",
+      b: active === "B" ? "confident" : "listening",
+      judge: state.status === "judging" && state.judgeActive ? "evaluating" : "standing-by",
     };
   }
 

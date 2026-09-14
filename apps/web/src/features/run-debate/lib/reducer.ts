@@ -16,6 +16,7 @@ import { findMatchTurn, type MatchMode, type MatchTurnSpec } from "@arena/types"
 import type {
   DebateStreamEvent,
   DebateStreamPhase,
+  DebateStreamStandardState,
   DebateStreamTurn,
   DebateStreamVerdict,
   DebateStreamToolCall,
@@ -59,6 +60,12 @@ export interface DebateRuntimeState {
   readonly judgeReasoning: string;
   readonly panels: readonly SpeechPanel[];
   readonly standardEvents: readonly StandardTimelineEvent[];
+  /**
+   * Most recent authoritative Standard resource snapshot from the runner
+   * (`standard-state`). Stays `undefined` for Quick and before the first
+   * Standard move completes, so the UI never re-derives accounting itself.
+   */
+  readonly standardState?: DebateStreamStandardState;
   readonly verdict?: DebateStreamVerdict;
   readonly errorMessage?: string;
   /**
@@ -95,6 +102,7 @@ export const initialRuntimeState: DebateRuntimeState = {
   judgeReasoning: "",
   panels: [],
   standardEvents: [],
+  standardState: undefined,
   matchId: undefined,
   judgedAt: undefined,
   cancelled: false,
@@ -187,6 +195,10 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
       return { ...withMatchId, standardEvents: [...withMatchId.standardEvents, event] };
     case "tool-result":
       return { ...withMatchId, standardEvents: [...withMatchId.standardEvents, event] };
+    case "standard-state":
+      // Authoritative runner-owned accounting; replace the last snapshot and
+      // leave the public tool timeline untouched.
+      return { ...withMatchId, standardState: event.state };
     case "turn":
       return sealTurn(withMatchId, event.turn);
     case "judge-start":

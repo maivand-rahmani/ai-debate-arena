@@ -1,0 +1,73 @@
+{
+  "colors": {
+    "stage": {
+      "background": "#0B0F14",
+      "skyTop": "#111924",
+      "skyMid": "#162230",
+      "floor": "#151D26",
+      "cyclorama": "#0E151E"
+    },
+    "material": {
+      "walnut": "#2A1F1C",
+      "walnutShadow": "#171316",
+      "walnutDeep": "#0E0D12",
+      "blackenedMetal": "#26303A",
+      "cream": "#F4EADC",
+      "creamWarm": "#E7D5BE",
+      "taupe": "#9C8F86",
+      "taupeMid": "#70666A",
+      "woodWarm": "#765247",
+      "woodMid": "#4D3431",
+      "woodShadow": "#241A1C",
+      "woodHighlight": "#A8775E"
+    },
+    "identity": {
+      "ember": {
+        "base": "#EF7F67",
+        "bright": "#FFAD92",
+        "deep": "#9B4A4A",
+        "glow": "#EF7F6740"
+      },
+      "vesper": {
+        "base": "#9B8CFF",
+        "bright": "#C9C1FF",
+        "deep": "#514B98",
+        "glow": "#9B8CFF40"
+      },
+      "judge": {
+        "base": "#E4B95B",
+        "bright": "#F7D68C",
+        "deep": "#8D6A2F",
+        "glow": "#E4B95B40"
+      }
+    },
+    "utility": {
+      "evidence": "#91B7CF",
+      "success": "#7BC7A1",
+      "warning": "#EEB36B",
+      "focusRing": "#F2C667"
+    },
+    "type": {
+      "primary": "#F4EADC",
+      "secondary": "#D4C5B7",
+      "muted": "#A49B9D",
+      "faint": "#736F78"
+    }
+  },
+  "alpha": {
+    "panel": 0.94,
+    "panelSoft": 0.82,
+    "speech": 0.97,
+    "border": 0.42,
+    "scrim": 0.68
+  },
+  "shape": {
+    "cardRadiusPx": 18,
+    "softRadiusPx": 12
+  },
+  "motion": {
+    "cameraMs": 900,
+    "lightMs": 700,
+    "revealMs": 420
+  }
+}

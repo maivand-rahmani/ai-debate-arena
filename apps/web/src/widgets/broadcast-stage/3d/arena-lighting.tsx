@@ -62,7 +62,7 @@ export function useArenaLightingControls(): ArenaLightingControls {
 /**
  * The lighting rig itself — a static layout of:
  *   - warm ambient (cream tint)
- *   - hemisphere (sky=honey, ground=walnut)
+ *   - hemisphere (canonical studio sky and floor)
  *   - directional KEY with soft shadows (the studio key light)
  *   - colored spots aimed at each desk (terracotta/plum)
  *   - honey spot aimed at the judge
@@ -142,8 +142,8 @@ export function ArenaLighting({
       <hemisphereLight
         ref={hemisphereRef}
         args={[
-          LIGHTING_DEFAULTS.hemisphereSky,
-          LIGHTING_DEFAULTS.hemisphereGround,
+          PALETTE.stageSkyTop,
+          PALETTE.stageFloor,
           LIGHTING_DEFAULTS.hemisphere,
         ]}
       />

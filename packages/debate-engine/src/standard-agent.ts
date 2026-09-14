@@ -25,6 +25,31 @@ export interface StandardAgentToolEvent {
 }
 
 /**
+ * SDK-neutral public progress emitted while a Standard move is running.
+ * `invocationId` only correlates a tool start with its result; the runner owns
+ * the public call id and timestamp.
+ */
+export type StandardAgentProgressEvent =
+  | { readonly type: "speech"; readonly text: string }
+  | {
+      readonly type: "tool-start";
+      readonly invocationId: string;
+      readonly tool: StandardToolName;
+      readonly query: string;
+    }
+  | {
+      readonly type: "tool-result";
+      readonly invocationId: string;
+      readonly tool: StandardToolName;
+      readonly query: string;
+      readonly output: string;
+      readonly ok: boolean;
+      readonly error?: string;
+    };
+
+export type StandardAgentProgressCallback = (event: StandardAgentProgressEvent) => void;
+
+/**
  * The engine's per-move observation handed to a Standard agent session.
  *
  * Everything is either public match state (`observation`, `publicToolEvents`)
@@ -63,6 +88,8 @@ export interface StandardAgentMoveInput {
   readonly publicToolEvents: readonly StandardToolCall[];
   /** Executes one registered tool behind the local server boundary. */
   readonly runTool: StandardToolExecutor;
+  /** Receives public semantic progress before this move resolves. */
+  readonly onProgress?: StandardAgentProgressCallback;
   readonly abortSignal?: AbortSignal;
 }
 

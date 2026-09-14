@@ -21,19 +21,26 @@ export interface ConfettiColor {
 }
 
 export const VERDICT_CONFETTI_COLORS: readonly ConfettiColor[] = [
-  { color: PALETTE.terracotta, weight: 0.25 },
-  { color: PALETTE.terracottaLight, weight: 0.12 },
-  { color: PALETTE.honey, weight: 0.18 },
-  { color: PALETTE.honeyLight, weight: 0.10 },
+  { color: PALETTE.terracotta, weight: 0.20 },
+  { color: PALETTE.terracottaLight, weight: 0.10 },
+  { color: PALETTE.terracottaGlow, weight: 0.08 },
+  { color: PALETTE.honey, weight: 0.14 },
+  { color: PALETTE.honeyLight, weight: 0.08 },
+  { color: PALETTE.honeyGlow, weight: 0.06 },
   { color: PALETTE.plum, weight: 0.10 },
-  { color: PALETTE.cream, weight: 0.15 },
   { color: PALETTE.plumLight, weight: 0.10 },
+  { color: PALETTE.cream, weight: 0.14 },
 ];
 
-export const CONFETTI_POOL_SIZE = 28;
-export const CONFETTI_BURST_COUNT = 24;
+// Twenty cards reads as a deliberate broadcast cue, while keeping the fixed
+// Rapier pool small enough that the reveal never competes with the verdict.
+export const CONFETTI_POOL_SIZE = 20;
+export const CONFETTI_BURST_COUNT = 20;
 
-export const CONFETTI_DEFAULT_SIZE: Vec3 = [0.07, 0.018, 0.07];
+// A thin, slightly elongated card catches the light more elegantly than the
+// old square chip. Rotation is varied per spawn to make the same geometry
+// read as a mix of ribbons and cards in flight.
+export const CONFETTI_DEFAULT_SIZE: Vec3 = [0.12, 0.018, 0.055];
 
 export interface ConfettiSpawn {
   readonly index: number;
@@ -50,7 +57,9 @@ export interface ConfettiSpawn {
 export function pickConfettiColor(seed: number): string {
   const palette = VERDICT_CONFETTI_COLORS;
   const totalWeight = palette.reduce((acc, c) => acc + c.weight, 0);
-  const target = ((seed % 1000) / 1000) * totalWeight;
+  const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : 0;
+  const normalized = ((normalizedSeed % 1000) + 1000) % 1000;
+  const target = (normalized / 1000) * totalWeight;
   let cursor = 0;
   for (const entry of palette) {
     cursor += entry.weight;
@@ -81,33 +90,41 @@ export function planConfettiBurst(
   const centerX = xs[winner];
   const spawns: ConfettiSpawn[] = [];
 
-  // Use a small deterministic-ish RNG so test fixture stays stable.
-  let s = (seed * 2654435761) >>> 0;
+  // Use a small deterministic RNG so the reveal has authored variation while
+  // remaining easy to replay and pin in tests.
+  let s = (Math.trunc(seed) * 2654435761) >>> 0;
   const rand = () => {
     s = (s * 1664525 + 1013904223) >>> 0;
     return s / 0x100000000;
   };
 
   for (let i = 0; i < count; i++) {
-    const angle = -Math.PI / 2 + ((i - count / 2) / Math.max(1, count)) * Math.PI * 0.6;
-    const upwardKick = 3.4 + rand() * 1.4;
-    const outward = 1.6 + rand() * 1.2;
-    const sideX = Math.cos(angle) * outward;
-    const sideZ = Math.sin(angle) * outward;
+    const progress = count > 1 ? i / (count - 1) : 0.5;
+    const fan = progress * 2 - 1;
+    const sideBias = winner === "A" ? -0.75 : winner === "B" ? 0.75 : 0;
+    const sourceSpread = winner === "DRAW" ? 0 : 0.38;
+    // A draw keeps a small, symmetric gap over the judge so the verdict stays
+    // legible through the celebration rather than sitting behind a cloud.
+    const drawLane =
+      winner === "DRAW"
+        ? (i % 2 === 0 ? -1 : 1) * (0.18 + rand() * 0.1)
+        : 0;
+    const upwardKick = 3.15 + rand() * 1.2;
+    const horizontalFan = fan * (winner === "DRAW" ? 1.2 : 0.95) + sideBias;
     const position: Vec3 = [
-      centerX + (rand() - 0.5) * 0.6,
-      3.0 + rand() * 0.6,
-      -1.6 + (rand() - 0.5) * 0.8,
+      centerX + drawLane + fan * sourceSpread + (rand() - 0.5) * 0.16,
+      2.85 + rand() * 0.45,
+      -1.75 + (rand() - 0.5) * 0.5,
     ];
     const velocity: Vec3 = [
-      centerX === 0 ? sideX : (sideX + (centerX > 0 ? -outward * 0.4 : outward * 0.4)) * 0.5,
+      horizontalFan + (rand() - 0.5) * 0.3,
       upwardKick,
-      sideZ,
+      -0.3 + (rand() - 0.5) * 0.45,
     ];
     const angularVelocity: Vec3 = [
-      (rand() - 0.5) * 6,
-      (rand() - 0.5) * 6,
-      (rand() - 0.5) * 6,
+      (rand() - 0.5) * 7,
+      (rand() - 0.5) * 7,
+      (i % 2 === 0 ? -1 : 1) * (2.5 + rand() * 4.5),
     ];
     spawns.push({
       index: i,
@@ -115,7 +132,11 @@ export function planConfettiBurst(
       velocity,
       angularVelocity,
       color: pickConfettiColor(i + seed),
-      rotationEuler: [rand() * Math.PI, rand() * Math.PI, rand() * Math.PI],
+      rotationEuler: [
+        (rand() - 0.5) * 0.8,
+        rand() * Math.PI * 2,
+        (i % 2 === 0 ? -1 : 1) * (0.25 + rand() * 1.1),
+      ],
     });
   }
   return spawns;

@@ -5,7 +5,7 @@ import { CanvasGate } from "./3d";
 import { BroadcastStage, type BroadcastStageProps } from "./broadcast-stage";
 import { deriveSceneSignal } from "./3d/scene-signal";
 import { ArenaHud } from "./arena-hud";
-import { StandardEventTimeline } from "@/features/arena/match/standard-event-timeline";
+import { ArenaRails } from "./arena-rails";
 
 /**
  * The v0.3 broadcast surface. Mounts the 3D arena via {@link CanvasGate}
@@ -36,9 +36,13 @@ export function ArenaFrame(props: BroadcastStageProps) {
   }, []);
   const isReducedMotion = Boolean(reducedMotion);
 
+  const focusedPanel = props.playback?.focusedPanel ?? null;
+  // A missing playback snapshot means there is no spectator hold in front of
+  // the terminal surface, so the verdict is already presentable.
+  const isTerminalFrame = props.playback?.isTerminalFrame ?? true;
   const signal = useMemo(
-    () => deriveSceneSignal(props.state, isReducedMotion),
-    [props.state, isReducedMotion],
+    () => deriveSceneSignal(props.state, isReducedMotion, undefined, focusedPanel, isTerminalFrame),
+    [props.state, isReducedMotion, focusedPanel, isTerminalFrame],
   );
 
   return (
@@ -52,7 +56,16 @@ export function ArenaFrame(props: BroadcastStageProps) {
         <BroadcastStage {...props} />
       </CanvasGate>
       <ArenaHud {...props} />
-      <StandardEventTimeline state={props.state} standardLimits={props.standardLimits} />
+      {/* Single source for the contender rails across both worlds. They are
+          omitted on the terminal frame so the verdict surface can never be
+          covered (the rails sit above the HUD in the stacking order). */}
+      {isTerminalFrame ? null : (
+        <ArenaRails
+          state={props.state}
+          playback={props.playback}
+          standardLimits={props.standardLimits}
+        />
+      )}
     </section>
   );
 }

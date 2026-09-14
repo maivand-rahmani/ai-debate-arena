@@ -88,6 +88,52 @@ async function drain(events: AsyncIterable<DebateStreamEvent>): Promise<DebateSt
 const typesOf = (events: readonly DebateStreamEvent[]): string[] => events.map((event) => event.type);
 
 describe("Standard runner → agent session port", () => {
+  it("yields callback progress before a deferred move resolves with stable public ids", async () => {
+    let releaseMove!: () => void;
+    const deferredMove = new Promise<void>((resolve) => {
+      releaseMove = resolve;
+    });
+    const { factory } = fakeSessions(async (side, index, input) => {
+      if (side === "A" && index === 0) {
+        input.onProgress?.({ type: "tool-start", invocationId: "native-1", tool: "web_search", query: "live query" });
+        input.onProgress?.({
+          type: "tool-result",
+          invocationId: "native-1",
+          tool: "web_search",
+          query: "live query",
+          output: "live result",
+          ok: true,
+        });
+        await deferredMove;
+        return { speech: "A live move", ready: true, toolEvents: [{ tool: "web_search", query: "live query", output: "live result", ok: true }] };
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const stream = runDebate(standardInput(), {
+      callModel: judgeCall,
+      runTool: async () => ({ ok: true, output: "unused" }),
+      createStandardAgentSession: factory,
+      saveMatch: noopSave,
+    });
+    expect((await stream.next()).value?.type).toBe("phase");
+    const start = await stream.next();
+    expect(start.value?.type).toBe("tool-start");
+    const result = await stream.next();
+    expect(result.value?.type).toBe("tool-result");
+    if (start.value?.type === "tool-start" && result.value?.type === "tool-result") {
+      expect(result.value.result.callId).toBe(start.value.tool.callId);
+      expect(result.value.result.createdAt).toBe(start.value.tool.createdAt);
+    }
+
+    // The session is still blocked, but progress already crossed the runner.
+    releaseMove();
+    const events = await drain(stream);
+    const all = [start.value, result.value, ...events].filter(Boolean) as DebateStreamEvent[];
+    expect(all.map((event) => event.seq)).toEqual(all.map((_, index) => index + 2));
+    expect(all.filter((event) => event.type === "tool-result")).toHaveLength(1);
+  });
+
   it("delegates the tool loop and emits tool events before the move in order", async () => {
     const saved: import("@arena/debate-engine").MatchRecord[] = [];
     const { factory, moveInputs } = fakeSessions((side, index) => {

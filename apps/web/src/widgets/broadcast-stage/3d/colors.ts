@@ -7,55 +7,70 @@
  * pass them to `new Color(hex)` once on the client, where Three's
  * `ColorManagement` (enabled by default in r0.150+) treats them as sRGB.
  *
- * Hue families:
- *   - terracotta      → Contender A signature + warm accent glow
- *   - plum            → Contender B signature + cool accent glow
- *   - honey           → Judge signature + key spotlight
- *   - walnut          → wood, walls, deep trim
- *   - cream           → paper cyclorama, HUD text
- *   - ink             → shadow / void
+ * The public PALETTE names are kept for the existing 3D callers. Values come
+ * from the canonical design token source rather than being duplicated here.
+ * The legacy hue names intentionally map to the new identity names:
+ *   - terracotta → Ember
+ *   - plum       → Vesper
+ *   - honey      → Judge
  */
 
+import { ARENA_TOKENS } from "@/shared/design/arena-tokens";
+
+const { stage, material, identity, utility } = ARENA_TOKENS.colors;
+
+/** Three material colors are opaque; canonical glow tokens carry UI alpha. */
+function opaqueColor(value: string): string {
+  return value.length === 9 ? value.slice(0, 7) : value;
+}
+
 export const PALETTE = {
-  // --- Terracotta (Contender A) ---------------------------------------------
-  terracotta: "#c97a5d",
-  terracottaDeep: "#8b4f3a",
-  terracottaLight: "#e8b59b",
-  terracottaGlow: "#d27f60", // emissive accent strip on desk front
+  // --- Ember (Contender A; legacy names retained) ---------------------------
+  terracotta: identity.ember.base,
+  terracottaDeep: identity.ember.deep,
+  terracottaLight: identity.ember.bright,
+  terracottaGlow: opaqueColor(identity.ember.glow),
 
-  // --- Plum (Contender B) ---------------------------------------------------
-  plum: "#8c6f8f",
-  plumDeep: "#5e4862",
-  plumLight: "#b89cbe",
-  plumGlow: "#9c7ea0",
+  // --- Vesper (Contender B; legacy names retained) -------------------------
+  plum: identity.vesper.base,
+  plumDeep: identity.vesper.deep,
+  plumLight: identity.vesper.bright,
+  plumGlow: opaqueColor(identity.vesper.glow),
 
-  // --- Honey (Judge) -------------------------------------------------------
-  honey: "#c89b3d",
-  honeyDeep: "#8a6823",
-  honeyLight: "#d4a843",
-  honeyGlow: "#e2b94a",
+  // --- Judge (legacy names retained) ---------------------------------------
+  honey: identity.judge.base,
+  honeyDeep: identity.judge.deep,
+  honeyLight: identity.judge.bright,
+  honeyGlow: opaqueColor(identity.judge.glow),
 
-  // --- Walnut (wood, walls, deep trim) -------------------------------------
-  walnut: "#3d2e22",
-  walnutShadow: "#5c4a38",
-  walnutDeep: "#1d150e",
-  walnutBlackened: "#14110d",
+  // --- Studio materials -----------------------------------------------------
+  walnut: material.walnut,
+  walnutShadow: material.walnutShadow,
+  walnutDeep: material.walnutDeep,
+  /** Kept dark for hair/eyes and older prop callers. */
+  walnutBlackened: material.walnutDeep,
+  blackenedMetal: material.blackenedMetal,
 
-  // --- Cream (cyclorama, HUD text) -----------------------------------------
-  cream: "#f4ede1",
-  creamWarm: "#e6dcc6",
+  cream: material.cream,
+  creamWarm: material.creamWarm,
 
-  // --- Taupe (mid-tone trim, signage edges) --------------------------------
-  taupe: "#b8a285",
-  taupeMid: "#8a7a64",
+  taupe: material.taupe,
+  taupeMid: material.taupeMid,
 
-  // --- Ink (shadow / void) -------------------------------------------------
-  ink: "#0c0a07",
-  inkDim: "#1d150e",
+  // --- Stage / shadow -------------------------------------------------------
+  stageBackground: stage.background,
+  stageSkyTop: stage.skyTop,
+  stageSkyMid: stage.skyMid,
+  stageFloor: stage.floor,
+  stageCyclorama: stage.cyclorama,
+  ink: stage.cyclorama,
+  inkDim: stage.background,
 
-  // --- Wood tones (stage floor planks) -------------------------------------
-  woodWarm: "#8d5a3a",
-  woodMid: "#6f4327",
-  woodShadow: "#3f2618",
-  woodHighlight: "#b78057",
+  // --- Neutral evidence cue ------------------------------------------------
+  evidence: utility.evidence,
+
+  woodWarm: material.woodWarm,
+  woodMid: material.woodMid,
+  woodShadow: material.woodShadow,
+  woodHighlight: material.woodHighlight,
 } as const satisfies Record<string, string>;

@@ -40,12 +40,15 @@ import {
 import type { StandardToolExecutor } from "./standard";
 import type {
   StandardAgentSession,
+  StandardAgentProgressEvent,
   StandardAgentSessionFactory,
   StandardAgentToolEvent,
 } from "./standard-agent";
 import type {
   DebateStreamEvent,
   DebateStreamEventBody,
+  DebateStreamSideResources,
+  DebateStreamStandardState,
   DebateStreamTerminal,
   DebateStreamTurn,
   DebateStreamVerdict,
@@ -62,6 +65,8 @@ import { getMatchFormat, standardOpeningTurn, standardRoundTurn, type MatchTurnS
 export type {
   DebateStreamEvent,
   DebateStreamEventBody,
+  DebateStreamSideResources,
+  DebateStreamStandardState,
   DebateStreamTerminal,
   DebateStreamTurn,
   DebateStreamVerdict,
@@ -420,17 +425,52 @@ function toStreamTurn(turn: DebateTurn): DebateStreamTurn {
  * Turns one normalized session tool event into the persisted/public record the
  * runner owns: fresh call id, timestamp, and bounded output/error text.
  */
-function toStandardToolRecord(side: DebateSide, event: StandardAgentToolEvent): StandardToolEventRecord {
+function toStandardToolRecord(
+  side: DebateSide,
+  event: StandardAgentToolEvent,
+  identity?: { readonly callId: string; readonly createdAt: string },
+): StandardToolEventRecord {
   return {
-    callId: randomUUID(),
+    callId: identity?.callId ?? randomUUID(),
     side,
     tool: event.tool,
     query: event.query,
     output: event.output.slice(0, 6000),
     ok: event.ok,
     ...(event.error ? { error: event.error.slice(0, 240) } : {}),
-    createdAt: new Date().toISOString(),
+    createdAt: identity?.createdAt ?? new Date().toISOString(),
   };
+}
+
+const STANDARD_PROGRESS_QUEUE_LIMIT = 32;
+
+/** Small hand-off queue so session callbacks are observed before move settles. */
+class StandardProgressQueue {
+  private readonly items: StandardAgentProgressEvent[] = [];
+  private readonly waiters: Array<(event: StandardAgentProgressEvent | undefined) => void> = [];
+  private closed = false;
+
+  push(event: StandardAgentProgressEvent): void {
+    if (this.closed) throw new Error("Standard move progress arrived after the move completed");
+    if (this.items.length >= STANDARD_PROGRESS_QUEUE_LIMIT) {
+      throw new Error("Standard move progress queue exceeded its bound");
+    }
+    const waiter = this.waiters.shift();
+    if (waiter) waiter(event);
+    else this.items.push(event);
+  }
+
+  close(): void {
+    this.closed = true;
+    while (this.waiters.length > 0) this.waiters.shift()!(undefined);
+  }
+
+  next(): Promise<StandardAgentProgressEvent | undefined> {
+    const event = this.items.shift();
+    if (event) return Promise.resolve(event);
+    if (this.closed) return Promise.resolve(undefined);
+    return new Promise((resolve) => this.waiters.push(resolve));
+  }
 }
 
 
@@ -524,8 +564,39 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     A: standardLimits.startingCredits,
     B: standardLimits.startingCredits,
   };
+  // Public per-side accounting the runner owns. Credits are charged below;
+  // `standardToolsUsed` accumulates across the match and
+  // `standardLastMoveTools` records the most recent move for the snapshot.
+  const standardToolsUsed: Record<DebateSide, number> = { A: 0, B: 0 };
+  const standardLastMoveTools: Record<DebateSide, number> = { A: 0, B: 0 };
   let standardMoveCount = 0;
   const sideOrder: readonly DebateSide[] = ["A", "B"];
+
+  function standardSideResources(side: DebateSide): DebateStreamSideResources {
+    return {
+      side,
+      creditsRemaining: standardCredits[side],
+      toolsUsed: standardToolsUsed[side],
+      toolsUsedThisMove: standardLastMoveTools[side],
+      maxToolsPerMove: standardLimits.maxToolsPerMove,
+      toolTimeoutMs: standardLimits.toolTimeoutMs,
+      depleted: standardCredits[side] < STANDARD_SPEECH_COST,
+    };
+  }
+
+  /** Public snapshot of authoritative Standard resources after a move. */
+  function standardStateSnapshot(closingRound: boolean): DebateStreamStandardState {
+    return {
+      startingCredits: standardLimits.startingCredits,
+      speechCost: STANDARD_SPEECH_COST,
+      toolCost: STANDARD_TOOL_COST,
+      maxMoves: STANDARD_MAX_MOVES,
+      movesUsed: standardMoveCount,
+      moveLimitReached: standardMoveCount >= STANDARD_MAX_MOVES,
+      closingRound,
+      sides: { A: standardSideResources("A"), B: standardSideResources("B") },
+    };
+  }
   // One match-long session per side, created lazily on that side's first move
   // and reused for the rest of the match.
   const standardSessions: Partial<Record<DebateSide, StandardAgentSession>> = {};
@@ -576,47 +647,47 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       Math.min(standardLimits.maxToolsPerMove, Math.floor((credits - STANDARD_SPEECH_COST) / STANDARD_TOOL_COST)),
     );
 
-    let move: Awaited<ReturnType<StandardAgentSession["move"]>>;
-    try {
-      if (!deps.runTool) throw new Error("Standard tool executor is not configured");
-      move = await standardSessionFor(side).move({
-        topic: input.topic,
-        observation: state.turns,
-        phase,
+    const progressQueue = new StandardProgressQueue();
+    const pendingTools = new Map<
+      string,
+      { readonly callId: string; readonly createdAt: string; readonly tool: StandardAgentToolEvent["tool"]; readonly query: string }
+    >();
+    let progressToolResults = 0;
+    let progressSpeech = false;
+
+    function* translateProgress(event: StandardAgentProgressEvent): Generator<DebateStreamEvent> {
+      if (event.type === "speech") {
+        progressSpeech = true;
+        yield envelope({ type: "token", side, text: event.text });
+        return;
+      }
+
+      if (event.type === "tool-start") {
+        const identity = { callId: randomUUID(), createdAt: new Date().toISOString() };
+        pendingTools.set(event.invocationId, { ...identity, tool: event.tool, query: event.query });
+        yield envelope({
+          type: "tool-start",
+          tool: { callId: identity.callId, side, tool: event.tool, query: event.query, createdAt: identity.createdAt },
+        });
+        return;
+      }
+
+      const pending = pendingTools.get(event.invocationId);
+      if (!pending) throw new Error("Standard agent returned a tool result without a start");
+      pendingTools.delete(event.invocationId);
+      progressToolResults += 1;
+      const record = toStandardToolRecord(
         side,
-        position: agent.position,
-        credits,
-        speechCost: STANDARD_SPEECH_COST,
-        toolCost: STANDARD_TOOL_COST,
-        maxToolsPerMove: standardLimits.maxToolsPerMove,
-        maxAffordableTools,
-        toolTimeoutMs: standardLimits.toolTimeoutMs,
-        closingRound,
-        publicToolEvents: [...toolEvents],
-        runTool: deps.runTool,
-        abortSignal: deps.abortSignal,
-      });
-    } catch (error) {
-      turnsMs.push(Date.now() - turnStartMs);
-      throw error;
-    }
-    turnsMs.push(Date.now() - turnStartMs);
-
-    if (move.toolEvents.length > maxAffordableTools) {
-      throw new Error("Standard session used more tool calls than the move allowed");
-    }
-
-    // Charge actual usage: every reported tool event plus the one speech.
-    standardCredits[side] = credits - move.toolEvents.length * STANDARD_TOOL_COST - STANDARD_SPEECH_COST;
-    addUsage(usageTotal, move.usage);
-
-    const records = move.toolEvents.map((event) => toStandardToolRecord(side, event));
-    toolEvents.push(...records);
-    for (const record of records) {
-      yield envelope({
-        type: "tool-start",
-        tool: { callId: record.callId, side, tool: record.tool, query: record.query, createdAt: record.createdAt },
-      });
+        {
+          tool: event.tool,
+          query: event.query,
+          output: event.output,
+          ok: event.ok,
+          ...(event.error ? { error: event.error } : {}),
+        },
+        pending,
+      );
+      toolEvents.push(record);
       yield envelope({
         type: "tool-result",
         result: {
@@ -632,10 +703,83 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       });
     }
 
+    let move: Awaited<ReturnType<StandardAgentSession["move"]>> | undefined;
+    let moveError: unknown;
+    let movePromise: Promise<Awaited<ReturnType<StandardAgentSession["move"]>>>;
+    try {
+      if (!deps.runTool) throw new Error("Standard tool executor is not configured");
+      movePromise = standardSessionFor(side).move({
+        topic: input.topic,
+        observation: state.turns,
+        phase,
+        side,
+        position: agent.position,
+        credits,
+        speechCost: STANDARD_SPEECH_COST,
+        toolCost: STANDARD_TOOL_COST,
+        maxToolsPerMove: standardLimits.maxToolsPerMove,
+        maxAffordableTools,
+        toolTimeoutMs: standardLimits.toolTimeoutMs,
+        closingRound,
+        publicToolEvents: [...toolEvents],
+        runTool: deps.runTool,
+        onProgress: (event) => progressQueue.push(event),
+        abortSignal: deps.abortSignal,
+      });
+    } catch (error) {
+      turnsMs.push(Date.now() - turnStartMs);
+      throw error;
+    }
+
+    void movePromise.then(
+      (result) => {
+        move = result;
+        progressQueue.close();
+      },
+      (error: unknown) => {
+        moveError = error;
+        progressQueue.close();
+      },
+    );
+    while (true) {
+      const progress = await progressQueue.next();
+      if (!progress) break;
+      yield* translateProgress(progress);
+    }
+    if (moveError) throw moveError;
+    if (!move) throw new Error("Standard agent move did not resolve");
+    turnsMs.push(Date.now() - turnStartMs);
+
+    if (move.toolEvents.length > maxAffordableTools) {
+      throw new Error("Standard session used more tool calls than the move allowed");
+    }
+
+    // Charge actual usage: every reported tool event plus the one speech.
+    standardCredits[side] = credits - move.toolEvents.length * STANDARD_TOOL_COST - STANDARD_SPEECH_COST;
+    standardToolsUsed[side] += move.toolEvents.length;
+    standardLastMoveTools[side] = move.toolEvents.length;
+    addUsage(usageTotal, move.usage);
+
+    // Older/injected sessions may only return final tool events. Reconcile
+    // those as a compatibility path, while never duplicating live progress.
+    for (const [index, event] of move.toolEvents.slice(progressToolResults).entries()) {
+      const invocationId = `returned:${index}`;
+      yield* translateProgress({ type: "tool-start", invocationId, tool: event.tool, query: event.query });
+      yield* translateProgress({
+        type: "tool-result",
+        invocationId,
+        tool: event.tool,
+        query: event.query,
+        output: event.output,
+        ok: event.ok,
+        ...(event.error ? { error: event.error } : {}),
+      });
+    }
+
     const chunks = (move.chunks ?? []).filter((chunk) => chunk.length > 0);
     if (chunks.length > 0) {
       for (const text of chunks) yield envelope({ type: "token", side, text });
-    } else if (move.speech) {
+    } else if (!progressSpeech && move.speech) {
       yield envelope({ type: "token", side, text: move.speech });
     }
 
@@ -652,6 +796,9 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     transcript.push(turn);
     yield envelope({ type: "turn", turn: toStreamTurn(turn) });
     standardMoveCount += 1;
+    // Publish authoritative post-move accounting. Emitted after the turn so
+    // the existing tool → token → turn order is unchanged.
+    yield envelope({ type: "standard-state", state: standardStateSnapshot(closingRound) });
     return { ready: move.ready === true };
   }
 

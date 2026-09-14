@@ -24,12 +24,12 @@ const providers = [alpha, beta];
 
 const draftWithA = (model: string): MatchDraft => ({
   ...emptyDraft(),
-  sideA: { providerId: "alpha", model, position: "FOR" },
+  sideA: { providerId: "alpha", model },
 });
 
 describe("applyProviderChange", () => {
   it("fills the model with the provider default when the field is empty", () => {
-    const draft = { ...emptyDraft(), sideA: { providerId: "", model: "", position: "FOR" as const } };
+    const draft = { ...emptyDraft(), sideA: { providerId: "", model: "" } };
     const next = applyProviderChange(draft, "A", "alpha", providers);
     expect(next.sideA.model).toBe("alpha-default");
   });
@@ -53,8 +53,8 @@ describe("applyProviderChange", () => {
   it("updates side B without touching side A", () => {
     const draft: MatchDraft = {
       ...emptyDraft(),
-      sideA: { providerId: "alpha", model: "keep-me", position: "FOR" },
-      sideB: { providerId: "alpha", model: "alpha-default", position: "AGAINST" },
+      sideA: { providerId: "alpha", model: "keep-me" },
+      sideB: { providerId: "alpha", model: "alpha-default" },
     };
     const next = applyProviderChange(draft, "B", "beta", providers);
     expect(next.sideA.model).toBe("keep-me");
@@ -67,8 +67,8 @@ describe("same-model matchups", () => {
     const draft: MatchDraft = {
       topic: "Should cities ban private cars?",
       mode: "quick",
-      sideA: { providerId: "alpha", model: "alpha-default", position: "FOR" },
-      sideB: { providerId: "alpha", model: "alpha-default", position: "AGAINST" },
+      sideA: { providerId: "alpha", model: "alpha-default" },
+      sideB: { providerId: "alpha", model: "alpha-default" },
     };
 
     expect(isSameModelMatchup(draft)).toBe(true);
@@ -80,8 +80,8 @@ describe("toDebateRequest", () => {
   const readyDraft = (mode: MatchDraft["mode"]): MatchDraft => ({
     topic: "  Should cities ban private cars?  ",
     mode,
-    sideA: { providerId: "alpha", model: "alpha-default", position: "FOR" },
-    sideB: { providerId: "beta", model: "beta-default", position: "AGAINST" },
+    sideA: { providerId: "alpha", model: "alpha-default" },
+    sideB: { providerId: "beta", model: "beta-default" },
   });
 
   it("keeps Quick request bodies unchanged with no Standard limits", () => {
@@ -93,6 +93,19 @@ describe("toDebateRequest", () => {
       agentB: { providerId: "beta", model: "beta-default", position: "AGAINST" },
     });
     expect(request).not.toHaveProperty("standardLimits");
+  });
+
+  it("forces fixed side positions even when a stale/legacy draft carries reversed ones", () => {
+    const current = readyDraft("quick");
+    const legacy = {
+      ...current,
+      sideA: { ...current.sideA, position: "AGAINST" },
+      sideB: { ...current.sideB, position: "FOR" },
+    } as unknown as MatchDraft;
+
+    const request = toDebateRequest(legacy);
+    expect(request.agentA.position).toBe("FOR");
+    expect(request.agentB.position).toBe("AGAINST");
   });
 
   it("attaches Standard limits for Standard and converts the tool timeout to seconds", () => {

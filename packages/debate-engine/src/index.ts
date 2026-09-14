@@ -26,6 +26,8 @@ export type {
   DebateStreamEvent,
   DebateStreamEventBody,
   DebateStreamPhase,
+  DebateStreamSideResources,
+  DebateStreamStandardState,
   DebateStreamTerminal,
   DebateStreamTurn,
   DebateStreamVerdict,

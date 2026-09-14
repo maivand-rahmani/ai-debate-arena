@@ -8,15 +8,14 @@ interface BroadcastBannerProps {
   readonly status: DebateRuntimeStatus;
   readonly onEndMatch?: () => void;
   readonly onOpenHistory?: () => void;
-  readonly reactionsMuted: boolean;
-  readonly onToggleMute?: () => void;
   readonly className?: string;
 }
 
 /**
  * Broadcast banner — the strip that runs across the top of the arena.
- * Carries the show title, topic, one live-status label, a reactions mute
- * toggle, and the actions (history / end match). Pure
+ * Carries the show title, topic, one live-status label, and quiet actions.
+ * History stays available from the idle/home surface; live broadcast chrome
+ * stays focused on the match. Pure
  * presentation — driven by parent props, no internal state.
  */
 export function BroadcastBanner({
@@ -24,9 +23,6 @@ export function BroadcastBanner({
   mode,
   status,
   onEndMatch,
-  onOpenHistory,
-  reactionsMuted,
-  onToggleMute,
   className = "",
 }: BroadcastBannerProps) {
   const episode = "Tonight's motion";
@@ -43,7 +39,7 @@ export function BroadcastBanner({
           </svg>
         </span>
         <span className="broadcast-banner__brand-text">
-          DEBATE<span style={{ color: "#d4a843" }}>/</span>ARENA
+          DEBATE<span className="broadcast-banner__brand-slash">/</span>ARENA
           <span className="broadcast-banner__brand-sub">{episode}</span>
         </span>
       </div>
@@ -60,33 +56,11 @@ export function BroadcastBanner({
           </span>
         ) : null}
 
-        {onToggleMute ? (
-          <button
-            type="button"
-            aria-pressed={reactionsMuted}
-            aria-label={reactionsMuted ? "Unmute reactions" : "Mute reactions"}
-            onClick={onToggleMute}
-            className="broadcast-banner__toggle"
-          >
-            <span>{reactionsMuted ? "Unmute reactions" : "Mute reactions"}</span>
-          </button>
-        ) : null}
-
-        {onOpenHistory ? (
-          <button
-            type="button"
-            onClick={onOpenHistory}
-            className="broadcast-banner__toggle"
-          >
-            Open history
-          </button>
-        ) : null}
-
         {onEndMatch ? (
           <button
             type="button"
             onClick={onEndMatch}
-            className="broadcast-banner__toggle"
+            className="broadcast-banner__toggle broadcast-banner__end"
           >
             End match
           </button>

@@ -10,6 +10,17 @@ export interface MatchPlaybackSnapshot {
   readonly canAdvance: boolean;
   /** Judge/verdict waits until the viewer explicitly continues after the final response. */
   readonly holdTerminal: boolean;
+  /**
+   * Explicit viewer-presentation flag. False while a speech (including the
+   * final one) is selected/held, and true only once playback has advanced to
+   * the terminal sentinel (`panels.length`) or there is no speech to hold.
+   *
+   * Runtime judge/verdict work may finish in the background. The scene uses
+   * this flag to keep winner-specific presentation (winner, verdict camera,
+   * victory/defeat moods, gavel/confetti) suppressed until the viewer actually
+   * reaches the terminal frame.
+   */
+  readonly isTerminalFrame: boolean;
 }
 
 /** Stable natural order, independent of network arrival timing. */
@@ -47,6 +58,18 @@ export function deriveMatchPlayback(state: DebateRuntimeState, requestedIndex: n
     !terminalSelected;
   const nextIndex = unseenTurns > 0 ? focusedIndex + 1 : holdTerminal ? panels.length : null;
   const canAdvance = nextIndex !== null;
+  // With no speech to hold there is nothing between the viewer and the
+  // terminal surface, so that is already the terminal frame. Otherwise the
+  // terminal frame begins only once the sentinel index is selected.
+  const isTerminalFrame = panels.length === 0 || terminalSelected;
 
-  return { focusedPanel, focusedIndex, unseenTurns, nextIndex, canAdvance, holdTerminal };
+  return {
+    focusedPanel,
+    focusedIndex,
+    unseenTurns,
+    nextIndex,
+    canAdvance,
+    holdTerminal,
+    isTerminalFrame,
+  };
 }

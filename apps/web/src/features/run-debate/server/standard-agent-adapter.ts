@@ -11,7 +11,7 @@ import type {
   StandardToolName,
   StandardToolResult,
 } from "@arena/debate-engine";
-import { createWebModel, webRunStandardTool } from "./web-adapter";
+import { createWebModel } from "./web-adapter";
 
 /**
  * Hard ceiling on SDK tool-loop steps for one Standard move. The default SDK
@@ -56,11 +56,17 @@ interface MoveState {
   readonly maxAffordableTools: number;
   readonly toolTimeoutMs: number;
   readonly abortSignal?: AbortSignal;
+  readonly runTool: StandardAgentMoveInput["runTool"];
+  readonly onProgress?: StandardAgentMoveInput["onProgress"];
   /** Every native-tool invocation this move, including over-cap attempts. */
   reserved: number;
   /** Executed (not over-cap) tool calls, in call order. */
   toolEvents: StandardAgentToolEvent[];
   speak: { readonly content: string; readonly ready: boolean } | null;
+  speakInputId: string | null;
+  speakInputBuffer: string;
+  streamedSpeakText: string;
+  speakInputDecodeFailed: boolean;
 }
 
 function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
@@ -140,13 +146,82 @@ function toToolEvent(toolName: StandardToolName, query: string, result: Standard
   };
 }
 
+interface ParsedJsonString {
+  readonly value: string;
+  readonly next: number;
+  readonly complete: boolean;
+  readonly invalid: boolean;
+}
+
+/** Parses just enough JSON string syntax to safely decode a streamed value. */
+function parseJsonString(input: string, quoteIndex: number): ParsedJsonString {
+  if (input[quoteIndex] !== '"') return { value: "", next: quoteIndex, complete: false, invalid: true };
+  let value = "";
+  let index = quoteIndex + 1;
+  while (index < input.length) {
+    const char = input[index]!;
+    if (char === '"') return { value, next: index + 1, complete: true, invalid: false };
+    if (char === "\\") {
+      if (index + 1 >= input.length) return { value, next: input.length, complete: false, invalid: false };
+      const escape = input[index + 1]!;
+      const simple = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" }[escape];
+      if (simple !== undefined) {
+        value += simple;
+        index += 2;
+        continue;
+      }
+      if (escape !== "u") return { value: "", next: index, complete: false, invalid: true };
+      if (index + 6 > input.length) return { value, next: input.length, complete: false, invalid: false };
+      const code = input.slice(index + 2, index + 6);
+      if (!/^[0-9a-fA-F]{4}$/.test(code)) return { value: "", next: index, complete: false, invalid: true };
+      value += String.fromCharCode(Number.parseInt(code, 16));
+      index += 6;
+      continue;
+    }
+    if (char < " ") return { value: "", next: index, complete: false, invalid: true };
+    value += char;
+    index += 1;
+  }
+  return { value, next: input.length, complete: false, invalid: false };
+}
+
+function findSpeakContentQuote(input: string): number | undefined {
+  for (let index = 0; index < input.length; index += 1) {
+    if (input[index] !== '"') continue;
+    const parsed = parseJsonString(input, index);
+    if (parsed.invalid || !parsed.complete) return undefined;
+    let after = parsed.next;
+    while (/\s/.test(input[after] ?? "")) after += 1;
+    if (parsed.value === "content" && input[after] === ":") {
+      after += 1;
+      while (/\s/.test(input[after] ?? "")) after += 1;
+      return input[after] === '"' ? after : undefined;
+    }
+    index = parsed.next - 1;
+  }
+  return undefined;
+}
+
+function safeDecodedPrefix(value: string): string {
+  const last = value.charCodeAt(value.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? value.slice(0, -1) : value;
+}
+
+function decodeSpeakContent(input: string): { readonly text: string; readonly invalid: boolean } | undefined {
+  const quote = findSpeakContentQuote(input);
+  if (quote === undefined) return undefined;
+  const parsed = parseJsonString(input, quote);
+  if (parsed.invalid) return { text: "", invalid: true };
+  return { text: safeDecodedPrefix(parsed.value), invalid: false };
+}
+
 /**
  * Server-owned Standard agent session backed by the AI SDK v7 `ToolLoopAgent`.
  *
  * One session is created per side per match. The model is built lazily (once)
  * through {@link createWebModel} with the stable `<matchId>:agent-a|b` session
  * key, and the match-long `privateMessages` conversation is kept here. Native
- * tools execute through the local server registry ({@link webRunStandardTool});
+ * tools execute through the injected local server registry executor;
  * the internal `speak` tool captures the public move and stops the loop. No
  * private model content is ever surfaced publicly.
  */
@@ -173,9 +248,11 @@ export function createWebStandardAgentSession(input: StandardAgentSessionFactory
         error: "Tool budget exhausted",
       };
     }
+    const invocationId = `${toolName}:${state.reserved}`;
+    state.onProgress?.({ type: "tool-start", invocationId, tool: toolName, query });
     let result: StandardToolResult;
     try {
-      result = await webRunStandardTool(
+      result = await state.runTool(
         toolName,
         { query, ...(language ? { language } : {}), timeoutMs: state.toolTimeoutMs },
         signal,
@@ -183,7 +260,17 @@ export function createWebStandardAgentSession(input: StandardAgentSessionFactory
     } catch {
       result = { ok: false, output: "The tool could not be executed.", error: "Tool execution failed" };
     }
-    state.toolEvents.push(toToolEvent(toolName, query, result));
+    const event = toToolEvent(toolName, query, result);
+    state.onProgress?.({
+      type: "tool-result",
+      invocationId,
+      tool: toolName,
+      query,
+      output: event.output,
+      ok: event.ok,
+      ...(event.error ? { error: event.error } : {}),
+    });
+    state.toolEvents.push(event);
     return result;
   }
 
@@ -212,7 +299,16 @@ export function createWebStandardAgentSession(input: StandardAgentSessionFactory
       inputSchema: speakSchema,
       execute: (args) => {
         const state = move;
-        if (state && !state.speak) state.speak = { content: args.content, ready: args.ready === true };
+        if (state && !state.speak) {
+          state.speak = { content: args.content, ready: args.ready === true };
+          const suffix = args.content.startsWith(state.streamedSpeakText)
+            ? args.content.slice(state.streamedSpeakText.length)
+            : state.streamedSpeakText.length === 0
+              ? args.content
+              : "";
+          if (suffix) state.onProgress?.({ type: "speech", text: suffix });
+          state.streamedSpeakText = args.content;
+        }
         return { ok: true };
       },
     }),
@@ -244,9 +340,15 @@ export function createWebStandardAgentSession(input: StandardAgentSessionFactory
         maxAffordableTools: moveInput.maxAffordableTools,
         toolTimeoutMs: moveInput.toolTimeoutMs,
         abortSignal: moveInput.abortSignal,
+        runTool: moveInput.runTool,
+        onProgress: moveInput.onProgress,
         reserved: 0,
         toolEvents: [],
         speak: null,
+        speakInputId: null,
+        speakInputBuffer: "",
+        streamedSpeakText: "",
+        speakInputDecodeFailed: false,
       };
       move = state;
 
@@ -259,8 +361,27 @@ export function createWebStandardAgentSession(input: StandardAgentSessionFactory
 
       // Text and reasoning are private: the public speech must arrive through
       // the speak tool, and a missing speak is a protocol error.
-      for await (const _part of result.stream) {
-        void _part;
+      for await (const part of result.stream) {
+        if (part.type === "tool-input-start" && part.toolName === "speak" && !state.speak) {
+          state.speakInputId = part.id;
+          state.speakInputBuffer = "";
+          state.streamedSpeakText = "";
+          state.speakInputDecodeFailed = false;
+        } else if (
+          part.type === "tool-input-delta" &&
+          part.id === state.speakInputId &&
+          !state.speakInputDecodeFailed
+        ) {
+          state.speakInputBuffer += part.delta;
+          const decoded = decodeSpeakContent(state.speakInputBuffer);
+          if (decoded?.invalid) {
+            state.speakInputDecodeFailed = true;
+          } else if (decoded && decoded.text.startsWith(state.streamedSpeakText)) {
+            const suffix = decoded.text.slice(state.streamedSpeakText.length);
+            if (suffix) state.onProgress?.({ type: "speech", text: suffix });
+            state.streamedSpeakText = decoded.text;
+          }
+        }
       }
 
       privateMessages.push(observation);

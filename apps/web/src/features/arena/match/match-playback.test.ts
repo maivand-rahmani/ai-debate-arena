@@ -39,4 +39,26 @@ describe("deriveMatchPlayback", () => {
     expect(playback.canAdvance).toBe(false);
     expect(playback.holdTerminal).toBe(false);
   });
+
+  it("is not the terminal frame while a speech is being read", () => {
+    expect(deriveMatchPlayback(state, 0).isTerminalFrame).toBe(false);
+    expect(deriveMatchPlayback(state, 2).isTerminalFrame).toBe(false);
+  });
+
+  it("keeps the final speech off the terminal frame until the viewer continues", () => {
+    const held = deriveMatchPlayback(state, 3);
+    expect(held.focusedPanel?.id).toBe("B:REBUTTAL_B");
+    expect(held.holdTerminal).toBe(true);
+    expect(held.isTerminalFrame).toBe(false);
+  });
+
+  it("becomes the terminal frame at the continue sentinel", () => {
+    const terminal = deriveMatchPlayback(state, 4);
+    expect(terminal.isTerminalFrame).toBe(true);
+  });
+
+  it("is already terminal when there is no speech to hold", () => {
+    const empty = deriveMatchPlayback({ ...state, panels: [] }, 0);
+    expect(empty.isTerminalFrame).toBe(true);
+  });
 });

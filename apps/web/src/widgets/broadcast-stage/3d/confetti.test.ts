@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CONFETTI_BURST_COUNT,
+  CONFETTI_DEFAULT_SIZE,
   CONFETTI_POOL_SIZE,
   VERDICT_TIMING,
   pickConfettiColor,
@@ -12,6 +13,16 @@ describe("CONFETTI constants", () => {
     expect(CONFETTI_BURST_COUNT).toBeLessThanOrEqual(CONFETTI_POOL_SIZE);
     expect(CONFETTI_BURST_COUNT).toBeGreaterThanOrEqual(20);
     expect(CONFETTI_BURST_COUNT).toBeLessThanOrEqual(30);
+    expect(CONFETTI_POOL_SIZE).toBeLessThanOrEqual(24);
+  });
+
+  it("uses a thin card silhouette for readable highlights", () => {
+    expect(CONFETTI_DEFAULT_SIZE[0]).toBeGreaterThan(
+      CONFETTI_DEFAULT_SIZE[1] * 4,
+    );
+    expect(CONFETTI_DEFAULT_SIZE[2]).toBeGreaterThan(
+      CONFETTI_DEFAULT_SIZE[1] * 2,
+    );
   });
 
   it("verdict timing orders gavel strike before confetti", () => {
@@ -77,5 +88,26 @@ describe("planConfettiBurst", () => {
     const a = planConfettiBurst("A", 42, 12);
     const b = planConfettiBurst("A", 42, 12);
     expect(a).toEqual(b);
+  });
+
+  it("gives the cards distinct broadcast-friendly orientations", () => {
+    const spawns = planConfettiBurst("B", 42, 12);
+    const orientations = new Set(
+      spawns.map(({ rotationEuler }) => rotationEuler.join(",")),
+    );
+
+    expect(orientations.size).toBeGreaterThan(8);
+    expect(spawns.some((spawn) => spawn.angularVelocity[2] < 0)).toBe(true);
+    expect(spawns.some((spawn) => spawn.angularVelocity[2] > 0)).toBe(true);
+  });
+
+  it("keeps a symmetric draw burst just off the verdict centerline", () => {
+    const spawns = planConfettiBurst("DRAW", 7, 20);
+
+    expect(spawns.every((spawn) => Math.abs(spawn.position[0]) < 0.5)).toBe(
+      true,
+    );
+    expect(spawns.some((spawn) => spawn.position[0] < -0.1)).toBe(true);
+    expect(spawns.some((spawn) => spawn.position[0] > 0.1)).toBe(true);
   });
 });

@@ -21,6 +21,7 @@ import type {
 import {
   deriveStageView,
   type StageCamera,
+  type StageFocus,
   type StageMode,
   type StageView,
 } from "@/widgets/broadcast-stage/stage-state";
@@ -43,6 +44,26 @@ export interface SceneSignal {
   readonly heroProgress: number;
   /** Format-owned turn metadata for camera/lighting directors. */
   readonly turn: MatchTurnSpec | null;
+  /**
+   * False while the viewer is holding a speech (including the final one) and
+   * true only after playback reaches the terminal sentinel. Winner-specific
+   * presentation (winner, verdict camera, victory/defeat moods, gavel/confetti)
+   * is suppressed while false, even if the runtime already finished judging.
+   */
+  readonly isTerminalFrame: boolean;
+}
+
+/**
+ * Pure gate for the verdict cue director: gavel/confetti may only fire on a
+ * fresh terminal-frame verdict. Kept here (three-free) so both the director and
+ * tests can share it without pulling in the R3F tree.
+ */
+export function isVerdictCueEligible(signal: SceneSignal | null | undefined): boolean {
+  if (!signal) return false;
+  if (!signal.isTerminalFrame) return false;
+  if (signal.status !== "finished") return false;
+  if (!signal.verdictWinner) return false;
+  return signal.verdictStamp !== null;
 }
 
 const INITIAL_VIEW: StageView = {
@@ -74,25 +95,36 @@ const INITIAL_VIEW: StageView = {
  * well-typed enum cases that already exist on `DebateRuntimeState` —
  * so it stays safely importable from any client-only module without
  * re-running reducer-side effects.
+ *
+ * `focus` is the viewer-selected speech panel (`playback.focusedPanel`).
+ * When present, the camera/lighting/character directors follow that panel's
+ * side instead of the live streaming side; when absent, the live current-side
+ * and judge/verdict behavior is preserved.
  */
 export function deriveSceneSignal(
   state: DebateRuntimeState,
   reducedMotion: boolean,
   heroProgress = 1,
+  focus: StageFocus | null = null,
+  isTerminalFrame = true,
 ): SceneSignal {
   let view: StageView;
   try {
-    view = deriveStageView(state);
+    view = deriveStageView(state, focus, { isTerminalFrame });
   } catch {
     view = INITIAL_VIEW;
   }
   const mode = view.mode;
   const camera = view.camera;
   const moods = view.moods;
-  const verdict =
-    state.status === "finished" && state.verdict
-      ? (state.verdict as DebateStreamVerdict)
-      : null;
+  // Winner-specific scene state only exists on the terminal frame. Before
+  // that the viewer is still on a speech and the verdict must not leak into
+  // the camera, moods, reactions, or verdict prop cues.
+  const terminalVerdict =
+    isTerminalFrame && state.status === "finished" ? state.verdict : undefined;
+  const verdict = terminalVerdict
+    ? (terminalVerdict as DebateStreamVerdict)
+    : null;
   const verdictWinner = verdict ? verdict.winner : null;
   // Stamp gives the canvas a stable identifier per verdict. `matchId|winner|scoreA-scoreB`
   // changes exactly when a fresh verdict lands (or re-judge updates it).
@@ -110,6 +142,7 @@ export function deriveSceneSignal(
     verdictStamp,
     heroProgress: Math.max(0, Math.min(1, Number.isFinite(heroProgress) ? heroProgress : 1)),
     turn: view.currentTurn ?? null,
+    isTerminalFrame,
   };
 }
 

@@ -18,10 +18,10 @@ interface MatchPageProps {
 }
 
 /**
- * Per-match page: full transcript chat-thread + verdict card with
- * criteria/scores + export + re-judge actions. The page is a focused
- * reading surface (no 3D canvas, no live arena) sitting on a dark
- * blurred backdrop.
+ * Per-match archive: a continuous match story with the public transcript,
+ * recorded tool evidence, and a distinct closing verdict. This surface is
+ * intentionally separate from the live arena; it is for reading the match
+ * back, not for replaying its runtime.
  */
 export default function MatchPage({ params }: MatchPageProps) {
   const { id } = use(params);
@@ -116,78 +116,146 @@ function MatchBody({
   readonly onRejudge: () => void;
 }) {
   const canRejudge = record.terminal === "completed";
+  const verdict = record.verdict;
   return (
     <>
       <header className="match-page__head">
         <p className="match-page__eyebrow">
-          {record.mode === "quick" ? "Quick" : record.mode} · {TERMINAL_LABEL[record.terminal]}
+          Archive · {record.mode === "quick" ? "Quick" : record.mode} · {TERMINAL_LABEL[record.terminal]}
           {record.judgedAt ? " · Re-judged" : ""}
         </p>
         <h1 className="match-page__topic">{record.topic}</h1>
-        <p className="match-page__meta">
-          {formatMatchDate(record.startedAt)} → {formatMatchDate(record.finishedAt)}
-        </p>
-        {record.verdict ? (
-          <p className="match-page__winner">
-            <span
-              className={`match-page__winner-badge match-page__winner-badge--${
-                record.verdict.winner === "A"
-                  ? "a"
-                  : record.verdict.winner === "B"
-                    ? "b"
-                    : "draw"
-              }`}
-            >
-              {record.verdict.winner === null
-                ? "Pending"
-                : record.verdict.winner === "DRAW"
-                  ? WINNER_LABEL.DRAW
-                  : record.verdict.winner === "A"
-                    ? WINNER_LABEL.A
-                    : WINNER_LABEL.B}
-            </span>
-            <span>
-              {record.verdict.scoreA} · {record.verdict.scoreB}
-            </span>
-          </p>
-        ) : null}
+        <div className="match-page__matchup" aria-label="Matchup">
+          <MatchSide identity="ember" name="Ember" role="Challenger" side={record.sides.A} />
+          <span className="match-page__versus" aria-hidden="true">VS</span>
+          <MatchSide identity="vesper" name="Vesper" role="Advocate" side={record.sides.B} />
+        </div>
+        <div className="match-page__meta-row">
+          <span>{formatMatchDate(record.startedAt)}</span>
+          <span aria-hidden="true">·</span>
+          <span>{formatDuration(record.metrics.totalMs)}</span>
+          <span aria-hidden="true">·</span>
+          <span>{record.transcript.length} {record.transcript.length === 1 ? "turn" : "turns"}</span>
+          <span aria-hidden="true">·</span>
+          <span>{record.mode === "quick" ? "Quick format" : "Standard evidence match"}</span>
+        </div>
+        <div className="match-page__result" aria-label="Match result">
+          <span className="match-page__result-label">{verdict ? "Winner" : "Terminal state"}</span>
+          <strong className={`match-page__winner-name match-page__winner-name--${winnerTone(verdict?.winner)}`}>
+            {winnerName(verdict?.winner)}
+          </strong>
+          {verdict ? <span className="match-page__score">{verdict.scoreA} <span aria-hidden="true">—</span> {verdict.scoreB}</span> : null}
+          <span className="match-page__terminal">{TERMINAL_LABEL[record.terminal]}</span>
+        </div>
       </header>
 
       <section className="match-page__section" aria-labelledby="match-transcript">
-        <h2 id="match-transcript" className="match-page__section-title">
-          Transcript
-        </h2>
-        <TranscriptThread turns={record.transcript} />
+        <div className="match-page__section-head">
+          <div>
+            <p className="match-page__section-kicker">The public record</p>
+            <h2 id="match-transcript" className="match-page__section-title">Match story</h2>
+          </div>
+          <span className="match-page__section-note">{record.transcript.length} {record.transcript.length === 1 ? "turn" : "turns"} recorded</span>
+        </div>
+        <TranscriptThread mode={record.mode} turns={record.transcript} toolEvents={record.toolEvents} />
       </section>
 
-      {record.verdict ? (
-        <section className="match-page__section" aria-labelledby="match-verdict">
-          <h2 id="match-verdict" className="match-page__section-title">
-            Verdict
-          </h2>
+      {verdict ? (
+        <section className="match-page__section match-page__verdict" aria-labelledby="match-verdict">
+          <div className="match-page__section-head">
+            <div>
+              <p className="match-page__section-kicker">The closing call</p>
+              <h2 id="match-verdict" className="match-page__section-title">Judge&apos;s verdict</h2>
+            </div>
+            <span className="match-page__section-note">{record.judgedAt ? `Judged ${formatMatchDate(record.judgedAt)}` : "Final review"}</span>
+          </div>
+          <div className="match-page__verdict-summary">
+            <span className="match-page__result-label">{winnerName(verdict.winner)}</span>
+            <strong>{verdict.scoreA} — {verdict.scoreB}</strong>
+          </div>
           <CriteriaView record={record} />
+          <ArchiveActions
+            record={record}
+            rejudgeStatus={rejudgeStatus}
+            rejudgeError={rejudgeError}
+            canRejudge={canRejudge}
+            onExportJson={onExportJson}
+            onRejudge={onRejudge}
+          />
         </section>
       ) : (
         <section className="match-page__section">
-          <p className="match-page__status">
-            No verdict was reached for this match.
-            {record.terminalReason ? ` (${record.terminalReason})` : ""}
-          </p>
+          <div className="match-page__no-verdict">
+            <p className="match-page__section-kicker">Closing state</p>
+            <p className="match-page__status">No verdict was reached for this match.{record.terminalReason ? ` ${record.terminalReason}` : ""}</p>
+          </div>
+          <ArchiveActions
+            record={record}
+            rejudgeStatus={rejudgeStatus}
+            rejudgeError={rejudgeError}
+            canRejudge={canRejudge}
+            onExportJson={onExportJson}
+            onRejudge={onRejudge}
+          />
         </section>
       )}
-
-      <section className="match-page__section match-page__section--actions">
-        <h2 className="match-page__section-title">Save &amp; inspect</h2>
-        <MatchActions
-          matchId={record.matchId}
-          rejudgeStatus={rejudgeStatus}
-          rejudgeError={rejudgeError}
-          canRejudge={canRejudge}
-          onExportJson={() => onExportJson()}
-          onRejudge={() => void onRejudge()}
-        />
-      </section>
     </>
+  );
+}
+
+function MatchSide({
+  identity,
+  name,
+  role,
+  side,
+}: {
+  readonly identity: "ember" | "vesper";
+  readonly name: string;
+  readonly role: string;
+  readonly side: MatchRecord["sides"]["A"];
+}) {
+  return (
+    <div className={`match-page__side match-page__side--${identity}`}>
+      <span className="match-page__side-mark" aria-hidden="true">{name[0]}</span>
+      <span className="match-page__side-copy">
+        <strong>{name}</strong>
+        <span>{role}</span>
+        <small>{side.providerName} · {side.modelId}</small>
+      </span>
+    </div>
+  );
+}
+
+function ArchiveActions({
+  record,
+  rejudgeStatus,
+  rejudgeError,
+  canRejudge,
+  onExportJson,
+  onRejudge,
+}: {
+  readonly record: MatchRecord;
+  readonly rejudgeStatus: RejudgeStatus;
+  readonly rejudgeError: string | undefined;
+  readonly canRejudge: boolean;
+  readonly onExportJson: () => void;
+  readonly onRejudge: () => void;
+}) {
+  return (
+    <div className="match-page__archive-actions">
+      <div>
+        <p className="match-page__section-kicker">Archive tools</p>
+        <p className="match-page__actions-note">Export the saved record or ask the judge to review it again.</p>
+      </div>
+      <MatchActions
+        matchId={record.matchId}
+        rejudgeStatus={rejudgeStatus}
+        rejudgeError={rejudgeError}
+        canRejudge={canRejudge}
+        onExportJson={() => onExportJson()}
+        onRejudge={() => void onRejudge()}
+      />
+    </div>
   );
 }
 
@@ -202,4 +270,26 @@ function ErrorState({ message }: { message: string }) {
       </Link>
     </div>
   );
+}
+
+function winnerName(winner: "A" | "B" | "DRAW" | null | undefined): string {
+  if (winner === "A") return "Ember wins";
+  if (winner === "B") return "Vesper wins";
+  if (winner === "DRAW") return WINNER_LABEL.DRAW;
+  return "No verdict";
+}
+
+function winnerTone(winner: "A" | "B" | "DRAW" | null | undefined): "a" | "b" | "draw" | "pending" {
+  if (winner === "A") return "a";
+  if (winner === "B") return "b";
+  if (winner === "DRAW") return "draw";
+  return "pending";
+}
+
+function formatDuration(totalMs: number): string {
+  if (!Number.isFinite(totalMs) || totalMs < 0) return "Duration unavailable";
+  const totalSeconds = Math.round(totalMs / 1_000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }

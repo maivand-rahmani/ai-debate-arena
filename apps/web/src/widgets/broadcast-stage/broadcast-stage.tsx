@@ -38,8 +38,7 @@ export interface BroadcastStageProps {
   readonly inMatch: boolean;
   readonly onEndMatch?: () => void;
   readonly onOpenHistory?: () => void;
-  readonly reactionsMuted: boolean;
-  readonly onToggleMute?: () => void;
+  readonly reactionsMuted?: boolean;
   /** Spectator-controlled presentation; generation keeps running independently. */
   readonly playback?: MatchPlayback;
   /** Equal Standard resource limits chosen in setup, for the public HUD. */
@@ -79,11 +78,10 @@ export function BroadcastStage({
   onNewMatch,
   onEndMatch,
   onOpenHistory,
-  reactionsMuted,
-  onToggleMute,
+  reactionsMuted = false,
   playback,
 }: BroadcastStageProps) {
-  const view = deriveStageView(state);
+  const view = deriveStageView(state, playback?.focusedPanel ?? null);
 
   const showCancelled = state.status === "cancelled";
   const showError = state.status === "error";
@@ -114,8 +112,6 @@ export function BroadcastStage({
         status={state.status}
         onEndMatch={broadcastLive ? onEndMatch : undefined}
         onOpenHistory={onOpenHistory}
-        reactionsMuted={reactionsMuted}
-        onToggleMute={onToggleMute}
       />
 
       <div className="broadcast-stage__composition">
@@ -123,7 +119,7 @@ export function BroadcastStage({
           <AgentDesk
             side="A"
             tone="coral"
-            identity="The Challenger"
+            identity="Ember"
             position={draftSideAPosition ?? "FOR"}
             provider={agentA}
             model={monitorModelA}
@@ -147,7 +143,7 @@ export function BroadcastStage({
           <AgentDesk
             side="B"
             tone="violet"
-            identity="The Advocate"
+            identity="Vesper"
             position={draftSideBPosition ?? "AGAINST"}
             provider={agentB}
             model={monitorModelB}
@@ -165,10 +161,17 @@ export function BroadcastStage({
         />
       </div>
 
+      {/* The contender rails are owned by ArenaFrame, which omits them on the
+          terminal frame so they can never cover the verdict surface. */}
+
       {broadcastLive ? (
         <div className="broadcast-stage__round--progress">
           <MatchProgress state={state} viewingPhase={playback?.focusedPanel?.phase} />
         </div>
+      ) : null}
+
+      {state.status === "streaming" && !playback?.focusedPanel && view.activeSide ? (
+        <LiveMatchCallout side={view.activeSide} responseRole={view.currentTurn?.role} />
       ) : null}
 
       {showPlaybackCaption ? (
@@ -203,5 +206,31 @@ export function BroadcastStage({
         )
       ) : null}
     </section>
+  );
+}
+
+function LiveMatchCallout({
+  side,
+  responseRole,
+}: {
+  readonly side: "A" | "B";
+  readonly responseRole?: "opening" | "response";
+}) {
+  const name = side === "A" ? "Ember" : "Vesper";
+  const role = side === "A" ? "Challenger" : "Advocate";
+  const next = side === "A" ? "Vesper" : "Ember";
+  const phase = responseRole === "response" ? "rebuttal" : "opening";
+
+  return (
+    <div className={`live-match-callout live-match-callout--${side.toLowerCase()}`} aria-live="polite">
+      <span className="live-match-callout__eyebrow">Now on air</span>
+      <strong className="live-match-callout__speaker">
+        {name}<span>{role}</span>
+      </strong>
+      <span className="live-match-callout__next">
+        <span>Next response</span>
+        <b>{next} answers the {phase}</b>
+      </span>
+    </div>
   );
 }

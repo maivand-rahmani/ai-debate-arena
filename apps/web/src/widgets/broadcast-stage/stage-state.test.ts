@@ -181,6 +181,89 @@ describe("deriveStageView — mode mapping", () => {
   });
 });
 
+describe("deriveStageView — viewer focus", () => {
+  it("follows the focused panel side while another side is live", () => {
+    const state = withPhase(baseState, "OPENING_A", "A");
+    const view = deriveStageView(state, { side: "B", phase: "OPENING_B" });
+    expect(view.mode).toBe("speaking");
+    expect(view.camera).toBe("b");
+    expect(view.activeSide).toBe("B");
+    expect(view.round).toBe("1");
+    expect(view.stageLabel).toBe("Agent B · Round 1 · Opening");
+    expect(view.sideBActivity).toBe("active");
+    expect(view.sideAActivity).toBe("idle");
+  });
+
+  it("frames a focused response as a rebuttal", () => {
+    const state = withPhase(baseState, "OPENING_A", "A");
+    const view = deriveStageView(state, { side: "B", phase: "REBUTTAL_B" });
+    expect(view.camera).toBe("rebuttal");
+    expect(view.round).toBe("2");
+    expect(view.stageLabel).toBe("Agent B · Round 2 · Rebuttal");
+  });
+
+  it("presents the focused speech instead of the judge while judging", () => {
+    const state: DebateRuntimeState = {
+      ...baseState,
+      status: "judging",
+      currentPhase: "JUDGING",
+      currentSide: null,
+      judgeActive: true,
+    };
+    const view = deriveStageView(state, { side: "A", phase: "REBUTTAL_A" });
+    expect(view.mode).toBe("speaking");
+    expect(view.camera).toBe("rebuttal");
+    expect(view.activeSide).toBe("A");
+    expect(view.judgeActivity).toBe("idle");
+  });
+
+  it("presents the focused speech instead of the verdict while finished", () => {
+    const state: DebateRuntimeState = {
+      ...baseState,
+      status: "finished",
+      currentPhase: "FINISHED",
+      currentSide: null,
+      verdict,
+    };
+    const view = deriveStageView(state, { side: "B", phase: "OPENING_B" });
+    expect(view.mode).toBe("speaking");
+    expect(view.camera).toBe("b");
+    expect(view.activeSide).toBe("B");
+  });
+
+  it("uses the focused panel's own turn metadata when supplied", () => {
+    const state = withPhase(baseState, "OPENING_A", "A");
+    const view = deriveStageView(state, {
+      side: "B",
+      phase: "quick-b-response-2",
+      turn: { id: "quick-b-response-2", side: "B", role: "response", order: 6, label: "Advocate responds" },
+    });
+    expect(view.camera).toBe("rebuttal");
+    expect(view.currentTurn).toMatchObject({ id: "quick-b-response-2", role: "response", side: "B" });
+  });
+
+  it("preserves terminal cancel/error framing even with a focused panel", () => {
+    const cancelled = deriveStageView(
+      { ...baseState, status: "cancelled", cancelled: true, currentPhase: "OPENING_A" },
+      { side: "A", phase: "OPENING_A" },
+    );
+    expect(cancelled.mode).toBe("cancelled");
+    expect(cancelled.activeSide).toBeNull();
+    const errored = deriveStageView(
+      { ...baseState, status: "error", errorMessage: "boom" },
+      { side: "A", phase: "OPENING_A" },
+    );
+    expect(errored.mode).toBe("error");
+  });
+
+  it("matches the unfocused derivation when no panel is focused", () => {
+    const state = withPhase(baseState, "OPENING_A", "A");
+    expect(deriveStageView(state, null).rootDataAttributes).toEqual(
+      deriveStageView(state).rootDataAttributes,
+    );
+  });
+});
+
 describe("deriveStageView — root data attributes", () => {
   it("emits the eight CSS data attributes for a speaking A turn", () => {
     const view = deriveStageView(withPhase(baseState, "OPENING_A", "A"));

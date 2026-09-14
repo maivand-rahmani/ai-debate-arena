@@ -112,6 +112,31 @@ describe("deriveMoods — terminal states", () => {
     });
     expect(view.judge).toBe("not-impressed");
   });
+
+  it("holds victory/defeat moods while a speech is presented before the terminal frame", () => {
+    const state = {
+      ...initialRuntimeState,
+      status: "finished" as const,
+      currentPhase: "FINISHED" as const,
+      verdict,
+    };
+    const view = deriveMoods(state, { side: "A" }, false);
+    expect(view.a).toBe("confident");
+    expect(view.b).toBe("listening");
+    expect(view.a).not.toBe("victorious");
+    expect(view.b).not.toBe("defeated");
+  });
+
+  it("stays non-partisan on the held frame even without a presented side", () => {
+    const state = {
+      ...initialRuntimeState,
+      status: "finished" as const,
+      currentPhase: "FINISHED" as const,
+      verdict,
+    };
+    const view = deriveMoods(state, null, false);
+    expect(view).toEqual({ a: "listening", b: "listening", judge: "standing-by" });
+  });
 });
 
 describe("deriveMoods — judging states", () => {

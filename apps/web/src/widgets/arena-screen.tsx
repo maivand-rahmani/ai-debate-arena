@@ -11,6 +11,7 @@ import {
 } from "@/shared/api/matches";
 import { useProviders } from "@/features/create-debate/use-providers";
 import { toDebateRequest, type MatchDraft } from "@/features/create-debate/draft";
+import { SIDE_POSITIONS } from "@/shared/config/sides";
 import { useDebateStream } from "@/features/run-debate/lib/use-debate-stream";
 import { isInMatch } from "@/features/run-debate/lib/reducer";
 import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match-history-drawer";
@@ -25,7 +26,7 @@ import { ArenaFrame } from "@/widgets/broadcast-stage";
  * separate dashboard layout. The ArenaFrame owns the 3D canvas (with the
  * original 2D CSS broadcast stage as the no-WebGL fallback) plus the HUD
  * overlay layer. This screen only orchestrates the runtime lifecycle,
- * provider lookup, history drawer, re-judge state, and the mute toggle.
+ * provider lookup, history drawer, and re-judge state.
  */
 export default function ArenaScreen() {
   const { providers } = useProviders();
@@ -33,7 +34,6 @@ export default function ArenaScreen() {
   const [matchDraft, setMatchDraft] = useState<MatchDraft | null>(null);
   const [rejudgeStatus, setRejudgeStatus] = useState<RejudgeStatus>("idle");
   const [rejudgeError, setRejudgeError] = useState<string | undefined>(undefined);
-  const [reactionsMuted, setReactionsMuted] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
   const [recentCount, setRecentCount] = useState(0);
@@ -99,8 +99,6 @@ export default function ArenaScreen() {
   }, [cancel, reset, state.status]);
 
   const handleOpenHistory = useCallback(() => setDrawerOpen(true), []);
-  const handleToggleMute = useCallback(() => setReactionsMuted((m) => !m), []);
-
   const handleExportJson = useCallback(async (matchId: string) => {
     try {
       const record = await fetchMatch(matchId);
@@ -162,7 +160,7 @@ export default function ArenaScreen() {
     : undefined;
 
   return (
-    <main className="arena-home" style={{ background: "#0c0a07" }}>
+    <main className="arena-home">
         <ArenaFrame
           topic={topic}
           state={state}
@@ -172,15 +170,13 @@ export default function ArenaScreen() {
           judgeModel={judgeModel}
           draftSideAModel={matchDraft?.sideA.model}
           draftSideBModel={matchDraft?.sideB.model}
-          draftSideAPosition={matchDraft?.sideA.position}
-          draftSideBPosition={matchDraft?.sideB.position}
+          draftSideAPosition={SIDE_POSITIONS.A}
+          draftSideBPosition={SIDE_POSITIONS.B}
           footer={footer}
           onNewMatch={handleNewMatch}
           inMatch={inMatch}
           onEndMatch={handleEndMatch}
           onOpenHistory={handleOpenHistory}
-          reactionsMuted={reactionsMuted}
-          onToggleMute={handleToggleMute}
           playback={playback}
           standardLimits={matchDraft?.standard}
         />

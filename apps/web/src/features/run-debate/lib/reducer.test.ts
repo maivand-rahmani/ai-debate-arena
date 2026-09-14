@@ -4,7 +4,11 @@ import {
   reduceDebateRuntime,
   type DebateRuntimeState,
 } from "./reducer";
-import type { DebateStreamEvent, DebateStreamVerdict } from "@/shared/api/debate-stream";
+import type {
+  DebateStreamEvent,
+  DebateStreamStandardState,
+  DebateStreamVerdict,
+} from "@/shared/api/debate-stream";
 
 const verdict: DebateStreamVerdict = {
   winner: "A",
@@ -102,6 +106,70 @@ describe("Standard public tool timeline", () => {
     expect(state.standardEvents.map((event) => event.type)).toEqual(["tool-start", "tool-result"]);
     expect(state.standardEvents[1]?.type === "tool-result" && state.standardEvents[1].result.output).toBe("A bounded result");
     expect(state.panels).toHaveLength(0);
+  });
+});
+
+describe("Standard authoritative resource state", () => {
+  const snapshot: DebateStreamStandardState = {
+    startingCredits: 12,
+    speechCost: 1,
+    toolCost: 2,
+    maxMoves: 12,
+    movesUsed: 1,
+    moveLimitReached: false,
+    closingRound: false,
+    sides: {
+      A: { side: "A", creditsRemaining: 7, toolsUsed: 2, toolsUsedThisMove: 2, maxToolsPerMove: 2, toolTimeoutMs: 8000, depleted: false },
+      B: { side: "B", creditsRemaining: 11, toolsUsed: 0, toolsUsedThisMove: 0, maxToolsPerMove: 2, toolTimeoutMs: 8000, depleted: false },
+    },
+  };
+
+  it("stores the latest runner snapshot without disturbing the tool timeline order", () => {
+    let state = reduceDebateRuntime(initialRuntimeState, { type: "start", topic: "Topic", mode: "standard" });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "phase", phase: "standard-a-opening", side: "A" },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-start", tool: { callId: "call-1", side: "A", tool: "web_search", query: "facts", createdAt: "now" } },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-result", result: { callId: "call-1", side: "A", tool: "web_search", query: "facts", ok: true, output: "result", createdAt: "later" } },
+    });
+    state = reduceDebateRuntime(state, { type: "stream-event", event: { type: "standard-state", state: snapshot } });
+
+    expect(state.standardState).toEqual(snapshot);
+    expect(state.standardEvents.map((event) => event.type)).toEqual(["tool-start", "tool-result"]);
+
+    const later: DebateStreamStandardState = {
+      ...snapshot,
+      movesUsed: 2,
+      closingRound: true,
+      sides: {
+        A: { ...snapshot.sides.A, creditsRemaining: 4, toolsUsedThisMove: 0 },
+        B: { ...snapshot.sides.B, creditsRemaining: 10 },
+      },
+    };
+    state = reduceDebateRuntime(state, { type: "stream-event", event: { type: "standard-state", state: later } });
+    expect(state.standardState?.movesUsed).toBe(2);
+    expect(state.standardState?.closingRound).toBe(true);
+    expect(state.standardState?.sides.A.creditsRemaining).toBe(4);
+  });
+
+  it("leaves standardState undefined for Quick and before the first Standard move", () => {
+    const quick = reduceDebateRuntime(initialRuntimeState, {
+      type: "stream-event",
+      event: { type: "phase", phase: "quick-a-opening", side: "A" },
+    });
+    expect(quick.standardState).toBeUndefined();
+
+    const standardOpening = reduceDebateRuntime(
+      { ...initialRuntimeState, mode: "standard" },
+      { type: "stream-event", event: { type: "phase", phase: "standard-a-opening", side: "A" } },
+    );
+    expect(standardOpening.standardState).toBeUndefined();
   });
 });
 

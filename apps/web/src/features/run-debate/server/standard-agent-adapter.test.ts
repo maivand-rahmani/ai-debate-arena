@@ -12,12 +12,10 @@ import type {
 
 const mocks = vi.hoisted(() => ({
   createWebModel: vi.fn(),
-  webRunStandardTool: vi.fn(),
 }));
 
 vi.mock("@/features/run-debate/server/web-adapter", () => ({
   createWebModel: mocks.createWebModel,
-  webRunStandardTool: mocks.webRunStandardTool,
 }));
 
 import { createWebStandardAgentSession } from "./standard-agent-adapter";
@@ -49,6 +47,36 @@ function streamResult(toolCalls: readonly ScriptedToolCall[], finish: "tool-call
       },
     }),
   };
+}
+
+function streamPartsResult(parts: readonly LanguageModelV4StreamPart[], finish: "tool-calls" | "stop" = "tool-calls"): LanguageModelV4StreamResult {
+  return {
+    stream: new ReadableStream<LanguageModelV4StreamPart>({
+      start(controller) {
+        controller.enqueue({ type: "stream-start", warnings: [] });
+        for (const part of parts) controller.enqueue(part);
+        controller.enqueue({
+          type: "finish",
+          finishReason: { unified: finish, raw: finish },
+          usage: {
+            inputTokens: { total: 5, noCache: 5, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 3, text: 3, reasoning: 0 },
+          },
+        });
+        controller.close();
+      },
+    }),
+  };
+}
+
+function speakInputStream(deltas: readonly string[], prefix: readonly LanguageModelV4StreamPart[] = []): LanguageModelV4StreamResult {
+  return streamPartsResult([
+    ...prefix,
+    { type: "tool-input-start", id: "speak-1", toolName: "speak" },
+    ...deltas.map((delta) => ({ type: "tool-input-delta", id: "speak-1", delta }) satisfies LanguageModelV4StreamPart),
+    { type: "tool-input-end", id: "speak-1" },
+    { type: "tool-call", toolCallId: "speak-1", toolName: "speak", input: deltas.join("") },
+  ]);
 }
 
 function textOnlyStream(): LanguageModelV4StreamResult {
@@ -129,8 +157,6 @@ const speak = (id: string, content: string, ready = false): ScriptedToolCall => 
 
 beforeEach(() => {
   mocks.createWebModel.mockReset();
-  mocks.webRunStandardTool.mockReset();
-  mocks.webRunStandardTool.mockResolvedValue({ ok: true, output: "bounded tool output" });
 });
 
 describe("createWebStandardAgentSession", () => {
@@ -141,13 +167,15 @@ describe("createWebStandardAgentSession", () => {
     const session = createWebStandardAgentSession(factoryInput);
     expect(mocks.createWebModel).not.toHaveBeenCalled();
 
-    const result = await session.move(moveInput());
+    const progress: unknown[] = [];
+    const result = await session.move(moveInput({ onProgress: (event) => progress.push(event) }));
 
     expect(mocks.createWebModel).toHaveBeenCalledTimes(1);
     expect(mocks.createWebModel).toHaveBeenCalledWith("p1", "m1", "match-1:agent-a");
     expect(result.speech).toBe("Opening case.");
     expect(result.ready).toBe(true);
     expect(result.toolEvents).toEqual([]);
+    expect(progress).toEqual([{ type: "speech", text: "Opening case." }]);
 
     const call = model.doStreamCalls[0]!;
     expect(call.maxOutputTokens).toBe(3500);
@@ -164,13 +192,14 @@ describe("createWebStandardAgentSession", () => {
       streamResult([speak("s1", "With evidence.", false)]),
     );
     mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "bounded tool output" }));
 
     const session = createWebStandardAgentSession(factoryInput);
-    const result = await session.move(moveInput({ maxAffordableTools: 1 }));
+    const result = await session.move(moveInput({ maxAffordableTools: 1, runTool }));
 
     // Over-cap second call is never executed and is not a public event.
-    expect(mocks.webRunStandardTool).toHaveBeenCalledTimes(1);
-    expect(mocks.webRunStandardTool).toHaveBeenCalledWith(
+    expect(runTool).toHaveBeenCalledTimes(1);
+    expect(runTool).toHaveBeenCalledWith(
       "web_search",
       { query: "car ban evidence", timeoutMs: 8_000 },
       undefined,
@@ -183,16 +212,124 @@ describe("createWebStandardAgentSession", () => {
     expect(result.toolEvents.some((event) => (event.tool as string) === "speak")).toBe(false);
   });
 
+  it("streams only semantic public progress through the injected executor", async () => {
+    const model = modelWith(
+      streamResult([{ id: "t1", name: "web_search", input: { query: "public source" } }]),
+      streamResult([speak("s1", "Validated public speech.", true)]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "public result" }));
+    const progress: unknown[] = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    await session.move(moveInput({ runTool, onProgress: (event) => progress.push(event) }));
+
+    expect(runTool).toHaveBeenCalledTimes(1);
+    expect((progress as Array<{ type: string }>).map((event) => event.type)).toEqual([
+      "tool-start",
+      "tool-result",
+      "speech",
+    ]);
+    expect(JSON.stringify(progress)).not.toContain("private");
+    expect(JSON.stringify(progress)).not.toContain("reasoning");
+  });
+
+  it("emits incremental speak content from tool-input deltas", async () => {
+    const model = modelWith(speakInputStream(['{"content":"Hel', 'lo ', 'world","ready":true}']));
+    mocks.createWebModel.mockResolvedValue(model);
+    const progress: Array<{ type: string; text?: string }> = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const result = await session.move(moveInput({ onProgress: (event) => progress.push(event) }));
+
+    expect(result.speech).toBe("Hello world");
+    expect(progress).toEqual([
+      { type: "speech", text: "Hel" },
+      { type: "speech", text: "lo " },
+      { type: "speech", text: "world" },
+    ]);
+  });
+
+  it("decodes escaped speech content across deltas", async () => {
+    const model = modelWith(
+      speakInputStream(['{"content":"line\\nquote: \\"', 'x\\\\tab\\t","ready":false}']),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const progress: Array<{ type: string; text?: string }> = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const result = await session.move(moveInput({ onProgress: (event) => progress.push(event) }));
+
+    expect(result.speech).toBe('line\nquote: "x\\tab\t');
+    expect(progress.map((event) => event.text ?? "").join(""))
+      .toBe('line\nquote: "x\\tab\t');
+  });
+
+  it("holds split unicode escapes until the code point is decodable", async () => {
+    const model = modelWith(
+      speakInputStream(['{"content":"emoji: \\uD83', 'D\\uDE', '00","ready":false}']),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const progress: Array<{ type: string; text?: string }> = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const result = await session.move(moveInput({ onProgress: (event) => progress.push(event) }));
+
+    expect(result.speech).toBe("emoji: 😀");
+    expect(progress.map((event) => event.text ?? "").join(""))
+      .toBe("emoji: 😀");
+    expect(progress.some((event) => event.text === "\ud83d")).toBe(false);
+  });
+
+  it("ignores ordinary text, reasoning, and non-speak tool input", async () => {
+    const nonSpeak = streamPartsResult([
+      { type: "text-start", id: "text-1" },
+      { type: "text-delta", id: "text-1", delta: "private ordinary text" },
+      { type: "reasoning-start", id: "reason-1" },
+      { type: "reasoning-delta", id: "reason-1", delta: "private reasoning" },
+      { type: "tool-input-start", id: "search-1", toolName: "web_search" },
+      { type: "tool-input-delta", id: "search-1", delta: '{"query":"private search"}' },
+      { type: "tool-input-end", id: "search-1" },
+      { type: "tool-call", toolCallId: "search-1", toolName: "web_search", input: '{"query":"private search"}' },
+    ]);
+    const model = modelWith(nonSpeak, speakInputStream(['{"content":"Public","ready":true}']));
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "search result" }));
+    const progress: Array<{ type: string; text?: string }> = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    await session.move(moveInput({ runTool, onProgress: (event) => progress.push(event) }));
+
+    expect(runTool).toHaveBeenCalledWith("web_search", { query: "private search", timeoutMs: 8_000 }, undefined);
+    expect(progress.filter((event) => event.type === "speech")).toEqual([{ type: "speech", text: "Public" }]);
+    expect(JSON.stringify(progress)).not.toContain("private ordinary text");
+    expect(JSON.stringify(progress)).not.toContain("private reasoning");
+  });
+
+  it("does not duplicate content when speak execution follows complete deltas", async () => {
+    const model = modelWith(speakInputStream(['{"content":"Already public","ready":true}']));
+    mocks.createWebModel.mockResolvedValue(model);
+    const progress: Array<{ type: string; text?: string }> = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    await session.move(moveInput({ onProgress: (event) => progress.push(event) }));
+
+    expect(progress.map((event) => event.text ?? "").join(""))
+      .toBe("Already public");
+  });
+
   it("normalizes a thrown executor error to a bounded event without provider internals", async () => {
     const model = modelWith(
       streamResult([{ id: "t1", name: "run_code", input: { language: "python", query: "print(1)" } }]),
       streamResult([speak("s1", "Ran code.", false)]),
     );
     mocks.createWebModel.mockResolvedValue(model);
-    mocks.webRunStandardTool.mockRejectedValue(new Error("sk-secret provider stack trace"));
+    const runTool = vi.fn(async () => {
+      throw new Error("sk-secret provider stack trace");
+    });
 
     const session = createWebStandardAgentSession(factoryInput);
-    const result = await session.move(moveInput());
+    const result = await session.move(moveInput({ runTool }));
 
     expect(result.toolEvents).toHaveLength(1);
     const event = result.toolEvents[0]!;

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { fetchMatchList, type MatchSummary, MatchesApiError } from "@/shared/api/matches";
+import { fetchMatchList, type MatchRecord, type MatchSummary, MatchesApiError } from "@/shared/api/matches";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/shared/ui/modal";
-import { formatMatchDate, TERMINAL_LABEL, WINNER_LABEL } from "@/features/run-debate/ui/match-history/format-helpers";
+import { MatchSummaryRow } from "@/features/run-debate/ui/match-history/match-summary-row";
+import { useMatchListDetails } from "@/features/run-debate/ui/match-history/use-match-list-details";
 
 interface RecentMatchesModalProps {
   readonly open: boolean;
@@ -31,6 +31,7 @@ function RecentMatchesModalBody({ onClose, onOpenMatch }: Omit<RecentMatchesModa
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [list, setList] = useState<readonly MatchSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const details = useMatchListDetails(list);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +56,7 @@ function RecentMatchesModalBody({ onClose, onOpenMatch }: Omit<RecentMatchesModa
       <ModalHeader
         eyebrow="Archive"
         title="Recent matches"
-        sub="Every completed, errored, or cancelled match is saved with a full transcript and verdict."
+        sub="Open a saved match to read its public record, evidence, and closing state."
       />
       <ModalBody>
         {status === "loading" ? (
@@ -75,6 +76,7 @@ function RecentMatchesModalBody({ onClose, onOpenMatch }: Omit<RecentMatchesModa
               <RecentMatchRow
                 key={summary.id}
                 summary={summary}
+                record={details.get(summary.id)}
                 onOpen={onOpenMatch ? () => onOpenMatch(summary.id) : undefined}
               />
             ))}
@@ -91,40 +93,10 @@ function RecentMatchesModalBody({ onClose, onOpenMatch }: Omit<RecentMatchesModa
   );
 }
 
-function RecentMatchRow({ summary, onOpen }: { summary: MatchSummary; onOpen?: () => void }) {
-  const href = `/matches/${encodeURIComponent(summary.id)}`;
+function RecentMatchRow({ summary, record, onOpen }: { summary: MatchSummary; record?: MatchRecord; onOpen?: () => void }) {
   return (
     <li>
-      <Link
-        href={href}
-        onClick={(event) => {
-          if (onOpen) {
-            event.preventDefault();
-            onOpen();
-          }
-        }}
-        className="recent-matches__row"
-      >
-        <span className="recent-matches__row-text">
-          <span className="recent-matches__row-topic">{summary.topic}</span>
-          <span className="recent-matches__row-meta">
-            {formatMatchDate(summary.date)} · {summary.mode === "quick" ? "Quick" : summary.mode} · {TERMINAL_LABEL[summary.terminal]}
-          </span>
-        </span>
-        <span
-          className={`recent-matches__row-badge recent-matches__row-badge--${
-            summary.winner === "A" ? "a" : summary.winner === "B" ? "b" : "draw"
-          }`}
-        >
-          {summary.winner === null
-            ? "Pending"
-            : summary.winner === "DRAW"
-              ? WINNER_LABEL.DRAW
-              : summary.winner === "A"
-                ? WINNER_LABEL.A
-                : WINNER_LABEL.B}
-        </span>
-      </Link>
+      <MatchSummaryRow summary={summary} record={record} onOpen={onOpen} className="recent-matches__row history-match-row" />
     </li>
   );
 }

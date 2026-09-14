@@ -166,14 +166,14 @@ function WinnerBadge({ winner }: { winner: MatchSummary["winner"] }) {
   if (winner === "A") {
     return (
       <span className="rounded-full border border-arena-coral-300/40 bg-arena-coral-300/[0.08] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-arena-coral-100">
-        {WINNER_LABEL.A}
+        Ember wins
       </span>
     );
   }
   if (winner === "B") {
     return (
       <span className="rounded-full border border-arena-violet-300/40 bg-arena-violet-300/[0.08] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-arena-violet-100">
-        {WINNER_LABEL.B}
+        Vesper wins
       </span>
     );
   }

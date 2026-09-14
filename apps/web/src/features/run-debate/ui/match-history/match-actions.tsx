@@ -30,12 +30,12 @@ export function MatchActions({
 }: MatchActionsProps) {
   const disabled = rejudgeStatus === "flying";
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="match-actions">
+      <div className="match-actions__row">
         <a
           href={markdownDownloadUrl(matchId)}
           download={`match-${matchId}.md`}
-          className="ghost-action"
+          className="match-actions__secondary ghost-action"
         >
           Export Markdown
         </a>
@@ -43,7 +43,7 @@ export function MatchActions({
           type="button"
           onClick={() => void onExportJson(matchId)}
           disabled={disabled}
-          className="ghost-action"
+          className="match-actions__secondary ghost-action"
         >
           Export JSON
         </button>
@@ -58,13 +58,13 @@ export function MatchActions({
                 ? "Re-judging…"
                 : "Re-run the judge on the saved transcript."
           }
-          className="coral-action"
+          className="match-actions__rejudge coral-action"
         >
           {rejudgeStatus === "flying" ? "Re-judging…" : "Re-judge"}
         </button>
       </div>
       {rejudgeStatus === "error" && rejudgeError ? (
-        <p role="alert" className="text-[12px] leading-snug text-arena-coral-200">
+        <p role="alert" className="match-actions__error">
           Could not re-judge: {rejudgeError}
         </p>
       ) : null}

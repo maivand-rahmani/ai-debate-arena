@@ -15,15 +15,10 @@ interface CriteriaViewProps {
 export function CriteriaView({ record }: CriteriaViewProps) {
   const rows = buildCriteriaRows(record);
   return (
-    <section
-      aria-label="Verdict rationale"
-      className="grid gap-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
-    >
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-coral-200">
-          Why this verdict
-        </p>
-        <p className="mt-2 text-sm leading-relaxed text-arena-300">
+    <section aria-label="Verdict rationale" className="criteria-view">
+      <div className="criteria-view__intro">
+        <p className="criteria-view__kicker">Why this verdict</p>
+        <p className="criteria-view__intro-copy">
           The judge scored each side against a four-criterion rubric. Wider
           bars mean a stronger showing on that criterion; the prose below
           explains the call.
@@ -31,39 +26,28 @@ export function CriteriaView({ record }: CriteriaViewProps) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-sm text-arena-400">No criteria recorded for this match.</p>
+        <p className="criteria-view__empty">No criteria recorded for this match.</p>
       ) : (
-        <div className="criteria-table-wrap">
-          <table className="criteria-table">
-            <caption className="sr-only">Judge scores by criterion</caption>
-            <thead>
-              <tr>
-                <th scope="col">Criterion</th>
-                <th scope="col">Challenger</th>
-                <th scope="col">Advocate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <CriteriaRow key={row.title} {...row} />
-              ))}
-            </tbody>
-          </table>
+        <div className="criteria-view__rows" role="list" aria-label="Judge scores by criterion">
+          <div className="criteria-view__column-head" aria-hidden="true">
+            <span>Criterion</span><span>Ember · Challenger</span><span>Vesper · Advocate</span>
+          </div>
+          {rows.map((row) => (
+            <CriteriaRow key={row.title} {...row} />
+          ))}
         </div>
       )}
 
       {record.verdict ? (
-        <div className="border-t border-white/[0.08] pt-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-arena-coral-200">
-            Reasoning
-          </p>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-arena-100">
+        <div className="criteria-view__reasoning">
+          <p className="criteria-view__kicker">Judge&apos;s reasoning</p>
+          <p className="criteria-view__reasoning-copy">
             {record.verdict.reasoning || "No reasoning was provided."}
           </p>
         </div>
       ) : null}
 
-      <dl className="grid gap-2 border-t border-white/[0.08] pt-4 text-[11px] uppercase tracking-[0.18em] text-arena-300 sm:grid-cols-2">
+      <dl className="criteria-view__versions">
         <VersionRow label="Agent prompt" value={record.promptVersions.agent} />
         <VersionRow label="Judge prompt" value={record.promptVersions.judge} />
         <VersionRow label="Rubric" value={record.rubricVersion} />
@@ -85,19 +69,43 @@ function CriteriaRow({
   right: number;
 }) {
   return (
-    <tr>
-      <th scope="row">{title}</th>
-      <td className={left >= right ? "is-leading" : ""}>{left}</td>
-      <td className={right >= left ? "is-leading" : ""}>{right}</td>
-    </tr>
+    <article className="criteria-view__row" role="listitem">
+      <h3>{title}</h3>
+      <ScoreBar side="ember" label="Ember · Challenger" value={left} leading={left >= right} />
+      <ScoreBar side="vesper" label="Vesper · Advocate" value={right} leading={right >= left} />
+    </article>
+  );
+}
+
+function ScoreBar({
+  side,
+  label,
+  value,
+  leading,
+}: {
+  readonly side: "ember" | "vesper";
+  readonly label: string;
+  readonly value: number;
+  readonly leading: boolean;
+}) {
+  const safeValue = Math.max(0, Math.min(10, Number.isFinite(value) ? value : 0));
+  return (
+    <div className={`criteria-view__score criteria-view__score--${side}${leading ? " is-leading" : ""}`}>
+      <div className="criteria-view__score-head">
+        <span>{label}</span><strong>{value}</strong>
+      </div>
+      <div className="criteria-view__bar" aria-hidden="true">
+        <span style={{ width: `${safeValue * 10}%` }} />
+      </div>
+    </div>
   );
 }
 
 function VersionRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="text-arena-400">{label}</dt>
-      <dd className="font-medium text-arena-100">v{value}</dd>
+    <div>
+      <dt>{label}</dt>
+      <dd>v{value}</dd>
     </div>
   );
 }

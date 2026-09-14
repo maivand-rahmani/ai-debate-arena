@@ -3,7 +3,6 @@
 import { useId, useMemo, useState } from "react";
 import type { RedactedProvider } from "@/shared/api/providers";
 import {
-  applyPositionChange,
   applyProviderChange,
   emptyDraft,
   isDraftReady,
@@ -12,8 +11,8 @@ import {
   TOPIC_MAX_LENGTH,
   validateDraft,
   type MatchDraft,
-  type Position,
 } from "@/features/create-debate/draft";
+import { SIDE_ROLE_LABELS } from "@/shared/config/sides";
 import { useProviders } from "@/features/create-debate/use-providers";
 import { ProvidersEmptyState } from "@/features/create-debate/providers-empty-state";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/shared/ui/modal";
@@ -77,8 +76,8 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
     return {
       topic: "",
       mode: "quick",
-      sideA: { providerId: a.id, model: a.model, position: "FOR" },
-      sideB: { providerId: b.id, model: b.model, position: "AGAINST" },
+      sideA: { providerId: a.id, model: a.model },
+      sideB: { providerId: b.id, model: b.model },
     };
   }, [userDraft, providers, status]);
 
@@ -138,9 +137,6 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
   const updateBProvider = (id: string) => applyChange((current) => applyProviderChange(current, "B", id, providers));
   const updateAModel = (model: string) => applyChange((current) => ({ ...current, sideA: { ...current.sideA, model } }));
   const updateBModel = (model: string) => applyChange((current) => ({ ...current, sideB: { ...current.sideB, model } }));
-  const updateAPosition = (position: Position) => applyChange((current) => applyPositionChange(current, "A", position));
-  const updateBPosition = (position: Position) =>
-    applyChange((current) => applyPositionChange(current, "B", position, false));
   const updateMode = (mode: MatchDraft["mode"]) =>
     applyChange((current) => ({
       ...current,
@@ -215,26 +211,20 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
             <ContenderCard
               side="A"
               tone="coral"
-              identity="The Challenger"
               providers={providers}
               providerId={effectiveDraft.sideA.providerId}
               model={effectiveDraft.sideA.model}
-              position={effectiveDraft.sideA.position}
               onProviderChange={updateAProvider}
               onModelChange={updateAModel}
-              onPositionChange={updateAPosition}
             />
             <ContenderCard
               side="B"
               tone="violet"
-              identity="The Advocate"
               providers={providers}
               providerId={effectiveDraft.sideB.providerId}
               model={effectiveDraft.sideB.model}
-              position={effectiveDraft.sideB.position}
               onProviderChange={updateBProvider}
               onModelChange={updateBModel}
-              onPositionChange={updateBPosition}
             />
           </div>
 
@@ -274,7 +264,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
                     aria-checked={active}
                     tabIndex={active ? 0 : -1}
                     onClick={() => updateMode(mode.id)}
-                    className={`setup-form__mode-btn${active ? " is-active" : ""}`}
+                    className={`setup-form__mode-btn setup-form__mode-btn--${mode.id}${active ? " is-active" : ""}`}
                   >
                     <span className="setup-form__mode-btn-title">{mode.label}</span>
                     <span className="setup-form__mode-btn-hint">{mode.hint}</span>
@@ -425,35 +415,31 @@ function boundedValue(value: number | undefined, fallback: number, min: number, 
 interface ContenderCardProps {
   readonly side: "A" | "B";
   readonly tone: "coral" | "violet";
-  readonly identity: string;
   readonly providers: readonly RedactedProvider[];
   readonly providerId: string;
   readonly model: string;
-  readonly position: Position;
   readonly onProviderChange: (providerId: string) => void;
   readonly onModelChange: (model: string) => void;
-  readonly onPositionChange: (position: Position) => void;
 }
 
 function ContenderCard({
   side,
   tone,
-  identity,
   providers,
   providerId,
   model,
-  position,
   onProviderChange,
   onModelChange,
-  onPositionChange,
 }: ContenderCardProps) {
+  const role = SIDE_ROLE_LABELS[side];
+  const name = side === "A" ? "Ember" : "Vesper";
   return (
-    <section className={`setup-form__contender setup-form__contender--${tone}`} aria-label={identity}>
+    <section className={`setup-form__contender setup-form__contender--${tone}`} aria-label={`${name}, ${role}`}>
       <header className="setup-form__contender-head">
-        <span className={`setup-form__contender-mark setup-form__contender-mark--${tone}`}>{side}</span>
+        <span className={`setup-form__contender-mark setup-form__contender-mark--${tone}`} aria-hidden="true">{name[0]}</span>
         <div>
-          <p className="setup-form__contender-sub">Contender {side}</p>
-          <h3 className="setup-form__contender-title">{identity}</h3>
+          <p className="setup-form__contender-sub">{role}</p>
+          <h3 className="setup-form__contender-title">{name}</h3>
         </div>
       </header>
 
@@ -485,40 +471,6 @@ function ContenderCard({
             className="setup-form__input"
           />
         </label>
-      </div>
-
-      <div
-        className="setup-form__position"
-        role="radiogroup"
-        aria-label={`${identity} position`}
-        onKeyDown={(event) => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-          event.preventDefault();
-          const nextPosition = position === "FOR" ? "AGAINST" : "FOR";
-          onPositionChange(nextPosition);
-          window.requestAnimationFrame(() => document.getElementById(`setup-position-${side}-${nextPosition}`)?.focus());
-        }}
-      >
-        <span className="setup-form__field-label">Position</span>
-        <div className="setup-form__position-row">
-          {(["FOR", "AGAINST"] as const).map((option) => {
-            const active = option === position;
-            return (
-              <button
-                key={option}
-                id={`setup-position-${side}-${option}`}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                tabIndex={active ? 0 : -1}
-                onClick={() => onPositionChange(option)}
-                className={`setup-form__position-btn setup-form__position-btn--${tone}${active ? " is-active" : ""}`}
-              >
-                {option === "FOR" ? "For" : "Against"}
-              </button>
-            );
-          })}
-        </div>
       </div>
     </section>
   );

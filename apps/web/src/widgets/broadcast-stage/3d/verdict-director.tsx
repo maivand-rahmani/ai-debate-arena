@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { VERDICT_TIMING } from "./confetti";
-import type { SceneSignal } from "./scene-signal";
+import { isVerdictCueEligible, type SceneSignal } from "./scene-signal";
 import type { VerdictPropHandles } from "./arena-props";
 
 /**
@@ -40,9 +40,11 @@ export function VerdictDirector({
   const scheduledStampsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    // Winner-specific cues only fire on a fresh terminal-frame verdict. While
+    // the viewer still holds the final speech the runtime may already be
+    // finished, but the gavel/confetti moment waits for the terminal frame.
     if (!signal) return;
-    if (signal.status !== "finished") return;
-    if (!signal.verdictWinner) return;
+    if (!isVerdictCueEligible(signal)) return;
     const stamp = signal.verdictStamp;
     if (stamp === null || scheduledStampsRef.current.has(stamp)) return;
 
@@ -51,6 +53,7 @@ export function VerdictDirector({
     scheduledStampsRef.current.add(stamp);
 
     const winner = signal.verdictWinner;
+    if (!winner) return;
     const reducedMotion = signal.reducedMotion;
 
     // Fire-and-forget: no cleanup — StrictMode must not cancel the moment.

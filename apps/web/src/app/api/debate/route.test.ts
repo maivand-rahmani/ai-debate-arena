@@ -194,6 +194,29 @@ describe("POST /api/debate", () => {
     expect(JSON.stringify(record)).not.toMatch(/apiKey|baseUrl|sk-test/i);
   });
 
+  it("normalizes reversed side positions to fixed FOR/AGAINST before persisting", async () => {
+    mock.enqueue(
+      ...AGENT_TEXTS.map((text) => ({ kind: "text", text }) as const),
+      { kind: "text", text: VALID_VERDICT_JSON },
+      { kind: "text", text: VALID_VERDICT_JSON },
+    );
+
+    const body = validBody();
+    const events = await readNdjson(
+      await postDebate({
+        ...body,
+        agentA: { ...body.agentA, position: "AGAINST" },
+        agentB: { ...body.agentB, position: "FOR" },
+      }),
+    );
+    expect(count(events, "error")).toBe(0);
+    expect(count(events, "done")).toBe(1);
+
+    const record = saveMatchMock.mock.calls[0]?.[0];
+    expect(record?.sides.A.position).toBe("FOR");
+    expect(record?.sides.B.position).toBe("AGAINST");
+  });
+
   it("completes agent turns when a provider ignores streaming requests", async () => {
     mock.enqueue(
       ...AGENT_TEXTS.flatMap((text) => [

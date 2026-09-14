@@ -86,11 +86,11 @@ export function ArenaDesk({ layout, children }: { readonly layout: DeskLayout; r
       {/* Feet and side reveals make the base read as furniture instead of a box. */}
       <mesh position={[-baseSize[0] * 0.35, baseY - baseSize[1] / 2 - 0.06, 0]} castShadow>
         <boxGeometry args={[0.14, 0.12, baseSize[2] * 0.74]} />
-        <meshStandardMaterial color={PALETTE.walnutBlackened} roughness={0.38} metalness={0.62} />
+        <meshStandardMaterial color={PALETTE.blackenedMetal} roughness={0.38} metalness={0.62} />
       </mesh>
       <mesh position={[baseSize[0] * 0.35, baseY - baseSize[1] / 2 - 0.06, 0]} castShadow>
         <boxGeometry args={[0.14, 0.12, baseSize[2] * 0.74]} />
-        <meshStandardMaterial color={PALETTE.walnutBlackened} roughness={0.38} metalness={0.62} />
+        <meshStandardMaterial color={PALETTE.blackenedMetal} roughness={0.38} metalness={0.62} />
       </mesh>
 
       {children ? <group>{children}</group> : null}
@@ -129,7 +129,7 @@ export function ArenaChair({
   const effectiveLegHeight = Math.max(0.02, seatBottomY - floorY);
   const legCenterY = (seatBottomY + floorY) / 2;
   const upholstery = accentColor ? PALETTE.walnutShadow : PALETTE.walnut;
-  const hardware = accentColor ?? PALETTE.walnutBlackened;
+  const hardware = accentColor ?? PALETTE.blackenedMetal;
   const casters = [
     [-0.22, -0.16],
     [0.22, -0.16],
@@ -180,7 +180,7 @@ export function ArenaChair({
       {casters.map(([x, z]) => (
         <mesh key={`${x}-${z}`} position={[position[0] + x, floorY + 0.015, position[2] + z]} castShadow>
           <sphereGeometry args={[0.055, 8, 6]} />
-          <meshStandardMaterial color={PALETTE.walnutBlackened} roughness={0.3} metalness={0.55} />
+          <meshStandardMaterial color={PALETTE.blackenedMetal} roughness={0.3} metalness={0.55} />
         </mesh>
       ))}
 
