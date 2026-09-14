@@ -21,7 +21,7 @@ interface RecentMatchesModalProps {
  */
 export function RecentMatchesModal({ open, onClose, onOpenMatch }: RecentMatchesModalProps) {
   return (
-    <Modal open={open} onClose={onClose} panelClassName="modal--narrow" ariaLabel="Recent matches">
+    <Modal open={open} onClose={onClose} panelClassName="modal--narrow">
       <RecentMatchesModalBody onClose={onClose} onOpenMatch={onOpenMatch} />
     </Modal>
   );

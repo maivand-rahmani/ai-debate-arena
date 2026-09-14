@@ -301,6 +301,8 @@ function SelectField({ id, label, value, onChange, options, error, disabled }: S
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
           className={`provider-form__input provider-form__input--select ${error ? "is-invalid" : ""}`}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
         >
           {options.map((option) => (
             <option key={option.value} value={option.value}>
@@ -310,7 +312,7 @@ function SelectField({ id, label, value, onChange, options, error, disabled }: S
         </select>
         <span aria-hidden="true" className="provider-form__select-caret">⌄</span>
       </div>
-      {error ? <p className="provider-form__error" role="alert">{error}</p> : null}
+      {error ? <p id={`${id}-error`} className="provider-form__error" role="alert">{error}</p> : null}
     </div>
   );
 }

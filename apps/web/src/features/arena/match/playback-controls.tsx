@@ -25,7 +25,7 @@ export function PlaybackControls({ state, playback }: PlaybackControlsProps) {
           {waitingLabel}
         </span>
         <button type="button" className="playback-controls__next" onClick={playback.advance}>
-          <span>{isLastResponse ? "Continue to judge" : "Next response"}</span>
+          <span>{isLastResponse ? "Show next turn" : "Show next turn"}</span>
           <kbd>Esc</kbd>
           <span aria-hidden="true">→</span>
         </button>

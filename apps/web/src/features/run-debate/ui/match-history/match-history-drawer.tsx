@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { fetchMatchList, type MatchSummary, MatchesApiError } from "@/shared/api/matches";
 import { formatMatchDate, TERMINAL_LABEL, WINNER_LABEL } from "./format-helpers";
@@ -28,6 +28,10 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
   const [list, setList] = useState<readonly MatchSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
   // Fetch the list once when the body mounts.
   useEffect(() => {
@@ -48,24 +52,45 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  // Esc closes; auto-focus the close button.
+  // Esc closes, focus stays in the drawer, and focus returns to its trigger.
   useEffect(() => {
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
         onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
     window.addEventListener("keydown", onKey);
     closeButtonRef.current?.focus();
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      const restore = restoreFocusRef.current;
+      if (restore && document.contains(restore)) restore.focus();
+    };
   }, [onClose]);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Recent matches"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
       className="drawer-shell"
     >
       <button
@@ -74,12 +99,12 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
         onClick={onClose}
         className="drawer-shell__backdrop"
       />
-      <aside className="drawer-shell__panel" aria-label="Recent matches">
+      <aside ref={panelRef} className="drawer-shell__panel" tabIndex={-1}>
         <header className="drawer-shell__head">
           <div>
             <p className="drawer-shell__eyebrow">Recent</p>
-            <h2 className="drawer-shell__title">Saved matches</h2>
-            <p className="drawer-shell__sub">
+            <h2 id={titleId} className="drawer-shell__title">Saved matches</h2>
+            <p id={descriptionId} className="drawer-shell__sub">
               Pick a match to open the full transcript and verdict on its own page.
             </p>
           </div>

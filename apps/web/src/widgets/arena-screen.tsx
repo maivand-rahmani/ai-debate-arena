@@ -182,6 +182,7 @@ export default function ArenaScreen() {
           reactionsMuted={reactionsMuted}
           onToggleMute={handleToggleMute}
           playback={playback}
+          standardLimits={matchDraft?.standard}
         />
         {/* v0.3.1 idle: minimal hero with one CTA + a small
             recent-matches link. Both open modals that sit on top of

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, type ReactNode } from "react";
 
 /**
  * Centered-modal shell shared by every overlay dialog in the arena.
@@ -38,6 +38,13 @@ interface ModalProps {
   readonly closeLabel?: string;
 }
 
+interface ModalIds {
+  readonly titleId: string;
+  readonly descriptionId: string;
+}
+
+const ModalIdsContext = createContext<ModalIds | null>(null);
+
 export function Modal({ open, onClose, children, panelClassName, ariaLabel, closeLabel }: ModalProps) {
   if (!open) return null;
   return (
@@ -60,18 +67,49 @@ function ModalPanel({
   closeLabel = "Close",
 }: Omit<ModalProps, "open">) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
-  // Esc closes.
+  const focusableSelector =
+    'button:not([disabled]):not([data-modal-backdrop]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  // Esc closes and focus never escapes the dialog while it is open.
   useEffect(() => {
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
         onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      const restore = restoreFocusRef.current;
+      if (restore && document.contains(restore)) restore.focus();
+    };
+  }, [focusableSelector, onClose]);
 
   // Move focus to the close button on mount.
   useEffect(() => {
@@ -89,20 +127,34 @@ function ModalPanel({
 
   const labelProps = ariaLabel
     ? ({ "aria-label": ariaLabel } as const)
-    : ({} as const);
+    : ({ "aria-labelledby": titleId } as const);
 
   return (
-    <div className="modal" role="dialog" aria-modal="true" {...labelProps}>
+    <div className="modal" role="dialog" aria-modal="true" aria-describedby={descriptionId} {...labelProps}>
       <button
         type="button"
         aria-label="Close dialog"
         onClick={onClose}
         className="modal__backdrop"
+        data-modal-backdrop
+        tabIndex={-1}
       />
-      <div className={["modal__panel", panelClassName].filter(Boolean).join(" ")}>
-        <ModalChrome closeButtonRef={closeButtonRef} onClose={onClose} closeLabel={closeLabel} />
-        {children}
-      </div>
+      <ModalIdsContext.Provider value={{ titleId, descriptionId }}>
+        <div
+          ref={panelRef}
+          className={["modal__panel", panelClassName].filter(Boolean).join(" ")}
+          tabIndex={-1}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              onClose();
+            }
+          }}
+        >
+          <ModalChrome closeButtonRef={closeButtonRef} onClose={onClose} closeLabel={closeLabel} />
+          {children}
+        </div>
+      </ModalIdsContext.Provider>
     </div>
   );
 }
@@ -146,15 +198,21 @@ interface ModalHeaderProps {
 }
 
 export function ModalHeader({ eyebrow, title, sub }: ModalHeaderProps) {
-  const id = useId();
+  const fallbackTitleId = useId();
+  const fallbackDescriptionId = useId();
+  const ids = useContext(ModalIdsContext);
+  const titleId = ids?.titleId ?? fallbackTitleId;
+  const descriptionId = ids?.descriptionId ?? fallbackDescriptionId;
   return (
     <header className="modal__head">
       <div className="modal__head-text">
         {eyebrow ? <p className="modal__eyebrow">{eyebrow}</p> : null}
-        <h2 id={id} className="modal__title">
+        <h2 id={titleId} className="modal__title">
           {title}
         </h2>
-        {sub ? <p className="modal__sub">{sub}</p> : null}
+        <p id={descriptionId} className={sub ? "modal__sub" : "sr-only"}>
+          {sub ?? "Dialog content"}
+        </p>
       </div>
     </header>
   );

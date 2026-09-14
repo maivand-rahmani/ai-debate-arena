@@ -84,25 +84,30 @@ export function VerdictCard({
         />
       </div>
 
-      <section className="verdict-card__criteria" aria-label="Judge scorecard">
-        <div className="verdict-card__criteria-head">
-          <span>Judge scorecard</span>
-          <span aria-label={`Challenger score ${verdict.scoreA}`}>A</span>
-          <span aria-label={`Advocate score ${verdict.scoreB}`}>B</span>
-        </div>
-        {CRITERIA.map((criterion) => {
+      <table className="verdict-card__criteria">
+        <caption className="sr-only">Judge scorecard</caption>
+        <thead>
+          <tr className="verdict-card__criteria-head">
+            <th scope="col">Criterion</th>
+            <th scope="col" aria-label={`Challenger score ${verdict.scoreA}`}>Challenger</th>
+            <th scope="col" aria-label={`Advocate score ${verdict.scoreB}`}>Advocate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CRITERIA.map((criterion) => {
           const scoreA = verdict.criteria[criterion.a];
           const scoreB = verdict.criteria[criterion.b];
           const leader = scoreA === scoreB ? "tie" : scoreA > scoreB ? "a" : "b";
           return (
-            <div key={criterion.label} className="verdict-card__criterion">
-              <span>{criterion.label}</span>
-              <strong className={leader === "a" ? "is-leading" : ""}>{scoreA}</strong>
-              <strong className={leader === "b" ? "is-leading" : ""}>{scoreB}</strong>
-            </div>
+            <tr key={criterion.label} className="verdict-card__criterion">
+              <th scope="row">{criterion.label}</th>
+              <td className={leader === "a" ? "is-leading" : ""}>{scoreA}</td>
+              <td className={leader === "b" ? "is-leading" : ""}>{scoreB}</td>
+            </tr>
           );
-        })}
-      </section>
+          })}
+        </tbody>
+      </table>
 
       {verdict.reasoning ? (
         <p className="verdict-card__reasoning">

@@ -42,6 +42,12 @@ export interface BroadcastStageProps {
   readonly onToggleMute?: () => void;
   /** Spectator-controlled presentation; generation keeps running independently. */
   readonly playback?: MatchPlayback;
+  /** Equal Standard resource limits chosen in setup, for the public HUD. */
+  readonly standardLimits?: {
+    readonly startingCredits?: number;
+    readonly maxToolsPerMove?: number;
+    readonly toolTimeoutMs?: number;
+  };
 }
 
 /**

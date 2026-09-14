@@ -126,7 +126,7 @@ describe("ErrorPanel", () => {
     const html = renderToStaticMarkup(<ErrorPanel state={state} onNewMatch={() => undefined} />);
     expect(html).toContain("The debate could not finish");
     expect(html).toContain("Provider stopped responding");
-    expect(html).toContain("New match");
+    expect(html).toContain("Start match");
   });
 });
 

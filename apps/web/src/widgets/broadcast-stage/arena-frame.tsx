@@ -52,7 +52,7 @@ export function ArenaFrame(props: BroadcastStageProps) {
         <BroadcastStage {...props} />
       </CanvasGate>
       <ArenaHud {...props} />
-      <StandardEventTimeline state={props.state} />
+      <StandardEventTimeline state={props.state} standardLimits={props.standardLimits} />
     </section>
   );
 }

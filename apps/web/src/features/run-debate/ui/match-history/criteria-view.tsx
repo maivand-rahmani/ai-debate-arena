@@ -33,10 +33,22 @@ export function CriteriaView({ record }: CriteriaViewProps) {
       {rows.length === 0 ? (
         <p className="text-sm text-arena-400">No criteria recorded for this match.</p>
       ) : (
-        <div className="grid gap-4">
-          {rows.map((row) => (
-            <CriteriaRow key={row.title} {...row} />
-          ))}
+        <div className="criteria-table-wrap">
+          <table className="criteria-table">
+            <caption className="sr-only">Judge scores by criterion</caption>
+            <thead>
+              <tr>
+                <th scope="col">Criterion</th>
+                <th scope="col">Challenger</th>
+                <th scope="col">Advocate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <CriteriaRow key={row.title} {...row} />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -63,8 +75,6 @@ export function CriteriaView({ record }: CriteriaViewProps) {
 
 function CriteriaRow({
   title,
-  leftLabel,
-  rightLabel,
   left,
   right,
 }: {
@@ -74,29 +84,12 @@ function CriteriaRow({
   left: number;
   right: number;
 }) {
-  const total = Math.max(1, left + right);
-  const leftPct = (left / total) * 100;
   return (
-    <div>
-      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-arena-300">
-        <span>{title}</span>
-        <span className="text-arena-400">
-          {leftLabel} {left} · {right} {rightLabel}
-        </span>
-      </div>
-      <div className="mt-2 flex h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-        <div
-          className="h-full bg-arena-coral-300/80"
-          style={{ width: `${leftPct}%` }}
-          aria-label={`${leftLabel} ${left}`}
-        />
-        <div
-          className="h-full bg-arena-violet-300/80"
-          style={{ width: `${100 - leftPct}%` }}
-          aria-label={`${rightLabel} ${right}`}
-        />
-      </div>
-    </div>
+    <tr>
+      <th scope="row">{title}</th>
+      <td className={left >= right ? "is-leading" : ""}>{left}</td>
+      <td className={right >= left ? "is-leading" : ""}>{right}</td>
+    </tr>
   );
 }
 

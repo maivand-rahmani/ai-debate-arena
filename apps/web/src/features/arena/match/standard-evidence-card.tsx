@@ -53,7 +53,11 @@ export function StandardEvidenceCard({ card, number, moveLabel }: StandardEviden
       </header>
 
       <div className="standard-evidence-card__toolline">
-        <span className="standard-evidence-card__tool-mark" aria-hidden="true">↗</span>
+        <span className="standard-evidence-card__tool-mark" aria-hidden="true">
+          <svg viewBox="0 0 20 20" width="13" height="13" fill="none">
+            <path d="M4 15.5 15.5 4M8 4h7.5v7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
         <strong>{toolLabel}</strong>
         <span>public tool</span>
       </div>
@@ -77,7 +81,6 @@ export function StandardEvidenceCard({ card, number, moveLabel }: StandardEviden
       </div>
 
       <footer className="standard-evidence-card__move-link">
-        <span aria-hidden="true">→</span>
         <span>{moveLabel}</span>
       </footer>
     </article>

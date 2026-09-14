@@ -56,14 +56,15 @@ const STANDARD_BUDGET_DEFAULTS = {
  */
 export function SetupModal({ open, onClose, onStart, busy = false, errorMessage }: SetupModalProps) {
   return (
-    <Modal open={open} onClose={onClose} panelClassName="modal--wide" ariaLabel="Set up a debate">
+    <Modal open={open} onClose={onClose} panelClassName="modal--wide">
       <SetupModalBody onClose={onClose} onStart={onStart} busy={busy} errorMessage={errorMessage} />
     </Modal>
   );
 }
 
 function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModalProps, "open">) {
-  const titleId = useId();
+  const topicId = useId();
+  const modeId = useId();
   const { status, providers, errorMessage: providerError, reload } = useProviders();
   const [userDraft, setUserDraft] = useState<SetupDraft | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
@@ -173,33 +174,41 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
       <ModalHeader
         eyebrow="New debate"
         title="Set the motion. Pick the contenders."
-        sub="Choose a topic, positions, models, and a mode. Standard lets each agent research before it speaks."
+        sub="Quick is a six-turn first look. Standard is open-ended: each agent can research, adapt, and show its evidence before speaking."
       />
       <ModalBody>
         <form
           className="setup-form"
           aria-busy={busy}
+          aria-describedby={issues.length > 0 ? "setup-form-issues" : undefined}
           onSubmit={(event) => {
             event.preventDefault();
             submit();
           }}
-          aria-labelledby={titleId}
         >
           <section className="setup-form__topic">
             <div className="setup-form__row-head">
-              <span className="setup-form__eyebrow">01 · The motion</span>
+              <label className="setup-form__eyebrow" htmlFor={topicId}>The motion</label>
               <span className="setup-form__counter">
                 {effectiveDraft.topic.length}/{TOPIC_MAX_LENGTH}
               </span>
             </div>
             <textarea
               rows={2}
+              id={topicId}
               maxLength={TOPIC_MAX_LENGTH}
               value={effectiveDraft.topic}
               onChange={(event) => updateTopic(event.target.value)}
               placeholder="Should AI-generated art be eligible for copyright?"
               className="setup-form__topic-textarea"
+              aria-invalid={issues.some((issue) => issue.field === "topic") || undefined}
+              aria-describedby={issues.some((issue) => issue.field === "topic") ? "setup-topic-error" : undefined}
             />
+            {issues.some((issue) => issue.field === "topic") ? (
+              <p id="setup-topic-error" className="setup-form__field-error">
+                {issues.find((issue) => issue.field === "topic")?.message}
+              </p>
+            ) : null}
           </section>
 
           <div className="setup-form__contenders">
@@ -235,26 +244,40 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
             </p>
           ) : null}
 
-          <section className="setup-form__mode" aria-label="Match mode">
-            <span className="setup-form__eyebrow">02 · Match mode</span>
-            <div className="setup-form__mode-row" role="radiogroup" aria-label="Match mode">
-              {MODE_OPTIONS.map((mode) => {
+          <section className="setup-form__mode" aria-labelledby={modeId}>
+            <span id={modeId} className="setup-form__eyebrow">Match mode</span>
+            <div
+              className="setup-form__mode-row"
+              role="radiogroup"
+              aria-labelledby={modeId}
+              onKeyDown={(event) => {
+                const modes = MODE_OPTIONS.filter((option) => option.enabled);
+                const currentIndex = modes.findIndex((option) => option.id === effectiveDraft.mode);
+                const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+                const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? modes.length - 1 : direction ? (currentIndex + direction + modes.length) % modes.length : -1;
+                if (nextIndex >= 0) {
+                  event.preventDefault();
+                  const nextMode = modes[nextIndex].id;
+                  updateMode(nextMode);
+                  window.requestAnimationFrame(() => document.getElementById(`setup-mode-${nextMode}`)?.focus());
+                }
+              }}
+            >
+              {MODE_OPTIONS.filter((option) => option.enabled).map((mode) => {
                 const active = mode.id === effectiveDraft.mode;
                 return (
                   <button
                     key={mode.id}
+                    id={`setup-mode-${mode.id}`}
                     type="button"
                     role="radio"
                     aria-checked={active}
-                    disabled={!mode.enabled}
-                    onClick={() => mode.enabled && updateMode(mode.id)}
+                    tabIndex={active ? 0 : -1}
+                    onClick={() => updateMode(mode.id)}
                     className={`setup-form__mode-btn${active ? " is-active" : ""}`}
                   >
                     <span className="setup-form__mode-btn-title">{mode.label}</span>
                     <span className="setup-form__mode-btn-hint">{mode.hint}</span>
-                    {!mode.enabled ? (
-                      <span className="setup-form__mode-chip">Coming soon</span>
-                    ) : null}
                   </button>
                 );
               })}
@@ -276,7 +299,8 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
               <div className="setup-form__budget-grid">
                 <BudgetField
                   id="standard-starting-credits"
-                  label="Starting credits"
+                  label="Credits available to each side"
+                  hint="Spent on speeches and research calls."
                   value={standardBudget.startingCredits}
                   min={1}
                   max={64}
@@ -285,7 +309,8 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
                 />
                 <BudgetField
                   id="standard-tools-per-move"
-                  label="Tools per move"
+                  label="Tool calls per move"
+                  hint="Maximum research calls before an argument."
                   value={standardBudget.maxToolsPerMove}
                   min={0}
                   max={4}
@@ -294,7 +319,8 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
                 />
                 <BudgetField
                   id="standard-tool-timeout"
-                  label="Tool timeout"
+                  label="Time allowed per tool"
+                  hint="A failed call still appears in the public record."
                   value={standardBudget.toolTimeoutMs / 1_000}
                   min={1}
                   max={60}
@@ -312,7 +338,7 @@ function SetupModalBody({ onClose, onStart, busy, errorMessage }: Omit<SetupModa
           ) : null}
 
           {issues.length > 0 ? (
-            <ul className="setup-form__issues" aria-label="Form issues">
+            <ul id="setup-form-issues" className="setup-form__issues" aria-label="Form issues" role="alert">
               {issues.map((issue) => (
                 <li key={issue.field}>{issue.message}</li>
               ))}
@@ -356,13 +382,15 @@ interface BudgetFieldProps {
   readonly min: number;
   readonly max: number;
   readonly suffix: string;
+  readonly hint?: string;
   readonly onChange: (value: string) => void;
 }
 
-function BudgetField({ id, label, value, min, max, suffix, onChange }: BudgetFieldProps) {
+function BudgetField({ id, label, value, min, max, suffix, hint, onChange }: BudgetFieldProps) {
   return (
     <label className="setup-form__field" htmlFor={id}>
       <span>{label}</span>
+      {hint ? <small className="setup-form__field-hint">{hint}</small> : null}
       <span className="setup-form__budget-input-wrap">
         <input
           id={id}
@@ -420,7 +448,7 @@ function ContenderCard({
   onPositionChange,
 }: ContenderCardProps) {
   return (
-    <section className={`setup-form__contender setup-form__contender--${tone}`} aria-label={`Contender ${side}`}>
+    <section className={`setup-form__contender setup-form__contender--${tone}`} aria-label={identity}>
       <header className="setup-form__contender-head">
         <span className={`setup-form__contender-mark setup-form__contender-mark--${tone}`}>{side}</span>
         <div>
@@ -459,7 +487,18 @@ function ContenderCard({
         </label>
       </div>
 
-      <div className="setup-form__position" role="radiogroup" aria-label="Position">
+      <div
+        className="setup-form__position"
+        role="radiogroup"
+        aria-label={`${identity} position`}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          const nextPosition = position === "FOR" ? "AGAINST" : "FOR";
+          onPositionChange(nextPosition);
+          window.requestAnimationFrame(() => document.getElementById(`setup-position-${side}-${nextPosition}`)?.focus());
+        }}
+      >
         <span className="setup-form__field-label">Position</span>
         <div className="setup-form__position-row">
           {(["FOR", "AGAINST"] as const).map((option) => {
@@ -467,9 +506,11 @@ function ContenderCard({
             return (
               <button
                 key={option}
+                id={`setup-position-${side}-${option}`}
                 type="button"
                 role="radio"
                 aria-checked={active}
+                tabIndex={active ? 0 : -1}
                 onClick={() => onPositionChange(option)}
                 className={`setup-form__position-btn setup-form__position-btn--${tone}${active ? " is-active" : ""}`}
               >

@@ -20,9 +20,8 @@ export function IdleHero({ onStart, onOpenHistory, recentCount = 0, busy = false
   return (
     <section className="idle-hero" aria-label="Arena idle" data-reduced-motion={reducedMotion || undefined}>
       <div className="idle-hero__inner">
-        <p className="idle-hero__eyebrow">A live argument, composed</p>
         <h1 className="idle-hero__title">AI Debate Arena</h1>
-        <p className="idle-hero__sub">Two minds. One question. Let them argue.</p>
+        <p className="idle-hero__sub">Two capable models. One question. Watch the evidence change the argument.</p>
 
         <div className="idle-hero__cta">
           <button
@@ -32,7 +31,7 @@ export function IdleHero({ onStart, onOpenHistory, recentCount = 0, busy = false
             className="start-button idle-hero__start"
             aria-busy={busy || undefined}
           >
-            <span>{busy ? "Opening the console…" : "Start new debate"}</span>
+            <span>{busy ? "Preparing match…" : "Start match"}</span>
             <span aria-hidden="true" className="font-display" style={{ fontSize: "1.1rem", lineHeight: 1 }}>
               →
             </span>
@@ -46,8 +45,8 @@ export function IdleHero({ onStart, onOpenHistory, recentCount = 0, busy = false
             <span aria-hidden="true" className="idle-hero__history-dot" />
             <span>
               {recentCount > 0
-                ? `Recent matches · ${recentCount}`
-                : "Recent matches"}
+                ? `Open history · ${recentCount}`
+                : "Open history"}
             </span>
           </button>
         </div>

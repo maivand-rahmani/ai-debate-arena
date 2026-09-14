@@ -26,16 +26,16 @@ export function ErrorPanel({ state, onNewMatch }: ErrorPanelProps) {
             The debate could not finish
           </h2>
           <p className="max-w-xl text-sm leading-relaxed text-arena-300">
-            The match stopped before a verdict could be published.
+            The match stopped before the judge could publish a verdict.
             {state.panels.length > 0 ? " The streamed transcript is preserved in history." : ""}
           </p>
           <p className="max-w-xl break-words text-sm leading-relaxed text-coral-100/90">
-            {state.errorMessage ?? "Something went wrong while running the match."}
+            {state.errorMessage ?? "The match could not finish. Try starting another match."}
           </p>
         </div>
 
         <button type="button" onClick={onNewMatch} className="start-button">
-          <span>New match</span>
+          <span>Start match</span>
           <span aria-hidden="true" className="font-display text-base leading-none">
             ↗
           </span>

@@ -57,7 +57,7 @@ function CaptionPanel({ view }: { view: CaptionView }) {
           {status}
         </span>
       </header>
-      <div ref={bodyRef} className="live-caption__body" aria-live={view.isLive ? "polite" : "off"}>
+      <div ref={bodyRef} className="live-caption__body" aria-live="off">
         {view.text ? (
           <p className="live-caption__text">
             {view.text}

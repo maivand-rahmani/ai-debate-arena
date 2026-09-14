@@ -17,6 +17,13 @@ interface ProgressStep {
 }
 
 function stepsFor(state: DebateRuntimeState): readonly ProgressStep[] {
+  if (state.mode === "standard") {
+    return [
+      { phase: "STANDARD_OPENING", label: "Openings" },
+      { phase: "STANDARD_OPEN_ROUNDS", label: "Open rounds" },
+      { phase: "JUDGING", label: "Judge's verdict" },
+    ];
+  }
   return [
     ...getMatchFormat(state.mode).turns.map((turn) => ({ phase: turn.id, label: turn.label })),
     { phase: "JUDGING", label: "Judge's verdict" },
@@ -64,6 +71,9 @@ function progressIndex(state: DebateRuntimeState, steps: readonly ProgressStep[]
   if (state.status === "judging" || state.status === "finished" || state.currentPhase === "JUDGING" || state.currentPhase === "FINISHED") {
     return steps.length - 1;
   }
+  if (state.mode === "standard" && state.currentPhase.startsWith("standard-")) {
+    return state.currentPhase.endsWith("opening") ? 0 : 1;
+  }
   const turn = findMatchTurn(state.mode, state.currentPhase);
   return turn ? turn.order - 1 : 0;
 }
@@ -81,6 +91,12 @@ function progressSummary(
   viewerControlled: boolean,
 ): string {
   if (completed) return "Match complete · verdict ready";
+  if (state.mode === "standard") {
+    if (viewerControlled) return `Viewing ${steps[activeIndex]?.label.toLowerCase() ?? "match"}`;
+    if (state.status === "starting") return "Preparing the opening moves";
+    if (state.currentPhase.startsWith("standard-") && !state.currentPhase.endsWith("opening")) return "Open rounds · agents choose when to continue";
+    return `${steps[activeIndex]?.label ?? "Match"} · no fixed round count`;
+  }
   if (viewerControlled) return `Viewing step ${activeIndex + 1} of ${steps.length} · ${steps[activeIndex]?.label ?? "match"}`;
   if (state.status === "starting") return "Preparing the opening round";
   return `Step ${activeIndex + 1} of ${steps.length} · ${steps[activeIndex]?.label ?? "match"}`;

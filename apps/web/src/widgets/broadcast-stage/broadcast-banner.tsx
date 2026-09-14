@@ -15,8 +15,8 @@ interface BroadcastBannerProps {
 
 /**
  * Broadcast banner — the strip that runs across the top of the arena.
- * Carries the show title, episode mark, mode chip, a live-status chip, a
- * reactions mute toggle, and the actions (history / end match). Pure
+ * Carries the show title, topic, one live-status label, a reactions mute
+ * toggle, and the actions (history / end match). Pure
  * presentation — driven by parent props, no internal state.
  */
 export function BroadcastBanner({
@@ -48,16 +48,14 @@ export function BroadcastBanner({
         </span>
       </div>
 
-      <div className="broadcast-banner__actions" aria-label="Broadcast status">
-        <span className={`broadcast-banner__chip broadcast-banner__chip--${statusView.tone}`}>
+      <div className="broadcast-banner__actions" aria-label="Broadcast controls">
+        <span className={`broadcast-banner__chip broadcast-banner__chip--${statusView.tone}`} role="status" aria-live="polite">
           <span className="broadcast-banner__chip-dot" aria-hidden="true" />
           {statusView.label}
         </span>
-        <span className="broadcast-banner__chip">
-          {mode === "quick" ? "Quick mode" : mode}
-        </span>
+        <span className="broadcast-banner__mode">{mode === "quick" ? "Quick" : "Standard"}</span>
         {topic ? (
-          <span className="broadcast-banner__chip" style={{ maxWidth: "320px", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <span className="broadcast-banner__topic" title={topic}>
             {topic}
           </span>
         ) : null}
@@ -70,8 +68,7 @@ export function BroadcastBanner({
             onClick={onToggleMute}
             className="broadcast-banner__toggle"
           >
-            <span aria-hidden="true">{reactionsMuted ? "🔇" : "🔊"}</span>
-            <span>{reactionsMuted ? "Muted" : "Reactions"}</span>
+            <span>{reactionsMuted ? "Unmute reactions" : "Mute reactions"}</span>
           </button>
         ) : null}
 
@@ -81,7 +78,7 @@ export function BroadcastBanner({
             onClick={onOpenHistory}
             className="broadcast-banner__toggle"
           >
-            History
+            Open history
           </button>
         ) : null}
 

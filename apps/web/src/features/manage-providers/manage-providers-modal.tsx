@@ -168,7 +168,7 @@ function ManageProvidersModalBody({ onClose, onChanged }: Omit<ManageProvidersMo
   const pendingDeleteProvider = pendingDelete ? providers.find((provider) => provider.id === pendingDelete) : undefined;
 
   return (
-    <Modal open onClose={onClose} ariaLabel="Manage providers">
+    <Modal open onClose={onClose}>
       <div data-state={editing.kind} className="provider-modal__inner">
         <ModalHeader
           eyebrow="Provider network"
