@@ -15,6 +15,7 @@ import type { DebateSide } from "@arena/debate-engine";
 import { findMatchTurn, type MatchMode, type MatchTurnSpec } from "@arena/types";
 import type {
   DebateStreamEvent,
+  DebateStreamJudgeActivityStage,
   DebateStreamPhase,
   DebateStreamStandardState,
   DebateStreamTurn,
@@ -49,6 +50,22 @@ export type DebateRuntimeStatus =
   | "error"
   | "cancelled";
 
+/**
+ * Client-visible judge-review progress. Only bounded public counts and the
+ * fixed rubric criterion names are kept; there is deliberately no field for
+ * judge tokens, prompt text, draft scores, or a likely winner.
+ */
+export interface JudgeActivityState {
+  /** Most recent stage received. */
+  readonly stage: DebateStreamJudgeActivityStage;
+  /** Distinct stages observed so far this pass, in arrival order. */
+  readonly stages: readonly DebateStreamJudgeActivityStage[];
+  readonly turnCount: number;
+  readonly evidenceCount: number;
+  readonly successfulEvidenceCount: number;
+  readonly criteria: readonly string[];
+}
+
 export interface DebateRuntimeState {
   readonly status: DebateRuntimeStatus;
   readonly topic?: string;
@@ -57,7 +74,17 @@ export interface DebateRuntimeState {
   readonly currentSide: DebateSide | null;
   readonly currentTurn: MatchTurnSpec | null;
   readonly judgeActive: boolean;
+  /**
+   * Reserved for the final verdict's reasoning text only. Live review progress
+   * never writes here; see {@link JudgeActivityState}.
+   */
   readonly judgeReasoning: string;
+  /**
+   * Public, bounded judge-review checkpoints observed during the current judge
+   * pass. Reset on `judge-start` (and therefore on match start) so no stale
+   * activity survives into the next match or re-judge.
+   */
+  readonly judgeActivity?: JudgeActivityState;
   readonly panels: readonly SpeechPanel[];
   readonly standardEvents: readonly StandardTimelineEvent[];
   /**
@@ -66,6 +93,12 @@ export interface DebateRuntimeState {
    * view is deliberately retired when the move seals or the next phase starts.
    */
   readonly activeStandardEvents: readonly StandardTimelineEvent[];
+  /**
+   * Last completed Standard move's public tool activity. Unlike the active
+   * collection, this remains visible after the speech seals and while the
+   * next response or judge is being prepared.
+   */
+  readonly lastStandardEvents?: readonly StandardTimelineEvent[];
   /**
    * Most recent authoritative Standard resource snapshot from the runner
    * (`standard-state`). Stays `undefined` for Quick and before the first
@@ -109,6 +142,7 @@ export const initialRuntimeState: DebateRuntimeState = {
   panels: [],
   standardEvents: [],
   activeStandardEvents: [],
+  lastStandardEvents: [],
   standardState: undefined,
   matchId: undefined,
   judgedAt: undefined,
@@ -227,7 +261,16 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
       // normalized so optional post-v1 fields are always concrete.
       return { ...withMatchId, standardState: normalizeStandardState(event.state) };
     case "turn":
-      return sealTurn({ ...withMatchId, activeStandardEvents: [] }, event.turn);
+      return sealTurn(
+        {
+          ...withMatchId,
+          activeStandardEvents: [],
+          lastStandardEvents: withMatchId.activeStandardEvents.length > 0
+            ? withMatchId.activeStandardEvents
+            : withMatchId.lastStandardEvents,
+        },
+        event.turn,
+      );
     case "judge-start":
       return {
         ...withMatchId,
@@ -235,16 +278,36 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
         status: "judging",
         judgeActive: true,
         judgeReasoning: "",
+        judgeActivity: undefined,
         cancelled: false,
         currentPhase: "JUDGING",
         currentSide: null,
         currentTurn: null,
       };
+    case "judge-activity": {
+      const previous = withMatchId.judgeActivity;
+      const stages = previous && previous.stages.includes(event.activity.stage)
+        ? previous.stages
+        : [...(previous?.stages ?? []), event.activity.stage];
+      return {
+        ...withMatchId,
+        judgeActivity: {
+          stage: event.activity.stage,
+          stages,
+          turnCount: event.activity.turnCount,
+          evidenceCount: event.activity.evidenceCount,
+          successfulEvidenceCount: event.activity.successfulEvidenceCount,
+          criteria: event.activity.criteria,
+        },
+      };
+    }
     case "verdict":
       return {
         ...withMatchId,
         status: "finished",
         verdict: event.verdict,
+        // The verdict is the only writer of judgeReasoning.
+        judgeReasoning: event.verdict.reasoning,
         judgeActive: false,
         cancelled: false,
         currentPhase: "FINISHED",

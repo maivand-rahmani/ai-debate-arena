@@ -28,7 +28,7 @@ import {
   type MatchProfile,
   type StandardLimitsInput,
 } from "./token-policy";
-import { RUBRIC_VERSION, type RubricVersion } from "./rubric";
+import { JUDGE_RUBRIC_CRITERIA, RUBRIC_VERSION, type RubricVersion } from "./rubric";
 import {
   CONTRACT_VERSION,
   type MatchMode,
@@ -47,6 +47,8 @@ import type {
 import type {
   DebateStreamEvent,
   DebateStreamEventBody,
+  DebateStreamJudgeActivity,
+  DebateStreamJudgeActivityStage,
   DebateStreamSideResources,
   DebateStreamStandardState,
   DebateStreamTerminal,
@@ -65,6 +67,8 @@ import { getMatchFormat, standardOpeningTurn, standardRoundTurn, type MatchTurnS
 export type {
   DebateStreamEvent,
   DebateStreamEventBody,
+  DebateStreamJudgeActivity,
+  DebateStreamJudgeActivityStage,
   DebateStreamSideResources,
   DebateStreamStandardState,
   DebateStreamTerminal,
@@ -500,6 +504,13 @@ class StandardProgressQueue {
   }
 }
 
+
+/**
+ * Fixed public rubric criterion names shown during a judge review. Derived from
+ * the engine rubric, never from judge output, so the client can render the
+ * checklist without leaking any judging content.
+ */
+const JUDGE_ACTIVITY_CRITERIA: readonly string[] = JUDGE_RUBRIC_CRITERIA.map((criterion) => criterion.label);
 
 export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}): AsyncGenerator<DebateStreamEvent> {
   const callModel = deps.callModel;
@@ -1085,6 +1096,30 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
 
     state = { ...state, phase: DebatePhase.JUDGING };
     yield envelope({ type: "judge-start" });
+
+    // Public review checkpoints. Counts come only from the public transcript
+    // and the runner-owned tool records; the judge's prompt, output, tokens,
+    // draft scores, and winner are never forwarded here.
+    const successfulEvidence = toolEvents.filter(
+      (event) => event.ok === true && event.rejected !== true,
+    ).length;
+    function judgeActivity(stage: DebateStreamJudgeActivityStage): DebateStreamJudgeActivity {
+      return {
+        stage,
+        turnCount: state.turns.length,
+        evidenceCount: toolEvents.length,
+        successfulEvidenceCount: successfulEvidence,
+        criteria: JUDGE_ACTIVITY_CRITERIA,
+      };
+    }
+    for (const stage of [
+      "record-loaded",
+      "evidence-check",
+      "rubric-check",
+      "comparing",
+    ] as const) {
+      yield envelope({ type: "judge-activity", activity: judgeActivity(stage) });
+    }
 
     const judge = input.judge ?? { providerId: input.agentA.providerId, model: input.agentA.model };
 

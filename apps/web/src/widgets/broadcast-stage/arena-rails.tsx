@@ -112,7 +112,7 @@ function ArenaRail({ identity, state, focusedPanel, activeSide, hasPlayback, sta
   const actions = deriveActions(state, identity.side);
   const evidence = deriveEvidence(state, identity.side);
   const resources = deriveResources(state, identity.side, standardLimits);
-  const moveSealed = isCurrentStandardMoveSealed(state);
+  const activityIsLive = state.mode !== "standard" || state.activeStandardEvents.length > 0;
   // A preview is only a preview while another speech is selected. During a
   // live stream the current side is the primary contestant; terminal frames
   // return to a balanced archive view.
@@ -160,12 +160,16 @@ function ArenaRail({ identity, state, focusedPanel, activeSide, hasPlayback, sta
         ) : null}
       </div>
 
-      {!moveSealed ? (
+      {state.mode === "standard" || !isCurrentStandardMoveSealed(state) ? (
         <div className="arena-rail__activity" role="region" aria-label={`${identity.name} public tool activity`}>
           <div className="arena-rail__section">
             <div className="arena-rail__section-head">
               <h3>Public actions</h3>
-              <span>{actions.length ? `${actions.length} total` : "No calls yet"}</span>
+              <span>
+                {actions.length
+                  ? `${actions.length} total · ${activityIsLive ? "Live" : "Last move"}`
+                  : "No calls yet"}
+              </span>
             </div>
             {actions.length ? (
               <ol className="arena-rail__actions">
@@ -328,7 +332,12 @@ function deriveEvidence(state: DebateRuntimeState, side: RailSide): readonly Rai
 }
 
 function liveToolEvents(state: DebateRuntimeState): readonly StandardTimelineEvent[] {
-  return state.mode === "standard" ? state.activeStandardEvents : state.standardEvents;
+  if (state.mode !== "standard") return state.standardEvents;
+  if (state.activeStandardEvents.length > 0) return state.activeStandardEvents;
+  if (state.lastStandardEvents && state.lastStandardEvents.length > 0) return state.lastStandardEvents;
+  // Keep older in-memory fixtures readable while the reducer's retained
+  // last-move snapshot is absent.
+  return state.standardEvents;
 }
 
 function isCurrentStandardMoveSealed(state: DebateRuntimeState): boolean {

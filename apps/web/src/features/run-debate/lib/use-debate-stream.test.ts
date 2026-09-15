@@ -24,6 +24,22 @@ function toolResult(callId: string, side: "A" | "B"): DebateStreamEvent {
   };
 }
 
+function failedToolResult(callId: string, side: "A" | "B"): DebateStreamEvent {
+  return {
+    type: "tool-result",
+    result: {
+      callId,
+      side,
+      tool: "web_search",
+      query: callId,
+      ok: false,
+      output: "The public lookup failed",
+      error: "Source unavailable",
+      createdAt: callId,
+    },
+  };
+}
+
 function token(side: "A" | "B", text: string): DebateStreamEvent {
   return { type: "token", side, text };
 }
@@ -52,8 +68,24 @@ describe("Standard spectator reveal gate", () => {
 
     expect(turnDecision.visible.map((event) => event.type)).toEqual(["turn"]);
     expect(turnDecision.gate.paused).toBe(true);
-    expect(buffered.visible).toEqual([]);
-    expect(buffered.gate.buffered).toEqual([phase("standard-b-opening", "B")]);
+    expect(buffered.visible).toEqual([phase("standard-b-opening", "B")]);
+    expect(buffered.gate.buffered).toEqual([]);
+  });
+
+  it("keeps public tool activity visible while the next speech stays paused", () => {
+    const gate = acceptStandardRevealEvent(
+      acceptStandardRevealEvent(initialStandardRevealGate, turn("a", "A")).gate,
+      phase("standard-b-round-1", "B"),
+    ).gate;
+    const started = acceptStandardRevealEvent(gate, toolStart("b-tool", "B"));
+    const failed = acceptStandardRevealEvent(started.gate, failedToolResult("b-tool", "B"));
+    const words = acceptStandardRevealEvent(failed.gate, token("B", "Public words"));
+
+    expect(started.visible.map((event) => event.type)).toEqual(["tool-start"]);
+    expect(failed.visible.map((event) => event.type)).toEqual(["tool-result"]);
+    expect(failed.visible[0]?.type === "tool-result" && failed.visible[0].result.ok).toBe(false);
+    expect(words.visible).toEqual([]);
+    expect(words.gate.buffered).toEqual([token("B", "Public words")]);
   });
 
   it("flushes one complete response block in arrival order", () => {
@@ -69,9 +101,7 @@ describe("Standard spectator reveal gate", () => {
     }
 
     const release = releaseNextStandardResponse(gate);
-    expect(release.visible.map((event) => event.type)).toEqual([
-      "phase", "tool-start", "tool-result", "token", "turn",
-    ]);
+    expect(release.visible.map((event) => event.type)).toEqual(["token", "turn"]);
     expect(release.gate.buffered).toEqual([]);
     expect(release.gate.paused).toBe(true);
   });
@@ -88,9 +118,9 @@ describe("Standard spectator reveal gate", () => {
 
     const first = releaseNextStandardResponse(gate);
     const second = releaseNextStandardResponse(first.gate);
-    expect(first.visible.map((event) => event.type)).toEqual(["phase", "turn"]);
+    expect(first.visible.map((event) => event.type)).toEqual(["turn"]);
     expect(second.visible).toEqual([]);
-    expect(second.gate.buffered).toEqual([phase("standard-a-round-2", "A")]);
+    expect(second.gate.buffered).toEqual([]);
   });
 
   it("flushes buffered events when a terminal event arrives", () => {
@@ -98,7 +128,7 @@ describe("Standard spectator reveal gate", () => {
     gate = acceptStandardRevealEvent(gate, phase("standard-b-round-1", "B")).gate;
     const terminal = acceptStandardRevealEvent(gate, { type: "error", message: "Provider stopped" });
 
-    expect(terminal.visible.map((event) => event.type)).toEqual(["phase", "error"]);
+    expect(terminal.visible.map((event) => event.type)).toEqual(["error"]);
     expect(terminal.gate).toEqual(initialStandardRevealGate);
     expect(acceptStandardRevealEvent(terminal.gate, { type: "done", terminal: "error" }).visible).toEqual([
       { type: "done", terminal: "error" },

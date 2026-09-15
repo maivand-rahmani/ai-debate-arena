@@ -11,6 +11,8 @@
 
 import type { DebateSide } from "@arena/types";
 import type {
+  DebateStreamJudgeActivity,
+  DebateStreamJudgeActivityStage,
   DebateStreamPhase,
   DebateStreamStandardState,
   DebateStreamTerminal,
@@ -27,6 +29,8 @@ import type { StandardLimitsInput } from "@arena/debate-engine";
 // narrowed turn phases, optional `terminal`, partial envelope) so the UI
 // degrades gracefully instead of crashing.
 export type {
+  DebateStreamJudgeActivity,
+  DebateStreamJudgeActivityStage,
   DebateStreamPhase,
   DebateStreamSideResources,
   DebateStreamStandardState,
@@ -85,6 +89,7 @@ export type DebateStreamEventBody =
   | { readonly type: "tool-result"; readonly result: DebateStreamToolResult }
   | { readonly type: "standard-state"; readonly state: DebateStreamStandardState }
   | { readonly type: "judge-start" }
+  | { readonly type: "judge-activity"; readonly activity: DebateStreamJudgeActivity }
   | { readonly type: "verdict"; readonly verdict: DebateStreamVerdict }
   | { readonly type: "error"; readonly message: string }
   | { readonly type: "done"; readonly terminal?: DebateStreamTerminal };
@@ -270,6 +275,11 @@ function normalizeEvent(input: Record<string, unknown>): DebateStreamEvent | nul
     }
     case "judge-start":
       return { type: "judge-start", ...envelope };
+    case "judge-activity": {
+      const activity = normalizeJudgeActivity(input.activity);
+      if (!activity) return null;
+      return { type: "judge-activity", activity, ...envelope };
+    }
     case "verdict": {
       if (!input.verdict || typeof input.verdict !== "object") return null;
       return { type: "verdict", verdict: input.verdict as DebateStreamVerdict, ...envelope };
@@ -285,6 +295,41 @@ function normalizeEvent(input: Record<string, unknown>): DebateStreamEvent | nul
     default:
       return null;
   }
+}
+
+const JUDGE_ACTIVITY_STAGES: ReadonlySet<DebateStreamJudgeActivityStage> = new Set([
+  "record-loaded",
+  "evidence-check",
+  "rubric-check",
+  "comparing",
+]);
+
+function readCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+}
+
+/**
+ * Normalizes a public judge-activity payload. Unknown stages are dropped so a
+ * future stage cannot be mistaken for transcript/speech/tool activity, and
+ * malformed counts degrade to 0 instead of crashing the stream.
+ */
+function normalizeJudgeActivity(value: unknown): DebateStreamJudgeActivity | null {
+  if (!value || typeof value !== "object") return null;
+  const input = value as Record<string, unknown>;
+  const stage = input.stage;
+  if (typeof stage !== "string" || !JUDGE_ACTIVITY_STAGES.has(stage as DebateStreamJudgeActivityStage)) {
+    return null;
+  }
+  const criteria = Array.isArray(input.criteria)
+    ? input.criteria.filter((criterion): criterion is string => typeof criterion === "string")
+    : [];
+  return {
+    stage: stage as DebateStreamJudgeActivityStage,
+    turnCount: readCount(input.turnCount),
+    evidenceCount: readCount(input.evidenceCount),
+    successfulEvidenceCount: readCount(input.successfulEvidenceCount),
+    criteria,
+  };
 }
 
 const STREAM_TERMINALS: ReadonlySet<DebateStreamTerminal> = new Set(["completed", "error", "cancelled"]);

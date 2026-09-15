@@ -132,6 +132,29 @@ export interface DebateStreamVerdict {
   readonly reasoning: string;
 }
 
+/**
+ * Bounded, public judge-review checkpoints. These describe observable progress
+ * through the judge pipeline only: no prompt, chain-of-thought, partial tokens,
+ * draft scores, likely winner, or hidden ranking is ever part of this payload.
+ */
+export type DebateStreamJudgeActivityStage =
+  | "record-loaded"
+  | "evidence-check"
+  | "rubric-check"
+  | "comparing";
+
+export interface DebateStreamJudgeActivity {
+  readonly stage: DebateStreamJudgeActivityStage;
+  /** Sealed public turns the judge has loaded into the record. */
+  readonly turnCount: number;
+  /** Public evidence attempts (executed and refused) the record carries. */
+  readonly evidenceCount: number;
+  /** Public evidence attempts that succeeded (`ok` and not refused). */
+  readonly successfulEvidenceCount: number;
+  /** Fixed rubric criterion names; never judge-authored. */
+  readonly criteria: readonly string[];
+}
+
 export type DebateStreamEventBody =
   | { readonly type: "phase"; readonly phase: DebateStreamPhase; readonly side: DebateSide | null }
   | { readonly type: "token"; readonly side: DebateSide; readonly text: string }
@@ -140,6 +163,7 @@ export type DebateStreamEventBody =
   | { readonly type: "tool-result"; readonly result: DebateStreamToolResult }
   | { readonly type: "standard-state"; readonly state: DebateStreamStandardState }
   | { readonly type: "judge-start" }
+  | { readonly type: "judge-activity"; readonly activity: DebateStreamJudgeActivity }
   | { readonly type: "verdict"; readonly verdict: DebateStreamVerdict }
   | { readonly type: "error"; readonly message: string }
   | { readonly type: "done"; readonly terminal: DebateStreamTerminal };

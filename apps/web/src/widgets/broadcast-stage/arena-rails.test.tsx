@@ -278,7 +278,7 @@ describe("ArenaRails match visibility", () => {
     );
   });
 
-  it("shows only the current Standard move and retires tools when its speech seals", () => {
+  it("keeps the last Standard move's public tools visible when its speech seals", () => {
     const moveBTools = [
       {
         type: "tool-start" as const,
@@ -346,13 +346,55 @@ describe("ArenaRails match visibility", () => {
       <ArenaRails
         state={{
           ...researching,
+          activeStandardEvents: [],
+          lastStandardEvents: moveBTools,
           panels: [{ ...researching.panels[0]!, content: "B's sealed response", sealed: true }],
         }}
       />,
     );
     expect(sealedMarkup).toContain("B&#x27;s sealed response");
     expect(sealedMarkup).toContain("Primary view");
-    expect(sealedMarkup).not.toContain("Public actions");
+    expect(sealedMarkup).toContain("Public actions");
+    expect(sealedMarkup).toContain("Last move");
+    expect(sealedMarkup).toContain("current move research");
+    expect(sealedMarkup).toContain("Current move result");
+  });
+
+  it("shows pending and failed public tool states without inventing calls", () => {
+    const markup = renderToStaticMarkup(
+      <ArenaRails
+        state={{
+          ...initialRuntimeState,
+          mode: "standard",
+          status: "judging",
+          currentPhase: "JUDGING",
+          lastStandardEvents: [
+            {
+              type: "tool-start",
+              tool: { callId: "pending-call", side: "A", tool: "web_search", query: "pending query", createdAt: "1" },
+            },
+            {
+              type: "tool-result",
+              result: {
+                callId: "failed-call",
+                side: "A",
+                tool: "fetch_url",
+                query: "failed query",
+                ok: false,
+                output: "No result",
+                error: "Source unavailable",
+                createdAt: "2",
+              },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(markup).toContain("Working");
+    expect(markup).toContain("Failed");
+    expect(markup).toContain("pending query");
+    expect(markup).toContain("failed query");
   });
 });
 

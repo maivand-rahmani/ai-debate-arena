@@ -190,7 +190,9 @@ describe("POST /api/debate Standard full seam", () => {
       "phase", "tool-start", "tool-result", "token", "turn", "standard-state",
       "phase", "token", "turn", "standard-state",
       "phase", "token", "turn", "standard-state",
-      "judge-start", "verdict", "done",
+      "judge-start",
+      "judge-activity", "judge-activity", "judge-activity", "judge-activity",
+      "verdict", "done",
     ]);
     expect(events.filter((event) => event.type === "error")).toHaveLength(0);
     expect(events.filter((event) => event.type === "judge-start")).toHaveLength(1);

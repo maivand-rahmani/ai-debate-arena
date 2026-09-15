@@ -74,6 +74,14 @@ export function acceptStandardRevealEvent(
   if (isRevealTerminalEvent(event)) {
     return { gate: initialStandardRevealGate, visible: buffered };
   }
+  // Speech pacing belongs to the response block, not to public operational
+  // activity. Let phases, tool calls/results, and authoritative resource
+  // snapshots through while the next speech remains buffered. This keeps the
+  // rails truthful when a tool runs after a sealed turn but before the viewer
+  // presses Next response.
+  if (isPublicStandardActivity(event)) {
+    return { gate, visible: [event] };
+  }
   return { gate: { paused: true, buffered }, visible: [] };
 }
 
@@ -90,6 +98,10 @@ export function releaseNextStandardResponse(gate: StandardRevealGate): StandardR
 
 function isRevealTerminalEvent(event: DebateStreamEvent): boolean {
   return event.type === "judge-start" || event.type === "verdict" || event.type === "error" || event.type === "done";
+}
+
+function isPublicStandardActivity(event: DebateStreamEvent): boolean {
+  return event.type === "phase" || event.type === "tool-start" || event.type === "tool-result" || event.type === "standard-state";
 }
 
 function revealStatus(gate: StandardRevealGate): {

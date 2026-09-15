@@ -87,6 +87,58 @@ describe("reduceDebateRuntime done handling", () => {
 });
 
 describe("Standard public tool timeline", () => {
+  it("retains the last move's pending and failed public activity after the speech seals", () => {
+    let state = reduceDebateRuntime(initialRuntimeState, { type: "start", topic: "Topic", mode: "standard" });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "phase", phase: "standard-a-opening", side: "A" },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: {
+        type: "tool-start",
+        tool: { callId: "pending", side: "A", tool: "web_search", query: "pending lookup", createdAt: "1" },
+      },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: {
+        type: "tool-result",
+        result: {
+          callId: "failed",
+          side: "A",
+          tool: "fetch_url",
+          query: "failed lookup",
+          ok: false,
+          output: "Unavailable",
+          error: "Source unavailable",
+          createdAt: "2",
+        },
+      },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: {
+        type: "turn",
+        turn: {
+          id: "opening-a",
+          side: "A",
+          phase: "standard-a-opening",
+          content: "A sealed opening",
+          model: "model-a",
+          createdAt: "3",
+        },
+      },
+    });
+
+    expect(state.activeStandardEvents).toEqual([]);
+    expect(state.lastStandardEvents?.map((event) => event.type)).toEqual(["tool-start", "tool-result"]);
+    expect(state.lastStandardEvents?.[1]?.type === "tool-result" && state.lastStandardEvents[1].result.ok).toBe(false);
+
+    const judging = reduceDebateRuntime(state, { type: "stream-event", event: { type: "judge-start" } });
+    expect(judging.lastStandardEvents).toEqual(state.lastStandardEvents);
+  });
+
   it("keeps tool selection and result visible in server event order without exposing private text", () => {
     let state = reduceDebateRuntime(initialRuntimeState, { type: "start", topic: "Topic", mode: "standard" });
     state = reduceDebateRuntime(state, {
@@ -476,6 +528,105 @@ describe("reduceDebateRuntime matchId threading", () => {
     expect(running.matchId).toBe("old-match");
     const fresh = reduceDebateRuntime(running, { type: "reset" });
     expect(fresh.matchId).toBeUndefined();
+  });
+});
+
+describe("reduceDebateRuntime judge-activity", () => {
+  const activity = (stage: "record-loaded" | "evidence-check" | "rubric-check" | "comparing") => ({
+    stage,
+    turnCount: 6,
+    evidenceCount: 2,
+    successfulEvidenceCount: 1,
+    criteria: ["argument quality", "rebuttal quality", "consistency", "relevance"],
+  });
+
+  it("records ordered public stages and counts without touching speech or tool state", () => {
+    let state = reduceDebateRuntime(
+      { ...initialRuntimeState, topic: "topic" },
+      { type: "stream-event", event: { type: "phase", phase: "OPENING_A", side: "A" } },
+    );
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "token", side: "A", text: "Agent speech" },
+    });
+    const panelsBefore = state.panels;
+
+    for (const stage of ["record-loaded", "evidence-check", "rubric-check", "comparing"] as const) {
+      state = reduceDebateRuntime(state, {
+        type: "stream-event",
+        event: { type: "judge-activity", activity: activity(stage) },
+      });
+    }
+
+    expect(state.judgeActivity?.stage).toBe("comparing");
+    expect(state.judgeActivity?.stages).toEqual([
+      "record-loaded",
+      "evidence-check",
+      "rubric-check",
+      "comparing",
+    ]);
+    expect(state.judgeActivity?.turnCount).toBe(6);
+    expect(state.judgeActivity?.evidenceCount).toBe(2);
+    expect(state.judgeActivity?.successfulEvidenceCount).toBe(1);
+    expect(state.judgeActivity?.criteria).toEqual([
+      "argument quality",
+      "rebuttal quality",
+      "consistency",
+      "relevance",
+    ]);
+    // Judge progress never becomes transcript/tool/speech state.
+    expect(state.panels).toEqual(panelsBefore);
+    expect(state.standardEvents).toEqual([]);
+    expect(state.judgeReasoning).toBe("");
+    expect(state.verdict).toBeUndefined();
+  });
+
+  it("is idempotent when a stage is repeated", () => {
+    let state = judgingState();
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "judge-activity", activity: activity("record-loaded") },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "judge-activity", activity: activity("record-loaded") },
+    });
+    expect(state.judgeActivity?.stages).toEqual(["record-loaded"]);
+  });
+
+  it("judge-start resets stale activity from a previous pass", () => {
+    let state = judgingState();
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "judge-activity", activity: activity("comparing") },
+    });
+    expect(state.judgeActivity).toBeDefined();
+
+    state = reduceDebateRuntime(state, { type: "stream-event", event: { type: "judge-start" } });
+    expect(state.judgeActivity).toBeUndefined();
+    expect(state.judgeReasoning).toBe("");
+  });
+
+  it("match start begins with no judge activity", () => {
+    const state = reduceDebateRuntime(initialRuntimeState, {
+      type: "start",
+      topic: "Fresh topic",
+      mode: "standard",
+    });
+    expect(state.judgeActivity).toBeUndefined();
+  });
+
+  it("stores verdict reasoning as judgeReasoning when the final verdict arrives", () => {
+    const activityState = reduceDebateRuntime(judgingState(), {
+      type: "stream-event",
+      event: { type: "judge-activity", activity: activity("comparing") },
+    });
+    const finished = reduceDebateRuntime(activityState, {
+      type: "stream-event",
+      event: { type: "verdict", verdict },
+    });
+    expect(finished.judgeReasoning).toBe(verdict.reasoning);
+    expect(finished.judgeActivity?.stage).toBe("comparing");
   });
 });
 

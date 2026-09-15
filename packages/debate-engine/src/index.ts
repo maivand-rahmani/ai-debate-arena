@@ -25,6 +25,8 @@ export type { MatchMode } from "@arena/types";
 export type {
   DebateStreamEvent,
   DebateStreamEventBody,
+  DebateStreamJudgeActivity,
+  DebateStreamJudgeActivityStage,
   DebateStreamPhase,
   DebateStreamSideResources,
   DebateStreamStandardState,

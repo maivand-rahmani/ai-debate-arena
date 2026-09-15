@@ -79,7 +79,9 @@ describe("runDebate", () => {
     const types = events.map((event) => event.type);
     expect(types).toEqual([
       ...Array.from({ length: 6 }, () => ["phase", "token", "token", "turn"]).flat(),
-      "judge-start", "verdict", "done",
+      "judge-start",
+      "judge-activity", "judge-activity", "judge-activity", "judge-activity",
+      "verdict", "done",
     ]);
 
     const phases = events.filter((event) => event.type === "phase");
@@ -97,6 +99,89 @@ describe("runDebate", () => {
     if (verdictEvent?.type === "verdict") {
       expect(verdictEvent.verdict.winner).toBe("A");
       expect(verdictEvent.verdict.criteria.argumentQualityA).toBe(85);
+    }
+  });
+
+  it("emits ordered public judge-activity checkpoints derived only from the record (Quick)", async () => {
+    const events: DebateStreamEvent[] = [];
+    for await (const event of runDebate(quickInput(), { saveMatch: noopSave, callModel: agentSuccess })) {
+      events.push(event);
+    }
+
+    const activity = events.flatMap((event) => (event.type === "judge-activity" ? [event.activity] : []));
+    expect(activity.map((entry) => entry.stage)).toEqual([
+      "record-loaded",
+      "evidence-check",
+      "rubric-check",
+      "comparing",
+    ]);
+    for (const entry of activity) {
+      expect(entry.turnCount).toBe(6);
+      expect(entry.evidenceCount).toBe(0);
+      expect(entry.successfulEvidenceCount).toBe(0);
+      expect(entry.criteria).toEqual(["argument quality", "rebuttal quality", "consistency", "relevance"]);
+    }
+
+    // Checkpoints sit strictly between judge-start and verdict; they are their
+    // own type, never a token/turn/tool event carrying judge output.
+    const types = events.map((event) => event.type);
+    const judgeStart = types.indexOf("judge-start");
+    const verdict = types.indexOf("verdict");
+    expect(types.slice(judgeStart + 1, verdict)).toEqual([
+      "judge-activity",
+      "judge-activity",
+      "judge-activity",
+      "judge-activity",
+    ]);
+    // Judge output only ever appears on the final verdict payload: no token,
+    // turn, or tool event may appear between judge-start and the verdict.
+    const activityJson = JSON.stringify(activity);
+    expect(activityJson).not.toContain("A had stronger arguments");
+    expect(
+      types
+        .slice(judgeStart + 1, verdict)
+        .filter((type) => type === "token" || type === "turn" || type === "tool-start" || type === "tool-result"),
+    ).toEqual([]);
+  });
+
+  it("counts public evidence attempts and successes in Standard judge-activity", async () => {
+    const events: DebateStreamEvent[] = [];
+    const { factory } = fakeSessions((side, index, input): StandardAgentMoveResult => {
+      if (side === "A" && index === 0) {
+        const tools = Array.from({ length: input.maxAffordableTools }, (_, i) => ({
+          tool: "web_search" as const,
+          query: `a-${i}`,
+          output: i === 0 ? "found" : "unavailable",
+          ok: i === 0,
+          ...(i === 0 ? {} : { error: "source unavailable" }),
+        }));
+        return { speech: "A0", ready: false, toolEvents: tools };
+      }
+      return { speech: `${side}${index}`, ready: true, toolEvents: [] };
+    });
+
+    for await (const event of runDebate(standardInput(), {
+      saveMatch: noopSave,
+      callModel: judgeCall,
+      runTool: async () => ({ ok: true, output: "unused" }),
+      createStandardAgentSession: factory,
+    })) {
+      events.push(event);
+    }
+
+    const activity = events.flatMap((event) => (event.type === "judge-activity" ? [event.activity] : []));
+    expect(activity.map((entry) => entry.stage)).toEqual([
+      "record-loaded",
+      "evidence-check",
+      "rubric-check",
+      "comparing",
+    ]);
+    const turnCount = events.filter((event) => event.type === "turn").length;
+    for (const entry of activity) {
+      expect(entry.turnCount).toBe(turnCount);
+      // Two public attempts: one succeeded, one failed.
+      expect(entry.evidenceCount).toBe(2);
+      expect(entry.successfulEvidenceCount).toBe(1);
     }
   });
 
