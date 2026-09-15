@@ -22,6 +22,12 @@ export interface StandardAgentToolEvent {
   readonly output: string;
   readonly ok: boolean;
   readonly error?: string;
+  /**
+   * True when the session refused the call before executing it (for example,
+   * an over-budget attempt). Rejected calls are still public failure events,
+   * but the runner does not charge match credits for a tool that never ran.
+   */
+  readonly rejected?: boolean;
 }
 
 /**
@@ -45,6 +51,8 @@ export type StandardAgentProgressEvent =
       readonly output: string;
       readonly ok: boolean;
       readonly error?: string;
+      /** Mirrors {@link StandardAgentToolEvent.rejected} onto the public event. */
+      readonly rejected?: boolean;
     };
 
 export type StandardAgentProgressCallback = (event: StandardAgentProgressEvent) => void;
@@ -124,6 +132,13 @@ export interface StandardAgentSessionFactoryInput {
   readonly model: string;
   /** Hard per-move output-token budget for this side's model calls. */
   readonly maxOutputTokens: number;
+  /**
+   * Optional bound on the private match-long conversation a session may retain
+   * across moves. The runner supplies the mode profile's per-side context
+   * budget so a long Standard match cannot grow memory without limit. Sessions
+   * may fall back to their own default when omitted.
+   */
+  readonly maxContextChars?: number;
   /** Stable per-conversation key: `<matchId>:agent-a` or `<matchId>:agent-b`. */
   readonly sessionKey: string;
 }

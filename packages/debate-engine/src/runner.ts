@@ -22,7 +22,6 @@ import { isDegenerateVerdict, normalizeVerdictWinner, parseDebateVerdict } from 
 import {
   JUDGE_MAX_CONTEXT_CHARS,
   MATCH_PROFILES,
-  STANDARD_MAX_MOVES,
   STANDARD_SPEECH_COST,
   STANDARD_TOOL_COST,
   resolveStandardLimits,
@@ -35,6 +34,7 @@ import {
   type MatchMode,
   type MatchRecord,
   type MatchTerminal,
+  type StandardEndReason,
   type StandardToolEventRecord,
 } from "./contract";
 import type { StandardToolExecutor } from "./standard";
@@ -421,9 +421,23 @@ function toStreamTurn(turn: DebateTurn): DebateStreamTurn {
   };
 }
 
+/** Bounds the runner persists into a public tool record. */
+const TOOL_RECORD_OUTPUT_LIMIT = 6_000;
+const TOOL_RECORD_ERROR_LIMIT = 240;
+
+/** Applies the public record's text bounds so comparisons use the same form. */
+function normalizeToolOutput(value: string): string {
+  return value.slice(0, TOOL_RECORD_OUTPUT_LIMIT);
+}
+
+function normalizeToolError(value: string | undefined): string | undefined {
+  return value ? value.slice(0, TOOL_RECORD_ERROR_LIMIT) : undefined;
+}
+
 /**
  * Turns one normalized session tool event into the persisted/public record the
- * runner owns: fresh call id, timestamp, and bounded output/error text.
+ * runner owns: fresh call id, timestamp, bounded output/error text, and the
+ * `rejected` flag that separates refused attempts from executed calls.
  */
 function toStandardToolRecord(
   side: DebateSide,
@@ -435,12 +449,25 @@ function toStandardToolRecord(
     side,
     tool: event.tool,
     query: event.query,
-    output: event.output.slice(0, 6000),
+    output: normalizeToolOutput(event.output),
     ok: event.ok,
-    ...(event.error ? { error: event.error.slice(0, 240) } : {}),
+    ...(event.error ? { error: normalizeToolError(event.error) } : {}),
+    ...(event.rejected ? { rejected: true } : {}),
     createdAt: identity?.createdAt ?? new Date().toISOString(),
   };
 }
+
+/**
+ * Human-readable labels for the machine-readable `StandardEndReason` persisted
+ * on the match record. Display text is derived here so the persisted value
+ * stays a stable domain token.
+ */
+const STANDARD_END_REASON_LABELS: Readonly<Record<StandardEndReason, string>> = {
+  "both-ready": "Both contenders signalled ready",
+  "closing-round": "Closing round completed",
+  depleted: "A contender ran out of credits",
+  "move-ceiling": "Standard move ceiling reached",
+};
 
 const STANDARD_PROGRESS_QUEUE_LIMIT = 32;
 
@@ -479,6 +506,12 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
   if (!callModel) throw new Error("callModel is required");
   const matchId = deps.matchId ?? randomUUID();
   const profile = deps.profile ?? MATCH_PROFILES[input.mode];
+  // The single authoritative Standard move ceiling. For Standard the profile's
+  // `rounds` is the emergency ceiling, so lifecycle, snapshots, and the saved
+  // policy all read this resolved value instead of re-deriving it. Both opening
+  // moves are mandatory, so the ceiling can never be lower than 2 even for a
+  // degenerate custom profile (`rounds: 1`).
+  const standardMaxMoves = Math.max(2, profile.rounds);
   const saveMatch = deps.saveMatch;
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
@@ -517,6 +550,17 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       },
       judge: input.judge ?? { providerId: input.agentA.providerId, model: input.agentA.model },
       policy: { ...profile },
+      ...(input.mode === "standard"
+        ? {
+            standard: {
+              startingCredits: standardLimits.startingCredits,
+              maxToolsPerMove: standardLimits.maxToolsPerMove,
+              toolTimeoutMs: standardLimits.toolTimeoutMs,
+              maxMoves: standardMaxMoves,
+            },
+            ...(standardEndReason ? { standardEndReason } : {}),
+          }
+        : {}),
       promptVersions: { agent: AGENT_PROMPT_VERSION, judge: JUDGE_PROMPT_VERSION },
       rubricVersion: RUBRIC_VERSION,
       transcript: transcript.map((turn) => ({ ...turn })),
@@ -564,12 +608,17 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     A: standardLimits.startingCredits,
     B: standardLimits.startingCredits,
   };
-  // Public per-side accounting the runner owns. Credits are charged below;
-  // `standardToolsUsed` accumulates across the match and
-  // `standardLastMoveTools` records the most recent move for the snapshot.
+  // Public per-side accounting the runner owns. Executed tools consume credits
+  // and accumulate in `standardToolsUsed`; refused (over-budget) attempts are
+  // counted separately so the snapshot never confuses the two.
   const standardToolsUsed: Record<DebateSide, number> = { A: 0, B: 0 };
   const standardLastMoveTools: Record<DebateSide, number> = { A: 0, B: 0 };
+  const standardRejectedTools: Record<DebateSide, number> = { A: 0, B: 0 };
   let standardMoveCount = 0;
+  // Cumulative ready intent that actually influenced open rounds, mirrored into
+  // the public snapshot so viewers can see why a match kept going or closed.
+  const standardReady: Record<DebateSide, boolean> = { A: false, B: false };
+  let standardEndReason: StandardEndReason | null = null;
   const sideOrder: readonly DebateSide[] = ["A", "B"];
 
   function standardSideResources(side: DebateSide): DebateStreamSideResources {
@@ -578,6 +627,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       creditsRemaining: standardCredits[side],
       toolsUsed: standardToolsUsed[side],
       toolsUsedThisMove: standardLastMoveTools[side],
+      toolsRejected: standardRejectedTools[side],
       maxToolsPerMove: standardLimits.maxToolsPerMove,
       toolTimeoutMs: standardLimits.toolTimeoutMs,
       depleted: standardCredits[side] < STANDARD_SPEECH_COST,
@@ -590,10 +640,11 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       startingCredits: standardLimits.startingCredits,
       speechCost: STANDARD_SPEECH_COST,
       toolCost: STANDARD_TOOL_COST,
-      maxMoves: STANDARD_MAX_MOVES,
+      maxMoves: standardMaxMoves,
       movesUsed: standardMoveCount,
-      moveLimitReached: standardMoveCount >= STANDARD_MAX_MOVES,
+      moveLimitReached: standardMoveCount >= standardMaxMoves,
       closingRound,
+      ready: { A: standardReady.A, B: standardReady.B },
       sides: { A: standardSideResources("A"), B: standardSideResources("B") },
     };
   }
@@ -615,6 +666,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
       providerId: agent.providerId,
       model: agent.model,
       maxOutputTokens: profile.agentMaxOutputTokens,
+      maxContextChars: profile.maxContextCharsPerSide,
       sessionKey: sessionKeyForMatchSlot(matchId, side === "A" ? "agent-a" : "agent-b"),
     });
     standardSessions[side] = session;
@@ -631,6 +683,7 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     side: DebateSide,
     spec: MatchTurnSpec,
     closingRound: boolean,
+    countReady: boolean,
   ): AsyncGenerator<DebateStreamEvent, { readonly ready: boolean }> {
     const phase = spec.id;
     state = { ...state, phase };
@@ -648,46 +701,42 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     );
 
     const progressQueue = new StandardProgressQueue();
-    const pendingTools = new Map<
-      string,
-      { readonly callId: string; readonly createdAt: string; readonly tool: StandardAgentToolEvent["tool"]; readonly query: string }
-    >();
-    let progressToolResults = 0;
+    type ToolResultProgress = Extract<StandardAgentProgressEvent, { type: "tool-result" }>;
+    interface PendingTool {
+      readonly callId: string;
+      readonly createdAt: string;
+      readonly tool: StandardAgentToolEvent["tool"];
+      readonly query: string;
+      result?: ToolResultProgress;
+    }
+    // Live progress is causally strict: every invocation id may start once,
+    // every result must pair with exactly one open start, and the result's
+    // tool/query must match what was started. `seenInvocations` also rejects
+    // reuse of an id after its result so identity stays stable for the move.
+    const pendingTools = new Map<string, PendingTool>();
+    const invocationByIndex = new Map<number, string>();
+    const seenInvocations = new Set<string>();
+    const publishedRecords: StandardToolEventRecord[] = [];
+    let nextToolIndex = 0;
+    let nextResultIndex = 0;
+    let liveResultCount = 0;
     let progressSpeech = false;
 
-    function* translateProgress(event: StandardAgentProgressEvent): Generator<DebateStreamEvent> {
-      if (event.type === "speech") {
-        progressSpeech = true;
-        yield envelope({ type: "token", side, text: event.text });
-        return;
-      }
-
-      if (event.type === "tool-start") {
-        const identity = { callId: randomUUID(), createdAt: new Date().toISOString() };
-        pendingTools.set(event.invocationId, { ...identity, tool: event.tool, query: event.query });
-        yield envelope({
-          type: "tool-start",
-          tool: { callId: identity.callId, side, tool: event.tool, query: event.query, createdAt: identity.createdAt },
-        });
-        return;
-      }
-
-      const pending = pendingTools.get(event.invocationId);
-      if (!pending) throw new Error("Standard agent returned a tool result without a start");
-      pendingTools.delete(event.invocationId);
-      progressToolResults += 1;
+    function* publishToolResult(pending: PendingTool, result: ToolResultProgress): Generator<DebateStreamEvent> {
       const record = toStandardToolRecord(
         side,
         {
-          tool: event.tool,
-          query: event.query,
-          output: event.output,
-          ok: event.ok,
-          ...(event.error ? { error: event.error } : {}),
+          tool: result.tool,
+          query: result.query,
+          output: result.output,
+          ok: result.ok,
+          ...(result.error ? { error: result.error } : {}),
+          ...(result.rejected ? { rejected: true } : {}),
         },
         pending,
       );
       toolEvents.push(record);
+      publishedRecords.push(record);
       yield envelope({
         type: "tool-result",
         result: {
@@ -698,9 +747,75 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           ok: record.ok,
           output: record.output,
           ...(record.error ? { error: record.error } : {}),
+          ...(record.rejected ? { rejected: true } : {}),
           createdAt: record.createdAt,
         },
       });
+    }
+
+    /**
+     * Publishes buffered results in stable invocation order. A result that
+     * completes early is held until every earlier-started invocation has
+     * resolved, so parallel completion can never reorder the public stream.
+     */
+    function* flushToolResults(): Generator<DebateStreamEvent> {
+      while (true) {
+        const invocationId = invocationByIndex.get(nextResultIndex);
+        if (invocationId === undefined) break;
+        const pending = pendingTools.get(invocationId);
+        if (!pending?.result) break;
+        yield* publishToolResult(pending, pending.result);
+        pendingTools.delete(invocationId);
+        invocationByIndex.delete(nextResultIndex);
+        nextResultIndex += 1;
+      }
+    }
+
+    function* translateProgress(event: StandardAgentProgressEvent): Generator<DebateStreamEvent> {
+      if (event.type === "speech") {
+        progressSpeech = true;
+        yield envelope({ type: "token", side, text: event.text });
+        return;
+      }
+
+      if (event.type === "tool-start") {
+        if (seenInvocations.has(event.invocationId)) {
+          throw new Error(
+            `Standard agent reported a duplicate tool-start for invocation "${event.invocationId}"`,
+          );
+        }
+        seenInvocations.add(event.invocationId);
+        const identity = { callId: randomUUID(), createdAt: new Date().toISOString() };
+        const index = nextToolIndex++;
+        pendingTools.set(event.invocationId, { ...identity, tool: event.tool, query: event.query });
+        invocationByIndex.set(index, event.invocationId);
+        yield envelope({
+          type: "tool-start",
+          tool: { callId: identity.callId, side, tool: event.tool, query: event.query, createdAt: identity.createdAt },
+        });
+        return;
+      }
+
+      const pending = pendingTools.get(event.invocationId);
+      if (!pending) {
+        throw new Error(
+          `Standard agent reported a tool result without a matching start for invocation "${event.invocationId}"`,
+        );
+      }
+      if (pending.result) {
+        throw new Error(
+          `Standard agent reported a duplicate tool result for invocation "${event.invocationId}"`,
+        );
+      }
+      if (pending.tool !== event.tool || pending.query !== event.query) {
+        throw new Error(
+          `Standard agent tool result for invocation "${event.invocationId}" does not match its start ` +
+            `(started ${pending.tool}(${pending.query}), resolved ${event.tool}(${event.query}))`,
+        );
+      }
+      pending.result = event;
+      liveResultCount += 1;
+      yield* flushToolResults();
     }
 
     let move: Awaited<ReturnType<StandardAgentSession["move"]>> | undefined;
@@ -750,31 +865,86 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     if (!move) throw new Error("Standard agent move did not resolve");
     turnsMs.push(Date.now() - turnStartMs);
 
-    if (move.toolEvents.length > maxAffordableTools) {
+    // A move is only complete when every started tool has produced a result.
+    // An unresolved start (or a buffered result whose predecessor never
+    // resolved) would leave a public "working" tool with no outcome.
+    if (pendingTools.size > 0) {
+      throw new Error(
+        `Standard agent ended a move with ${pendingTools.size} unresolved tool start(s)`,
+      );
+    }
+
+    const hasLiveToolProgress = nextToolIndex > 0 || liveResultCount > 0;
+    if (hasLiveToolProgress) {
+      // A session reports tools exactly once. When it streams live progress,
+      // its final list must agree with what was already published; the runner
+      // never reconciles positionally or emits duplicates.
+      if (move.toolEvents.length !== publishedRecords.length) {
+        throw new Error("Standard agent mixed live and final tool reporting");
+      }
+      for (let index = 0; index < publishedRecords.length; index += 1) {
+        const published = publishedRecords[index]!;
+        const reported = move.toolEvents[index]!;
+        if (
+          published.tool !== reported.tool ||
+          published.query !== reported.query ||
+          published.ok !== reported.ok ||
+          (published.rejected === true) !== (reported.rejected === true) ||
+          // Compare the persisted (bounded) text against the same bounds so
+          // normalization is never mistaken for disagreement.
+          published.output !== normalizeToolOutput(reported.output) ||
+          published.error !== normalizeToolError(reported.error)
+        ) {
+          throw new Error("Standard agent live tool progress disagrees with its final tool events");
+        }
+      }
+    } else {
+      // Older/injected sessions may only return final tool events. Validate the
+      // same attempt policy the adapter enforces before publishing anything:
+      // executed calls cannot exceed the affordable budget, and a move may
+      // report at most one rejected attempt.
+      const reportedExecuted = move.toolEvents.filter((event) => event.rejected !== true).length;
+      const reportedRejected = move.toolEvents.length - reportedExecuted;
+      if (reportedExecuted > maxAffordableTools) {
+        throw new Error("Standard session used more tool calls than the move allowed");
+      }
+      if (reportedRejected > 1) {
+        throw new Error("Standard session reported too many rejected tool attempts");
+      }
+      // Publish them through the same path with deterministic synthetic identities.
+      for (const [index, event] of move.toolEvents.entries()) {
+        const invocationId = `returned:${index}`;
+        yield* translateProgress({ type: "tool-start", invocationId, tool: event.tool, query: event.query });
+        yield* translateProgress({
+          type: "tool-result",
+          invocationId,
+          tool: event.tool,
+          query: event.query,
+          output: event.output,
+          ok: event.ok,
+          ...(event.error ? { error: event.error } : {}),
+          ...(event.rejected ? { rejected: true } : {}),
+        });
+      }
+    }
+
+    // Executed tools consume credits; refused (over-budget) attempts are public
+    // but unpaid, and are accounted separately so the snapshot is unambiguous.
+    const executedTools = publishedRecords.filter((record) => record.rejected !== true).length;
+    const rejectedTools = publishedRecords.length - executedTools;
+    if (executedTools > maxAffordableTools) {
       throw new Error("Standard session used more tool calls than the move allowed");
     }
-
-    // Charge actual usage: every reported tool event plus the one speech.
-    standardCredits[side] = credits - move.toolEvents.length * STANDARD_TOOL_COST - STANDARD_SPEECH_COST;
-    standardToolsUsed[side] += move.toolEvents.length;
-    standardLastMoveTools[side] = move.toolEvents.length;
-    addUsage(usageTotal, move.usage);
-
-    // Older/injected sessions may only return final tool events. Reconcile
-    // those as a compatibility path, while never duplicating live progress.
-    for (const [index, event] of move.toolEvents.slice(progressToolResults).entries()) {
-      const invocationId = `returned:${index}`;
-      yield* translateProgress({ type: "tool-start", invocationId, tool: event.tool, query: event.query });
-      yield* translateProgress({
-        type: "tool-result",
-        invocationId,
-        tool: event.tool,
-        query: event.query,
-        output: event.output,
-        ok: event.ok,
-        ...(event.error ? { error: event.error } : {}),
-      });
+    // One refused attempt is enough to signal an exhausted budget; extra
+    // rejected events are a policy violation, never a free action.
+    if (rejectedTools > 1) {
+      throw new Error("Standard session reported too many rejected tool attempts");
     }
+    standardCredits[side] = credits - executedTools * STANDARD_TOOL_COST - STANDARD_SPEECH_COST;
+    standardToolsUsed[side] += executedTools;
+    standardLastMoveTools[side] = executedTools;
+    standardRejectedTools[side] += rejectedTools;
+    addUsage(usageTotal, move.usage);
 
     const chunks = (move.chunks ?? []).filter((chunk) => chunk.length > 0);
     if (chunks.length > 0) {
@@ -796,8 +966,10 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     transcript.push(turn);
     yield envelope({ type: "turn", turn: toStreamTurn(turn) });
     standardMoveCount += 1;
-    // Publish authoritative post-move accounting. Emitted after the turn so
+    // Record the intent only where the protocol honors it (open rounds), then
+    // publish authoritative post-move accounting. Emitted after the turn so
     // the existing tool → token → turn order is unchanged.
+    if (countReady) standardReady[side] = move.ready === true;
     yield envelope({ type: "standard-state", state: standardStateSnapshot(closingRound) });
     return { ready: move.ready === true };
   }
@@ -811,19 +983,20 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
    */
   async function* runStandardLifecycle(): AsyncGenerator<DebateStreamEvent> {
     for (const side of sideOrder) {
-      if (standardMoveCount >= STANDARD_MAX_MOVES) break;
-      yield* playStandardMove(side, standardOpeningTurn(side), false);
+      if (standardMoveCount >= standardMaxMoves) break;
+      // Opening readiness is ignored by the protocol: both sides always open.
+      yield* playStandardMove(side, standardOpeningTurn(side), false, false);
     }
 
-    const ready: Record<DebateSide, boolean> = { A: false, B: false };
     let closingRound = false;
     let round = 0;
-    while (standardMoveCount < STANDARD_MAX_MOVES) {
+    while (standardMoveCount < standardMaxMoves) {
       round += 1;
       let forcedClose = false;
+      let ceilingReached = false;
       for (const side of sideOrder) {
-        if (standardMoveCount >= STANDARD_MAX_MOVES) {
-          forcedClose = true;
+        if (standardMoveCount >= standardMaxMoves) {
+          ceilingReached = true;
           break;
         }
         if (standardCredits[side] < STANDARD_SPEECH_COST) {
@@ -832,14 +1005,28 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
           forcedClose = true;
           continue;
         }
-        const outcome = yield* playStandardMove(side, standardRoundTurn(side, round), closingRound);
-        if (!closingRound) ready[side] = outcome.ready;
+        yield* playStandardMove(side, standardRoundTurn(side, round), closingRound, !closingRound);
       }
-      if (closingRound) break;
-      if (forcedClose) break;
-      if (ready.A && ready.B) break;
-      if (ready.A || ready.B) closingRound = true;
+      if (closingRound) {
+        standardEndReason = "closing-round";
+        break;
+      }
+      if (ceilingReached) {
+        standardEndReason = "move-ceiling";
+        break;
+      }
+      if (forcedClose) {
+        standardEndReason = "depleted";
+        break;
+      }
+      if (standardReady.A && standardReady.B) {
+        standardEndReason = "both-ready";
+        break;
+      }
+      if (standardReady.A || standardReady.B) closingRound = true;
     }
+    // Reached only when the opening moves alone consumed the ceiling.
+    standardEndReason ??= "move-ceiling";
   }
 
   try {
@@ -929,7 +1116,11 @@ export async function* runDebate(input: RunDebateInput, deps: RunDebateDeps = {}
     }
     verdict = parsedVerdict;
     terminal = "completed";
-    terminalReason = null;
+    // Standard records why the variable lifecycle stopped; Quick keeps its
+    // established null reason.
+    terminalReason = input.mode === "standard" && standardEndReason
+      ? STANDARD_END_REASON_LABELS[standardEndReason]
+      : null;
     state = attachVerdict(state, verdict);
     void state;
     yield envelope({ type: "verdict", verdict });

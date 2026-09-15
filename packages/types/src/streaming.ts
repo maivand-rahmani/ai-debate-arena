@@ -47,6 +47,12 @@ export interface DebateStreamToolResult {
   readonly ok: boolean;
   readonly output: string;
   readonly error?: string;
+  /**
+   * Present and true when the call was refused before execution (for example,
+   * the move's affordable tool budget was already spent). Rejected attempts are
+   * public failures but are not priced tool executions.
+   */
+  readonly rejected?: boolean;
   readonly createdAt: string;
 }
 
@@ -58,10 +64,15 @@ export interface DebateStreamToolResult {
 export interface DebateStreamSideResources {
   readonly side: DebateSide;
   readonly creditsRemaining: number;
-  /** Total public tool calls this side has used across the match. */
+  /** Executed tool calls this side has paid for across the match. */
   readonly toolsUsed: number;
-  /** Tool calls folded into this side's most recent move. */
+  /** Executed tool calls folded into this side's most recent move. */
   readonly toolsUsedThisMove: number;
+  /**
+   * Refused (over-budget) attempts this side made across the match. These are
+   * public failures that were never executed and never charged.
+   */
+  readonly toolsRejected?: number;
   readonly maxToolsPerMove: number;
   /** Hard per-tool timeout in milliseconds. */
   readonly toolTimeoutMs: number;
@@ -85,6 +96,17 @@ export interface DebateStreamStandardState {
   readonly movesUsed: number;
   readonly moveLimitReached: boolean;
   readonly closingRound: boolean;
+  /**
+   * Cumulative `ready` intent signalled by each side in a non-closing open
+   * round. Opening-move readiness is ignored by the protocol; the snapshot only
+   * reports intents that actually influenced the lifecycle. Optional because
+   * v1 snapshot events written before this field existed must stay readable;
+   * consumers normalize a missing value to "not ready".
+   */
+  readonly ready?: {
+    readonly A: boolean;
+    readonly B: boolean;
+  };
   readonly sides: {
     readonly A: DebateStreamSideResources;
     readonly B: DebateStreamSideResources;

@@ -96,6 +96,29 @@ export type MatchSideRecord = z.infer<typeof matchSideSchema>;
 export const matchTerminalSchema = z.enum(["completed", "error", "cancelled"]);
 export type MatchTerminal = z.infer<typeof matchTerminalSchema>;
 
+/**
+ * Resolved Standard resource rules actually applied to a match. The generic
+ * `policy` block describes the model-mode profile; this block preserves the
+ * per-match credits/tool/time bounds so a saved Standard match stays
+ * reconstructable instead of only showing the profile defaults.
+ */
+export const standardPolicyRecordSchema = z.object({
+  startingCredits: z.number().int().min(1),
+  maxToolsPerMove: z.number().int().min(0),
+  toolTimeoutMs: z.number().int().min(1),
+  maxMoves: z.number().int().min(1),
+});
+export type StandardPolicyRecord = z.infer<typeof standardPolicyRecordSchema>;
+
+/**
+ * Machine-readable reason a Standard lifecycle stopped. Persisted alongside the
+ * human-readable `terminalReason` so tooling can reason about endings without
+ * parsing prose.
+ */
+export const STANDARD_END_REASONS = ["both-ready", "closing-round", "depleted", "move-ceiling"] as const;
+export const standardEndReasonSchema = z.enum(STANDARD_END_REASONS);
+export type StandardEndReason = z.infer<typeof standardEndReasonSchema>;
+
 /** Judge identity used for controlled re-judge (ids only — never secrets). */
 export const matchJudgeSchema = z.object({
   providerId: z.string().min(1),
@@ -121,6 +144,10 @@ export const matchRecordSchema = z.object({
   judge: matchJudgeSchema.optional(),
   judgedAt: z.string().min(1).optional(),
   policy: matchProfileSchema,
+  /** Standard-only: the resolved per-match resource rules. */
+  standard: standardPolicyRecordSchema.optional(),
+  /** Standard-only: machine-readable ending reason (see `StandardEndReason`). */
+  standardEndReason: standardEndReasonSchema.optional(),
   promptVersions: z.object({ agent: z.string().min(1), judge: z.string().min(1) }),
   rubricVersion: z.string().min(1),
   transcript: transcriptSchema,

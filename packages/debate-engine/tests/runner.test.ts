@@ -821,6 +821,33 @@ describe("runDebate Standard budget configuration", () => {
     expect(timeouts).toEqual([5_000, 5_000]);
   });
 
+  it("persists the resolved Standard resource rules and the ending reason", async () => {
+    const saved: MatchRecord[] = [];
+    const { factory } = fakeSessions((side, index) => ({ speech: `${side}${index}`, ready: true, toolEvents: [] }));
+    for await (const event of runDebate(
+      { ...standardInput(), standardLimits: { startingCredits: 5, maxToolsPerMove: 1, toolTimeoutSeconds: 3 } },
+      {
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+      },
+    )) {
+      void event;
+    }
+
+    expect(saved[0]!.standard).toEqual({
+      startingCredits: 5,
+      maxToolsPerMove: 1,
+      toolTimeoutMs: 3_000,
+      maxMoves: 12,
+    });
+    expect(saved[0]!.terminal).toBe("completed");
+    expect(saved[0]!.terminalReason).toMatch(/ready/i);
+  });
+
   it("rejects out-of-bounds Standard limits before running the match", async () => {
     const generator = runDebate(
       { ...standardInput(), standardLimits: { startingCredits: 0 } },
@@ -900,6 +927,9 @@ describe("runDebate Standard public resource snapshots", () => {
     expect(opening.movesUsed).toBe(1);
     expect(opening.moveLimitReached).toBe(false);
     expect(opening.closingRound).toBe(false);
+    // Opening readiness is ignored by the protocol, so the snapshot is honest
+    // about no side having influenced the lifecycle yet.
+    expect(opening.ready).toEqual({ A: false, B: false });
     // A spent two tools (2 credits each) plus one speech.
     expect(opening.sides.A.creditsRemaining).toBe(7);
     expect(opening.sides.A.toolsUsed).toBe(2);

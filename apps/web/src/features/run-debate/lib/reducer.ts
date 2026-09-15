@@ -172,6 +172,22 @@ function applyCancel(state: DebateRuntimeState): DebateRuntimeState {
   };
 }
 
+/**
+ * Fills snapshot fields added after the v1 wire freeze. An older server's
+ * `standard-state` event may omit them, so normalizing here keeps the runtime
+ * shape stable without rejecting otherwise-valid events.
+ */
+function normalizeStandardState(snapshot: DebateStreamStandardState): DebateStreamStandardState {
+  return {
+    ...snapshot,
+    ready: snapshot.ready ?? { A: false, B: false },
+    sides: {
+      A: { ...snapshot.sides.A, toolsRejected: snapshot.sides.A.toolsRejected ?? 0 },
+      B: { ...snapshot.sides.B, toolsRejected: snapshot.sides.B.toolsRejected ?? 0 },
+    },
+  };
+}
+
 function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): DebateRuntimeState {
   // Lazily capture the v1-envelope matchId so the judge-panel footer can
   // reach back into the saved record without an extra round-trip. We only
@@ -197,8 +213,9 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
       return { ...withMatchId, standardEvents: [...withMatchId.standardEvents, event] };
     case "standard-state":
       // Authoritative runner-owned accounting; replace the last snapshot and
-      // leave the public tool timeline untouched.
-      return { ...withMatchId, standardState: event.state };
+      // leave the public tool timeline untouched. Older snapshots are
+      // normalized so optional post-v1 fields are always concrete.
+      return { ...withMatchId, standardState: normalizeStandardState(event.state) };
     case "turn":
       return sealTurn(withMatchId, event.turn);
     case "judge-start":

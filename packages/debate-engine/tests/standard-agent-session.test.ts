@@ -305,6 +305,11 @@ describe("Standard runner → agent session port", () => {
     expect(round("B", 1)?.closingRound).toBe(false);
     expect(round("A", 2)?.closingRound).toBe(true);
     expect(round("B", 2)?.closingRound).toBe(true);
+
+    // Public state names the closing round and the side whose readiness caused it.
+    const finalSnapshot = events.flatMap((event) => (event.type === "standard-state" ? [event.state] : [])).at(-1)!;
+    expect(finalSnapshot.closingRound).toBe(true);
+    expect(finalSnapshot.ready).toEqual({ A: true, B: false });
   });
 
   it("keeps a failed tool public and lets the match continue", async () => {
@@ -381,6 +386,476 @@ describe("Standard runner → agent session port", () => {
     expect(error?.type).toBe("error");
     if (error?.type === "error") expect(error.message).toMatch(/createStandardAgentSession/);
     expect(events.at(-1)?.type).toBe("done");
+  });
+
+  it("rejects a duplicate tool start instead of silently overwriting it", async () => {
+    const { factory } = fakeSessions((side, index, input) => {
+      if (side === "A" && index === 0) {
+        input.onProgress?.({ type: "tool-start", invocationId: "dup", tool: "web_search", query: "one" });
+        input.onProgress?.({ type: "tool-start", invocationId: "dup", tool: "web_search", query: "two" });
+        return speak("A0", true);
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const events = await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: noopSave,
+      }),
+    );
+
+    const error = events.find((event) => event.type === "error");
+    expect(error?.type).toBe("error");
+    if (error?.type === "error") expect(error.message).toMatch(/duplicate tool-start/i);
+    expect(events.flatMap((event) => (event.type === "tool-start" ? [event.tool.callId] : []))).toHaveLength(1);
+  });
+
+  it("rejects a tool result that never started", async () => {
+    const { factory } = fakeSessions((side, index, input) => {
+      if (side === "A" && index === 0) {
+        input.onProgress?.({
+          type: "tool-result",
+          invocationId: "ghost",
+          tool: "web_search",
+          query: "q",
+          output: "out",
+          ok: true,
+        });
+        return speak("A0", true);
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const events = await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: noopSave,
+      }),
+    );
+
+    const error = events.find((event) => event.type === "error");
+    expect(error?.type).toBe("error");
+    if (error?.type === "error") expect(error.message).toMatch(/without a matching start/i);
+  });
+
+  it("rejects a tool result whose tool or query does not match its start", async () => {
+    const { factory } = fakeSessions((side, index, input) => {
+      if (side === "A" && index === 0) {
+        input.onProgress?.({ type: "tool-start", invocationId: "i1", tool: "web_search", query: "original" });
+        input.onProgress?.({
+          type: "tool-result",
+          invocationId: "i1",
+          tool: "fetch_url",
+          query: "original",
+          output: "out",
+          ok: true,
+        });
+        return speak("A0", true);
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const events = await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: noopSave,
+      }),
+    );
+
+    const error = events.find((event) => event.type === "error");
+    expect(error?.type).toBe("error");
+    if (error?.type === "error") expect(error.message).toMatch(/does not match its start/i);
+  });
+
+  it("rejects a move that leaves a tool start unresolved", async () => {
+    const { factory } = fakeSessions((side, index, input) => {
+      if (side === "A" && index === 0) {
+        input.onProgress?.({ type: "tool-start", invocationId: "unfinished", tool: "web_search", query: "q" });
+        return speak("A0", true);
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const events = await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: noopSave,
+      }),
+    );
+
+    const error = events.find((event) => event.type === "error");
+    expect(error?.type).toBe("error");
+    if (error?.type === "error") expect(error.message).toMatch(/unresolved tool start/i);
+  });
+
+  it("keeps rejected over-budget attempts public without charging credits", async () => {
+    const saved: import("@arena/debate-engine").MatchRecord[] = [];
+    const { factory } = fakeSessions((side, index) => {
+      if (side === "A" && index === 0) {
+        return {
+          speech: "A0",
+          ready: true,
+          toolEvents: [
+            toolEvent("executed"),
+            toolEvent("blocked", {
+              ok: false,
+              output: "The tool budget for this move is exhausted.",
+              error: "Tool budget exhausted",
+              rejected: true,
+            }),
+          ],
+        };
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const events = await drain(
+      runDebate(standardInput({ startingCredits: 3, maxToolsPerMove: 4 }), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+      }),
+    );
+
+    // Both attempts are public (start + result each), but only the executed one
+    // is charged and counted as a used tool. The refused attempt is accounted
+    // separately so the two meanings are never ambiguous.
+    expect(events.filter((event) => event.type === "tool-start")).toHaveLength(2);
+    expect(events.filter((event) => event.type === "tool-result")).toHaveLength(2);
+    const snapshot = events.flatMap((event) => (event.type === "standard-state" ? [event.state] : []))[0]!;
+    expect(snapshot.sides.A.toolsUsed).toBe(1);
+    expect(snapshot.sides.A.toolsUsedThisMove).toBe(1);
+    expect(snapshot.sides.A.toolsRejected).toBe(1);
+    expect(snapshot.sides.A.creditsRemaining).toBe(0);
+    // The rejected flag is preserved in the saved public record.
+    const rejectedRecord = saved[0]!.toolEvents?.find((event) => event.error === "Tool budget exhausted");
+    expect(rejectedRecord?.rejected).toBe(true);
+  });
+
+  it("publishes buffered tool results in stable invocation order under out-of-order completion", async () => {
+    const saved: import("@arena/debate-engine").MatchRecord[] = [];
+    const { factory } = fakeSessions((side, index, input) => {
+      if (side === "A" && index === 0) {
+        input.onProgress?.({ type: "tool-start", invocationId: "a", tool: "web_search", query: "first" });
+        input.onProgress?.({ type: "tool-start", invocationId: "b", tool: "web_search", query: "second" });
+        // The second invocation completes first; the runner must still publish
+        // the public results in invocation order.
+        input.onProgress?.({
+          type: "tool-result",
+          invocationId: "b",
+          tool: "web_search",
+          query: "second",
+          output: "second out",
+          ok: true,
+        });
+        input.onProgress?.({
+          type: "tool-result",
+          invocationId: "a",
+          tool: "web_search",
+          query: "first",
+          output: "first out",
+          ok: true,
+        });
+        return {
+          speech: "A0",
+          ready: true,
+          toolEvents: [
+            toolEvent("first", { output: "first out" }),
+            toolEvent("second", { output: "second out" }),
+          ],
+        };
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const events = await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+      }),
+    );
+
+    const publishedOrder = events.flatMap((event) =>
+      event.type === "tool-result" ? [event.result.query] : [],
+    );
+    expect(publishedOrder).toEqual(["first", "second"]);
+    // Persistence matches the published order too.
+    expect(saved[0]!.toolEvents?.map((event) => event.query)).toEqual(["first", "second"]);
+  });
+
+  it("rejects final tool events that disagree with streamed live progress", async () => {
+    const { factory } = fakeSessions((side, index, input) => {
+      if (side === "A" && index === 0) {
+        input.onProgress?.({ type: "tool-start", invocationId: "a", tool: "web_search", query: "live-query" });
+        input.onProgress?.({
+          type: "tool-result",
+          invocationId: "a",
+          tool: "web_search",
+          query: "live-query",
+          output: "out",
+          ok: true,
+        });
+        return { speech: "A0", ready: true, toolEvents: [toolEvent("different-query")] };
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const events = await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: noopSave,
+      }),
+    );
+
+    const error = events.find((event) => event.type === "error");
+    expect(error?.type).toBe("error");
+    if (error?.type === "error") expect(error.message).toMatch(/disagrees/i);
+  });
+
+  it("compares normalized output and error, not just tool identity, for live/final agreement", async () => {
+    for (const field of ["output", "error"] as const) {
+      const { factory } = fakeSessions((side, index, input) => {
+        if (side === "A" && index === 0) {
+          input.onProgress?.({ type: "tool-start", invocationId: "a", tool: "web_search", query: "q" });
+          input.onProgress?.({
+            type: "tool-result",
+            invocationId: "a",
+            tool: "web_search",
+            query: "q",
+            output: "live output",
+            ok: false,
+            error: "live error",
+          });
+          return {
+            speech: "A0",
+            ready: true,
+            toolEvents: [
+              toolEvent("q", {
+                ok: false,
+                output: field === "output" ? "different output" : "live output",
+                error: field === "error" ? "different error" : "live error",
+              }),
+            ],
+          };
+        }
+        return speak(`${side}${index}`, true);
+      });
+
+      const events = await drain(
+        runDebate(standardInput(), {
+          callModel: judgeCall,
+          runTool: async () => ({ ok: true, output: "unused" }),
+          createStandardAgentSession: factory,
+          saveMatch: noopSave,
+        }),
+      );
+
+      const error = events.find((event) => event.type === "error");
+      expect(error?.type).toBe("error");
+      if (error?.type === "error") expect(error.message).toMatch(/disagrees/i);
+    }
+  });
+
+  it("rejects a compatibility move that reports more than one rejected attempt", async () => {
+    const { factory } = fakeSessions((side, index) => {
+      if (side === "A" && index === 0) {
+        return {
+          speech: "A0",
+          ready: true,
+          toolEvents: [
+            toolEvent("blocked-1", {
+              ok: false,
+              output: "The tool budget for this move is exhausted.",
+              error: "Tool budget exhausted",
+              rejected: true,
+            }),
+            toolEvent("blocked-2", {
+              ok: false,
+              output: "The tool budget for this move is exhausted.",
+              error: "Tool budget exhausted",
+              rejected: true,
+            }),
+          ],
+        };
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const events = await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: noopSave,
+      }),
+    );
+
+    const error = events.find((event) => event.type === "error");
+    expect(error?.type).toBe("error");
+    if (error?.type === "error") expect(error.message).toMatch(/too many rejected/i);
+  });
+
+  it("rejects a count mismatch between live progress and final tool events", async () => {
+    const { factory } = fakeSessions((side, index, input) => {
+      if (side === "A" && index === 0) {
+        input.onProgress?.({ type: "tool-start", invocationId: "a", tool: "web_search", query: "live-query" });
+        input.onProgress?.({
+          type: "tool-result",
+          invocationId: "a",
+          tool: "web_search",
+          query: "live-query",
+          output: "out",
+          ok: true,
+        });
+        return { speech: "A0", ready: true, toolEvents: [] };
+      }
+      return speak(`${side}${index}`, true);
+    });
+
+    const events = await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: noopSave,
+      }),
+    );
+
+    const error = events.find((event) => event.type === "error");
+    expect(error?.type).toBe("error");
+    if (error?.type === "error") expect(error.message).toMatch(/mixed live and final/i);
+  });
+
+  it("uses the injected profile's rounds as the authoritative Standard move ceiling", async () => {
+    const saved: import("@arena/debate-engine").MatchRecord[] = [];
+    const { factory } = fakeSessions((side, index) => speak(`${side}${index}`, false));
+    const events = await drain(
+      runDebate(standardInput(), {
+        profile: { ...MATCH_PROFILES.standard, rounds: 4 },
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+      }),
+    );
+
+    expect(events.filter((event) => event.type === "turn")).toHaveLength(4);
+    const snapshots = events.flatMap((event) => (event.type === "standard-state" ? [event.state] : []));
+    expect(snapshots.at(-1)?.maxMoves).toBe(4);
+    expect(snapshots.at(-1)?.moveLimitReached).toBe(true);
+    expect(saved[0]!.standard?.maxMoves).toBe(4);
+    expect(saved[0]!.standardEndReason).toBe("move-ceiling");
+  });
+
+  it("always plays both opening moves even when the profile ceiling is one", async () => {
+    const saved: import("@arena/debate-engine").MatchRecord[] = [];
+    const { factory } = fakeSessions((side, index) => speak(`${side}${index}`, false));
+    const events = await drain(
+      runDebate(standardInput(), {
+        profile: { ...MATCH_PROFILES.standard, rounds: 1 },
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+      }),
+    );
+
+    const phases = events.flatMap((event) => (event.type === "phase" ? [event.phase] : []));
+    expect(phases).toEqual(["standard-a-opening", "standard-b-opening"]);
+    expect(events.filter((event) => event.type === "turn")).toHaveLength(2);
+    // The resolved ceiling is raised to the two mandatory openings.
+    expect(saved[0]!.standard?.maxMoves).toBe(2);
+    expect(saved[0]!.standardEndReason).toBe("move-ceiling");
+  });
+
+  it("exposes readiness and records why a Standard match ended", async () => {
+    const saved: import("@arena/debate-engine").MatchRecord[] = [];
+    const { factory } = fakeSessions((side, index) => speak(`${side}${index}`, side === "A" && index >= 1));
+
+    await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+      }),
+    );
+
+    expect(saved[0]!.terminalReason).toMatch(/closing round/i);
+    expect(saved[0]!.standardEndReason).toBe("closing-round");
+  });
+
+  it("records the move-ceiling reason when neither side becomes ready", async () => {
+    const saved: import("@arena/debate-engine").MatchRecord[] = [];
+    const { factory } = fakeSessions((side, index) => speak(`${side}${index}`, false));
+
+    await drain(
+      runDebate(standardInput(), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+      }),
+    );
+
+    expect(saved[0]!.terminalReason).toMatch(/ceiling/i);
+    expect(saved[0]!.standardEndReason).toBe("move-ceiling");
+  });
+
+  it("records the depletion reason when a side runs out of credits", async () => {
+    const saved: import("@arena/debate-engine").MatchRecord[] = [];
+    const { factory } = fakeSessions((side, index, input): StandardAgentMoveResult => {
+      if (side === "A") {
+        return {
+          speech: `A${index}`,
+          ready: false,
+          toolEvents: Array.from({ length: input.maxAffordableTools }, (_, i) =>
+            toolEvent(`a-${index}-${i}`),
+          ),
+        };
+      }
+      return speak(`B${index}`, false);
+    });
+
+    await drain(
+      runDebate(standardInput({ startingCredits: 4, maxToolsPerMove: 1 }), {
+        callModel: judgeCall,
+        runTool: async () => ({ ok: true, output: "unused" }),
+        createStandardAgentSession: factory,
+        saveMatch: async (record) => {
+          saved.push(record);
+        },
+      }),
+    );
+
+    expect(saved[0]!.terminalReason).toMatch(/ran out of credits/i);
+    expect(saved[0]!.standardEndReason).toBe("depleted");
   });
 
   it("leaves Quick untouched and never constructs a Standard session", async () => {

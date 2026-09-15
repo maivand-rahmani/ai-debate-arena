@@ -87,6 +87,12 @@ export interface StandardToolCall {
   readonly output: string;
   readonly ok: boolean;
   readonly error?: string;
+  /**
+   * True when the tool was refused before execution because the move's
+   * affordable tool budget was already spent. Refused (attempted) calls are
+   * public failure events but are not priced tool executions.
+   */
+  readonly rejected?: boolean;
   readonly createdAt: string;
 }
 
@@ -110,6 +116,7 @@ export const standardToolCallSchema = z.object({
   output: z.string(),
   ok: z.boolean(),
   error: z.string().optional(),
+  rejected: z.boolean().optional(),
   createdAt: z.string().min(1),
 });
 

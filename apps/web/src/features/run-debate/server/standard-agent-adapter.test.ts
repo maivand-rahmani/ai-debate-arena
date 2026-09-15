@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
+import type { ModelMessage } from "ai";
 import type {
   LanguageModelV4Prompt,
   LanguageModelV4StreamPart,
@@ -7,6 +8,7 @@ import type {
 } from "@ai-sdk/provider";
 import type {
   StandardAgentMoveInput,
+  StandardAgentProgressEvent,
   StandardAgentSessionFactoryInput,
 } from "@arena/debate-engine";
 
@@ -18,7 +20,7 @@ vi.mock("@/features/run-debate/server/web-adapter", () => ({
   createWebModel: mocks.createWebModel,
 }));
 
-import { createWebStandardAgentSession } from "./standard-agent-adapter";
+import { boundPrivateMessages, createWebStandardAgentSession } from "./standard-agent-adapter";
 
 interface ScriptedToolCall {
   readonly id: string;
@@ -183,7 +185,7 @@ describe("createWebStandardAgentSession", () => {
     expect(toolNames).toEqual(["fetch_url", "run_code", "speak", "web_search"]);
   });
 
-  it("executes native tools and keeps only executed calls in the public events", async () => {
+  it("executes affordable tools and reports over-budget attempts as public failures", async () => {
     const model = modelWith(
       streamResult([
         { id: "t1", name: "web_search", input: { query: "car ban evidence" } },
@@ -195,21 +197,190 @@ describe("createWebStandardAgentSession", () => {
     const runTool = vi.fn(async () => ({ ok: true, output: "bounded tool output" }));
 
     const session = createWebStandardAgentSession(factoryInput);
-    const result = await session.move(moveInput({ maxAffordableTools: 1, runTool }));
+    const progress: StandardAgentProgressEvent[] = [];
+    const result = await session.move(
+      moveInput({ maxAffordableTools: 1, runTool, onProgress: (event) => progress.push(event) }),
+    );
 
-    // Over-cap second call is never executed and is not a public event.
+    // Only the affordable call reached the executor.
     expect(runTool).toHaveBeenCalledTimes(1);
     expect(runTool).toHaveBeenCalledWith(
       "web_search",
       { query: "car ban evidence", timeoutMs: 8_000 },
       undefined,
     );
-    expect(result.toolEvents).toHaveLength(1);
-    expect(result.toolEvents[0]).toMatchObject({ tool: "web_search", query: "car ban evidence", ok: true });
+    // The executed call plus the rejected attempt are both visible; the
+    // rejected one is flagged and never executed. Parallel SDK tool calls may
+    // settle out of call order, so pair by tool/query rather than index.
+    expect(result.toolEvents).toHaveLength(2);
+    expect(result.toolEvents.find((event) => event.query === "car ban evidence")).toMatchObject({
+      tool: "web_search",
+      ok: true,
+    });
+    expect(result.toolEvents.find((event) => event.query === "https://example.com/over-cap")).toMatchObject({
+      tool: "fetch_url",
+      ok: false,
+      error: "Tool budget exhausted",
+      rejected: true,
+    });
+    // Every result pairs with an earlier start sharing its invocation id.
+    const starts = new Set(
+      progress.flatMap((event) => (event.type === "tool-start" ? [event.invocationId] : [])),
+    );
+    const results = progress.flatMap((event) => (event.type === "tool-result" ? [event.invocationId] : []));
+    expect(starts.size).toBe(2);
+    expect(results).toHaveLength(2);
+    expect(results.every((id) => starts.has(id))).toBe(true);
+    // The refused attempt is flagged on the public progress event too, so the
+    // wire and the canonical record agree.
+    const rejectedResult = progress.find(
+      (event) => event.type === "tool-result" && event.invocationId.includes("fetch_url"),
+    );
+    expect(rejectedResult && rejectedResult.type === "tool-result" && rejectedResult.rejected).toBe(true);
     expect(result.speech).toBe("With evidence.");
     expect(result.ready).toBe(false);
     // speak must never be reported as a public tool event.
     expect(result.toolEvents.some((event) => (event.tool as string) === "speak")).toBe(false);
+  });
+
+  it("publishes at most one over-budget rejection per move", async () => {
+    const model = modelWith(
+      streamResult([
+        { id: "t1", name: "web_search", input: { query: "one" } },
+        { id: "t2", name: "fetch_url", input: { query: "two" } },
+        { id: "t3", name: "run_code", input: { language: "javascript", query: "3" } },
+      ]),
+      streamResult([speak("s1", "Speak now.", false)]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "should not run" }));
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const progress: StandardAgentProgressEvent[] = [];
+    const result = await session.move(
+      moveInput({ maxAffordableTools: 0, runTool, onProgress: (event) => progress.push(event) }),
+    );
+
+    expect(runTool).not.toHaveBeenCalled();
+    expect(result.toolEvents).toHaveLength(1);
+    expect(result.toolEvents[0]).toMatchObject({ rejected: true, error: "Tool budget exhausted" });
+    expect(progress.filter((event) => event.type === "tool-start")).toHaveLength(1);
+    expect(progress.filter((event) => event.type === "tool-result")).toHaveLength(1);
+  });
+
+  it("returns tool events in call order even when parallel tools finish out of order", async () => {
+    const model = modelWith(
+      streamResult([
+        { id: "t1", name: "web_search", input: { query: "slow" } },
+        { id: "t2", name: "fetch_url", input: { query: "fast" } },
+      ]),
+      streamResult([speak("s1", "Done.", false)]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool: StandardAgentMoveInput["runTool"] = async (_tool, input) => {
+      if (input.query === "slow") await new Promise((resolve) => setTimeout(resolve, 20));
+      return { ok: true, output: `${input.query} output` };
+    };
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const progress: StandardAgentProgressEvent[] = [];
+    const result = await session.move(
+      moveInput({ maxAffordableTools: 2, runTool, onProgress: (event) => progress.push(event) }),
+    );
+
+    // Results streamed in completion order …
+    const completionOrder = progress.flatMap((event) =>
+      event.type === "tool-result" ? [event.query] : [],
+    );
+    expect(completionOrder).toEqual(["fast", "slow"]);
+    // … but the move reports them in invocation order for deterministic replay.
+    expect(result.toolEvents.map((event) => event.query)).toEqual(["slow", "fast"]);
+  });
+
+  it("bounds the private conversation to the runner-supplied context budget", async () => {
+    const model = modelWith(
+      streamResult([speak("s1", "First move.", false)]),
+      streamResult([speak("s2", "Second move.", false)]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession({ ...factoryInput, maxContextChars: 650 });
+    await session.move(moveInput({ phase: "standard-a-opening" }));
+    await session.move(moveInput({ phase: "standard-a-round-1" }));
+
+    expect(model.doStreamCalls).toHaveLength(2);
+    const firstPrompt = promptText(model.doStreamCalls[0]!.prompt);
+    const secondPrompt = promptText(model.doStreamCalls[1]!.prompt);
+    expect(firstPrompt).toContain("standard-a-opening");
+    // The first observation group was dropped, but the newest one remains and
+    // private reasoning never leaks into the bounded conversation.
+    expect(secondPrompt).not.toContain("standard-a-opening");
+    expect(secondPrompt).toContain("standard-a-round-1");
+  });
+
+  it("truly caps a single oversized observation", async () => {
+    const model = modelWith(streamResult([speak("s1", "Opening.", false)]));
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession({ ...factoryInput, maxContextChars: 120 });
+    await session.move(moveInput());
+
+    const observation = model.doStreamCalls[0]!.prompt.filter((message) => message.role === "user").at(-1)!;
+    const text = promptText([observation]);
+    expect(text.length).toBeLessThanOrEqual(120);
+    // The topic header survives even a budget smaller than the header itself.
+    expect(text).toContain("TOPIC:");
+  });
+
+  it("keeps a valid role sequence in bounded requests", async () => {
+    const model = modelWith(
+      streamResult([{ id: "t1", name: "web_search", input: { query: "q1" } }]),
+      streamResult([speak("s1", "First.", false)]),
+      streamResult([{ id: "t2", name: "web_search", input: { query: "q2" } }]),
+      streamResult([speak("s2", "Second.", false)]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = async (): Promise<{ ok: boolean; output: string }> => ({ ok: true, output: "out" });
+
+    const session = createWebStandardAgentSession({ ...factoryInput, maxContextChars: 2_000 });
+    await session.move(moveInput({ phase: "standard-a-opening", runTool }));
+    await session.move(moveInput({ phase: "standard-a-round-1", runTool }));
+
+    for (const call of model.doStreamCalls) {
+      const firstNonSystem = call.prompt.find((message) => message.role !== "system");
+      expect(firstNonSystem?.role).toBe("user");
+      let sawAssistant = false;
+      for (const message of call.prompt) {
+        if (message.role === "assistant") sawAssistant = true;
+        if (message.role === "tool") expect(sawAssistant).toBe(true);
+      }
+    }
+  });
+
+  it("keeps a full-length large-output match within the context budget", async () => {
+    const bigOutput = "evidence ".repeat(750);
+    const steps: LanguageModelV4StreamResult[] = [];
+    for (let index = 0; index < 4; index += 1) {
+      steps.push(streamResult([{ id: `t${index}`, name: "web_search", input: { query: `query-${index}` } }]));
+      steps.push(streamResult([speak(`s${index}`, `Speech ${index}.`, false)]));
+    }
+    const model = modelWith(...steps);
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: bigOutput }));
+
+    const session = createWebStandardAgentSession({ ...factoryInput, maxContextChars: 4_000 });
+    for (let index = 0; index < 4; index += 1) {
+      await session.move(moveInput({ phase: `standard-a-phase-${index}`, runTool }));
+    }
+
+    // Every observation request stays under the budget even after four moves
+    // that each returned a full-length tool output.
+    for (const call of model.doStreamCalls) {
+      for (const message of call.prompt) {
+        if (message.role !== "user") continue;
+        expect(promptText([message]).length).toBeLessThanOrEqual(4_000);
+      }
+    }
   });
 
   it("streams only semantic public progress through the injected executor", async () => {
@@ -383,6 +554,16 @@ describe("createWebStandardAgentSession", () => {
     await expect(session.move(moveInput())).rejects.toThrow(/speak/);
   });
 
+  it("rejects a move that calls speak more than once", async () => {
+    const model = modelWith(
+      streamResult([speak("s1", "First attempt.", false), speak("s2", "Second attempt.", false)]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession(factoryInput);
+    await expect(session.move(moveInput())).rejects.toThrow(/more than once/);
+  });
+
   it("reports token usage from the model stream", async () => {
     const model = modelWith(streamResult([speak("s1", "Closing.", true)]));
     mocks.createWebModel.mockResolvedValue(model);
@@ -391,5 +572,19 @@ describe("createWebStandardAgentSession", () => {
     const result = await session.move(moveInput());
 
     expect(result.usage).toEqual({ promptTokens: 5, completionTokens: 3 });
+  });
+
+  it("evicts older groups as a suffix without inventing content", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: `u1${"a".repeat(100)}` },
+      { role: "assistant", content: `a1${"b".repeat(100)}` },
+      { role: "user", content: `u2${"c".repeat(100)}` },
+      { role: "assistant", content: `a2${"d".repeat(100)}` },
+    ];
+    const bounded = boundPrivateMessages(messages, 220);
+    // Only the newest whole group survives, byte-for-byte — no summary or
+    // synthesized message is inserted.
+    expect(bounded.map((message) => message.content)).toEqual([messages[2]!.content, messages[3]!.content]);
+    expect(bounded).not.toBe(messages);
   });
 });

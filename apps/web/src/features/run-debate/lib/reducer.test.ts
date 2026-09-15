@@ -118,9 +118,10 @@ describe("Standard authoritative resource state", () => {
     movesUsed: 1,
     moveLimitReached: false,
     closingRound: false,
+    ready: { A: false, B: false },
     sides: {
-      A: { side: "A", creditsRemaining: 7, toolsUsed: 2, toolsUsedThisMove: 2, maxToolsPerMove: 2, toolTimeoutMs: 8000, depleted: false },
-      B: { side: "B", creditsRemaining: 11, toolsUsed: 0, toolsUsedThisMove: 0, maxToolsPerMove: 2, toolTimeoutMs: 8000, depleted: false },
+      A: { side: "A", creditsRemaining: 7, toolsUsed: 2, toolsUsedThisMove: 2, toolsRejected: 0, maxToolsPerMove: 2, toolTimeoutMs: 8000, depleted: false },
+      B: { side: "B", creditsRemaining: 11, toolsUsed: 0, toolsUsedThisMove: 0, toolsRejected: 0, maxToolsPerMove: 2, toolTimeoutMs: 8000, depleted: false },
     },
   };
 
@@ -170,6 +171,21 @@ describe("Standard authoritative resource state", () => {
       { type: "stream-event", event: { type: "phase", phase: "standard-a-opening", side: "A" } },
     );
     expect(standardOpening.standardState).toBeUndefined();
+  });
+
+  it("normalizes post-v1 snapshot fields that an older server omitted", () => {
+    // Simulate a v1 snapshot written before `ready` and `toolsRejected` existed.
+    const { ready: _ready, ...legacy } = snapshot;
+    void _ready;
+    let state = reduceDebateRuntime(initialRuntimeState, { type: "start", topic: "Topic", mode: "standard" });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "standard-state", state: legacy as unknown as DebateStreamStandardState },
+    });
+
+    expect(state.standardState?.ready).toEqual({ A: false, B: false });
+    expect(state.standardState?.sides.A.toolsRejected).toBe(0);
+    expect(state.standardState?.sides.B.toolsRejected).toBe(0);
   });
 });
 

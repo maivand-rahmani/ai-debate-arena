@@ -148,5 +148,44 @@ describe("versioned contracts", () => {
     const record = { ...validRecord(), verdict: null, terminal: "error", terminalReason: "boom" };
     expect(matchRecordSchema.safeParse(record).success).toBe(true);
   });
+
+  it("accepts a Standard record that preserves the resolved resource rules", () => {
+    const withStandard = {
+      ...validRecord(),
+      mode: "standard" as const,
+      standard: { startingCredits: 12, maxToolsPerMove: 2, toolTimeoutMs: 8_000, maxMoves: 12 },
+      standardEndReason: "move-ceiling" as const,
+    };
+    expect(matchRecordSchema.safeParse(withStandard).success).toBe(true);
+    expect(
+      matchRecordSchema.safeParse({
+        ...withStandard,
+        standard: { startingCredits: 12, maxToolsPerMove: 2, toolTimeoutMs: 8_000, maxMoves: 0 },
+      }).success,
+    ).toBe(false);
+    expect(matchRecordSchema.safeParse({ ...withStandard, standardEndReason: "timeout" }).success).toBe(false);
+  });
+
+  it("persists rejected tool attempts with their own flag", () => {
+    const record = {
+      ...validRecord(),
+      toolEvents: [
+        {
+          callId: "call-1",
+          side: "A" as const,
+          tool: "web_search" as const,
+          query: "q",
+          output: "The tool budget for this move is exhausted.",
+          ok: false,
+          error: "Tool budget exhausted",
+          rejected: true,
+          createdAt: "2026-01-01T00:00:05.000Z",
+        },
+      ],
+    };
+    const parsed = matchRecordSchema.safeParse(record);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.toolEvents?.[0]?.rejected).toBe(true);
+  });
 });
 
