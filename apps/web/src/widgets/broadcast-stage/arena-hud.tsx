@@ -60,6 +60,7 @@ export function ArenaHud(props: ArenaHudProps) {
   const showJudge = !viewerIsReadingSpeech && !playback?.holdTerminal && (state.status === "judging" || state.status === "finished");
   const showLiveCaption = shouldShowLiveCaptionStatus(state.status);
   const showPlaybackCaption = showLiveCaption || viewerIsReadingSpeech || playback?.holdTerminal;
+  const showPlaybackNavigation = Boolean(playback?.isTerminalFrame && playback.canGoPrevious);
   const broadcastLive = isBroadcastLiveStatus(state.status);
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
@@ -151,10 +152,12 @@ export function ArenaHud(props: ArenaHudProps) {
               onNewMatch={onNewMatch}
               footer={footer ? { ...footer, matchId: state.matchId ?? footer.matchId } : undefined}
             />
+            {showPlaybackNavigation && playback ? <PlaybackControls state={state} playback={playback} /> : null}
           </div>
         ) : (
           <div className="arena-hud__terminal arena-hud__terminal--judging">
-            <VerdictEvaluating footer={footer} />
+            <VerdictEvaluating footer={footer} judgeActivity={state.judgeActivity} />
+            {showPlaybackNavigation && playback ? <PlaybackControls state={state} playback={playback} /> : null}
           </div>
         )
       ) : null}

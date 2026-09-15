@@ -96,6 +96,7 @@ export function BroadcastStage({
   const showJudge = !viewerIsReadingSpeech && !playback?.holdTerminal && (state.status === "judging" || state.status === "finished");
   const showLiveCaption = shouldShowLiveCaptionStatus(state.status);
   const showPlaybackCaption = showLiveCaption || viewerIsReadingSpeech || playback?.holdTerminal;
+  const showPlaybackNavigation = Boolean(playback?.isTerminalFrame && playback.canGoPrevious);
   const broadcastLive = isBroadcastLiveStatus(state.status);
   const judgeState =
     state.status === "judging" ? "evaluating" : state.status === "finished" ? "revealed" : null;
@@ -143,6 +144,7 @@ export function BroadcastStage({
               activity={view.judgeActivity}
               mood={view.moods.judge}
               view={view}
+              judgeActivity={state.judgeActivity}
               className="broadcast-stage__plinth"
             />
           </div>
@@ -213,9 +215,13 @@ export function BroadcastStage({
               onNewMatch={onNewMatch}
               footer={footer ? { ...footer, matchId: state.matchId ?? footer.matchId } : undefined}
             />
+            {showPlaybackNavigation && playback ? <PlaybackControls state={state} playback={playback} /> : null}
           </div>
         ) : (
-          <VerdictEvaluating footer={footer} />
+          <div className="broadcast-stage__caption">
+            <VerdictEvaluating footer={footer} judgeActivity={state.judgeActivity} />
+            {showPlaybackNavigation && playback ? <PlaybackControls state={state} playback={playback} /> : null}
+          </div>
         )
       ) : null}
     </section>

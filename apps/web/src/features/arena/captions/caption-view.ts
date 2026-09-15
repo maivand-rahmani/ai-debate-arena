@@ -159,7 +159,7 @@ export function deriveCaptionView(state: DebateRuntimeState, focusedPanel?: Spee
       return {
         kind: { kind: "verdict" },
         speakerLabel: "The Judge",
-        phaseLabel: "Reasoning",
+        phaseLabel: "Judge’s rationale",
         text: reasoning,
         tone: "honey",
         isLive: false,

@@ -40,9 +40,9 @@ export function CriteriaView({ record }: CriteriaViewProps) {
 
       {record.verdict ? (
         <div className="criteria-view__reasoning">
-          <p className="criteria-view__kicker">Judge&apos;s reasoning</p>
+          <p className="criteria-view__kicker">Judge’s rationale</p>
           <p className="criteria-view__reasoning-copy">
-            {record.verdict.reasoning || "No reasoning was provided."}
+            {record.verdict.reasoning || "No rationale was provided."}
           </p>
         </div>
       ) : null}
@@ -88,14 +88,14 @@ function ScoreBar({
   readonly value: number;
   readonly leading: boolean;
 }) {
-  const safeValue = Math.max(0, Math.min(10, Number.isFinite(value) ? value : 0));
+  const safeValue = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
   return (
     <div className={`criteria-view__score criteria-view__score--${side}${leading ? " is-leading" : ""}`}>
       <div className="criteria-view__score-head">
         <span>{label}</span><strong>{value}</strong>
       </div>
       <div className="criteria-view__bar" aria-hidden="true">
-        <span style={{ width: `${safeValue * 10}%` }} />
+        <span style={{ width: `${safeValue}%` }} />
       </div>
     </div>
   );

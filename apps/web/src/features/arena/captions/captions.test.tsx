@@ -11,6 +11,7 @@ import { LiveCaption } from "./live-caption";
 import { VerdictCard } from "./verdict-card";
 import { CompactChip } from "./compact-chip";
 import { ErrorPanel } from "@/features/run-debate/ui/error-panel";
+import { CancelledPanel } from "@/features/run-debate/ui/cancelled-panel";
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
 
 const verdict: DebateStreamVerdict = {
@@ -185,13 +186,14 @@ describe("LiveCaption", () => {
 });
 
 describe("VerdictCard", () => {
-  it("renders the winner, scores, and reasoning", () => {
+  it("renders the winner, scores, and judge rationale", () => {
     const html = renderToStaticMarkup(<VerdictCard verdict={verdict} topic="Should AI be regulated?" />);
     expect(html).toContain("The Challenger wins");
     expect(html).toContain("8-point margin · for the motion");
     expect(html).toContain("82");
     expect(html).toContain("74");
     expect(html).toContain("A had stronger arguments");
+    expect(html).toContain("Judge’s rationale");
     expect(html).toContain("Should AI be regulated?");
     expect(html).toContain("Judge scorecard");
     expect(html).toContain("Argument quality");
@@ -229,7 +231,14 @@ describe("ErrorPanel", () => {
     const html = renderToStaticMarkup(<ErrorPanel state={state} onNewMatch={() => undefined} />);
     expect(html).toContain("The debate could not finish");
     expect(html).toContain("Provider stopped responding");
-    expect(html).toContain("Start match");
+    expect(html).toContain("Try again");
+  });
+
+  it("offers a setup recovery action after a user cancellation", () => {
+    const html = renderToStaticMarkup(
+      <CancelledPanel state={{ ...initialRuntimeState, status: "cancelled", cancelled: true }} onNewMatch={() => undefined} />,
+    );
+    expect(html).toContain("Back to setup");
   });
 });
 

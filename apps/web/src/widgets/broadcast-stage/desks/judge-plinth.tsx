@@ -1,6 +1,7 @@
 "use client";
 
 import type { RedactedProvider } from "@/shared/api/providers";
+import type { JudgeActivityState } from "@/features/run-debate/lib/reducer";
 import type { JudgeMood } from "../mood";
 import type { StageSideActivity, StageView } from "../stage-state";
 import { BroadcastMonitor } from "../monitor/monitor";
@@ -12,6 +13,7 @@ interface JudgePlinthProps {
   readonly activity: StageSideActivity;
   readonly mood: JudgeMood;
   readonly view: StageView;
+  readonly judgeActivity?: JudgeActivityState;
   readonly className?: string;
 }
 
@@ -28,11 +30,12 @@ export function JudgePlinth({
   activity,
   mood,
   view,
+  judgeActivity,
   className = "",
 }: JudgePlinthProps) {
   const statusLabel =
     view.mode === "judging"
-      ? "Evaluating the debate"
+      ? judgeActivityLabel(judgeActivity)
       : view.mode === "verdict"
         ? view.rootDataAttributes["data-camera"] === "verdict"
           ? "Verdict reached"
@@ -79,4 +82,14 @@ export function JudgePlinth({
       </div>
     </section>
   );
+}
+
+function judgeActivityLabel(activity: JudgeActivityState | undefined): string {
+  switch (activity?.stage) {
+    case "record-loaded": return "Record loaded";
+    case "evidence-check": return "Checking public evidence";
+    case "rubric-check": return "Checking the rubric";
+    case "comparing": return "Comparing both sides";
+    default: return "Evaluating the debate";
+  }
 }

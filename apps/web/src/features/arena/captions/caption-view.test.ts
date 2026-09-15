@@ -114,7 +114,7 @@ describe("deriveCaptionView — judge evaluating", () => {
 });
 
 describe("deriveCaptionView — verdict", () => {
-  it("prefers the judge's reasoning text over the last sealed line", () => {
+  it("prefers the judge's rationale text over the last sealed line", () => {
     const view = deriveCaptionView({
       ...base,
       status: "finished",
@@ -140,7 +140,7 @@ describe("deriveCaptionView — verdict", () => {
     });
     expect(view.kind?.kind).toBe("verdict");
     expect(view.speakerLabel).toBe("The Judge");
-    expect(view.phaseLabel).toBe("Reasoning");
+    expect(view.phaseLabel).toBe("Judge’s rationale");
     expect(view.text).toBe("A had stronger arguments");
     expect(view.tone).toBe("honey");
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import type { DebateStreamVerdict } from "@/shared/api/debate-stream";
-import { MatchActions, type RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
+import { MatchActions, type ExportStatus, type RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
 
 interface VerdictCardProps {
   readonly verdict: DebateStreamVerdict;
@@ -15,6 +15,9 @@ interface VerdictCardProps {
     readonly canRejudge: boolean;
     readonly rejudgeStatus: RejudgeStatus;
     readonly rejudgeError?: string;
+    readonly refreshError?: string;
+    readonly exportStatus?: ExportStatus;
+    readonly exportError?: string;
     readonly judgedAt?: string;
     readonly onExportJson: (matchId: string) => void | Promise<unknown>;
     readonly onRejudge: (matchId: string) => void | Promise<unknown>;
@@ -111,7 +114,7 @@ export function VerdictCard({
 
       {verdict.reasoning ? (
         <p className="verdict-card__reasoning">
-          <span className="verdict-card__reasoning-label">Reasoning</span>
+          <span className="verdict-card__reasoning-label">Judge’s rationale</span>
           {verdict.reasoning}
         </p>
       ) : null}
@@ -129,6 +132,9 @@ export function VerdictCard({
               matchId={footer.matchId}
               rejudgeStatus={footer.rejudgeStatus}
               rejudgeError={footer.rejudgeError}
+              refreshError={footer.refreshError}
+              exportStatus={footer.exportStatus}
+              exportError={footer.exportError}
               canRejudge={footer.canRejudge}
               onExportJson={footer.onExportJson}
               onRejudge={footer.onRejudge}
