@@ -1,8 +1,11 @@
 {
   "name": "ai-debate-arena",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "npm -w @arena/web run dev",
     "build": "npm -w @arena/web run build",
