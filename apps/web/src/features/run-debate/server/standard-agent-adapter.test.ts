@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import type { ModelMessage } from "ai";
 import type {
+  LanguageModelV4FinishReason,
   LanguageModelV4Prompt,
   LanguageModelV4StreamPart,
   LanguageModelV4StreamResult,
@@ -28,7 +29,7 @@ interface ScriptedToolCall {
   readonly input: unknown;
 }
 
-function streamResult(toolCalls: readonly ScriptedToolCall[], finish: "tool-calls" | "stop" = "tool-calls"): LanguageModelV4StreamResult {
+function streamResult(toolCalls: readonly ScriptedToolCall[], finish: LanguageModelV4FinishReason["unified"] = "tool-calls"): LanguageModelV4StreamResult {
   const parts: LanguageModelV4StreamPart[] = [{ type: "stream-start", warnings: [] }];
   for (const call of toolCalls) {
     parts.push({ type: "tool-call", toolCallId: call.id, toolName: call.name, input: JSON.stringify(call.input) });
@@ -51,7 +52,7 @@ function streamResult(toolCalls: readonly ScriptedToolCall[], finish: "tool-call
   };
 }
 
-function streamPartsResult(parts: readonly LanguageModelV4StreamPart[], finish: "tool-calls" | "stop" = "tool-calls"): LanguageModelV4StreamResult {
+function streamPartsResult(parts: readonly LanguageModelV4StreamPart[], finish: LanguageModelV4FinishReason["unified"] = "tool-calls"): LanguageModelV4StreamResult {
   return {
     stream: new ReadableStream<LanguageModelV4StreamPart>({
       start(controller) {
@@ -116,7 +117,9 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<voi
   }
 }
 
-function textOnlyStream(): LanguageModelV4StreamResult {
+function textOnlyStream(
+  finishReason: LanguageModelV4FinishReason = { unified: "stop", raw: "stop" },
+): LanguageModelV4StreamResult {
   const parts: LanguageModelV4StreamPart[] = [
     { type: "stream-start", warnings: [] },
     { type: "text-start", id: "t" },
@@ -124,10 +127,33 @@ function textOnlyStream(): LanguageModelV4StreamResult {
     { type: "text-end", id: "t" },
     {
       type: "finish",
-      finishReason: { unified: "stop", raw: "stop" },
+      finishReason,
       usage: {
         inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
         outputTokens: { total: 1, text: 1, reasoning: 0 },
+      },
+    },
+  ];
+  return {
+    stream: new ReadableStream<LanguageModelV4StreamPart>({
+      start(controller) {
+        for (const part of parts) controller.enqueue(part);
+        controller.close();
+      },
+    }),
+  };
+}
+
+function errorStream(): LanguageModelV4StreamResult {
+  const parts: LanguageModelV4StreamPart[] = [
+    { type: "stream-start", warnings: [] },
+    { type: "error", error: new Error("provider stream failed") },
+    {
+      type: "finish",
+      finishReason: { unified: "error", raw: "error" },
+      usage: {
+        inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 0, text: 0, reasoning: 0 },
       },
     },
   ];
@@ -153,6 +179,27 @@ function promptText(prompt: LanguageModelV4Prompt): string {
       return message.content.map((part) => (part.type === "text" ? part.text : "")).join("");
     })
     .join("\n");
+}
+
+/** The bounded follow-up marker; present only when a retry request was issued. */
+const RETRY_MARKER = "Call the `speak` tool exactly once now";
+
+/** True when any provider request carried the retry follow-up instruction. */
+function retryRequested(model: MockLanguageModelV4): boolean {
+  return model.doStreamCalls.some((call) => promptText(call.prompt).includes(RETRY_MARKER));
+}
+
+/** The length-rescue marker; present only when a length rescue was issued. */
+const RESCUE_MARKER = "cut off by the output length limit";
+
+/** True when any provider request carried the length-rescue instruction. */
+function rescueRequested(model: MockLanguageModelV4): boolean {
+  return model.doStreamCalls.some((call) => promptText(call.prompt).includes(RESCUE_MARKER));
+}
+
+/** Tool names offered to the provider on one request. */
+function offeredTools(model: MockLanguageModelV4, callIndex: number): string[] {
+  return (model.doStreamCalls[callIndex]!.tools ?? []).map((entry) => entry.name).sort();
 }
 
 const factoryInput: StandardAgentSessionFactoryInput = {
@@ -761,15 +808,263 @@ describe("createWebStandardAgentSession", () => {
     expect(second.speech).toBe("Second move done.");
   });
 
-  it("treats a move that never calls speak as a protocol error", async () => {
-    const model = modelWith(textOnlyStream());
+  it("retries once on the same session when a text-only move omits speak", async () => {
+    // The first attempt is ordinary private text with no speak; the bounded
+    // follow-up request then delivers a validated public speech.
+    const model = modelWith(
+      textOnlyStream(),
+      speakInputStream(['{"content":"Recovered public speech","ready":true}']),
+    );
     mocks.createWebModel.mockResolvedValue(model);
 
     const session = createWebStandardAgentSession(factoryInput);
-    await expect(session.move(moveInput())).rejects.toThrow(/speak/);
+    const progress: StandardAgentProgressEvent[] = [];
+    const result = await session.move(
+      moveInput({ phase: "standard-a-opening", onProgress: (event) => progress.push(event) }),
+    );
+
+    // The same lazily-built model/session is reused; exactly one extra request.
+    expect(mocks.createWebModel).toHaveBeenCalledTimes(1);
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(result.speech).toBe("Recovered public speech");
+    expect(result.ready).toBe(true);
+    // Usage aggregates both attempts: text-only first (1/1) plus the speak
+    // retry (5/3).
+    expect(result.usage).toEqual({ promptTokens: 6, completionTokens: 4 });
+    // The retry request carries the bounded follow-up instruction requiring a
+    // single speak call.
+    const retryPrompt = promptText(model.doStreamCalls[1]!.prompt);
+    expect(retryPrompt).toContain("Call the `speak` tool exactly once now");
+    // Public progress only carries the validated speech, never private text.
+    expect(
+      progress.filter((event) => event.type === "speech").map((event) => event.text).join(""),
+    ).toBe("Recovered public speech");
+    expect(JSON.stringify(result)).not.toContain("private reasoning");
+    expect(JSON.stringify(progress)).not.toContain("private reasoning");
   });
 
-  it("rejects a move that calls speak more than once", async () => {
+  it("reports bounded diagnostics when the retry also omits speak", async () => {
+    const model = modelWith(textOnlyStream(), textOnlyStream());
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session
+      .move(moveInput({ phase: "standard-a-opening" }))
+      .then(
+        () => undefined,
+        (reason: unknown) => reason as Error,
+      );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error!.message).toMatch(/did not call the speak tool/);
+    expect(error!.message).toContain("side=A");
+    expect(error!.message).toContain("phase=standard-a-opening");
+    expect(error!.message).toContain("attempt=retry");
+    expect(error!.message).toMatch(/steps=\d+/);
+    expect(error!.message).toMatch(/tools=0/);
+    expect(error!.message).toMatch(/stop=\S+/);
+    expect(error!.message).toMatch(/streamedSpeechChars=0/);
+    // Diagnostics never include the private text the model produced.
+    expect(error!.message).not.toContain("private reasoning");
+    expect(model.doStreamCalls).toHaveLength(2);
+  });
+
+  it("rescues a tool-heavy stop=length miss with a speak-only request", async () => {
+    // Mirrors the reported failure: three steps, four completed tool calls, and
+    // a provider length cut with zero streamed speech. The bounded rescue asks
+    // for `speak` once more with native tools disabled.
+    const model = modelWith(
+      streamResult(
+        [
+          { id: "t1", name: "web_search", input: { query: "attempt1-a" } },
+          { id: "t2", name: "fetch_url", input: { query: "attempt1-b" } },
+        ],
+        "tool-calls",
+      ),
+      streamResult(
+        [
+          { id: "t3", name: "run_code", input: { language: "javascript", query: "attempt1-c" } },
+          { id: "t4", name: "web_search", input: { query: "attempt1-d" } },
+        ],
+        "tool-calls",
+      ),
+      textOnlyStream({ unified: "length", raw: "length" }),
+      speakInputStream(['{"content":"Rescued public speech","ready":true}']),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "tool output" }));
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const progress: StandardAgentProgressEvent[] = [];
+    const result = await session.move(
+      moveInput({
+        phase: "standard-a-opening",
+        maxAffordableTools: 4,
+        maxToolsPerMove: 4,
+        runTool,
+        onProgress: (event) => progress.push(event),
+      }),
+    );
+
+    // First attempt: 3 steps and 4 tools, then the length cut. Rescue: 1 request.
+    expect(model.doStreamCalls).toHaveLength(4);
+    expect(result.speech).toBe("Rescued public speech");
+    expect(result.ready).toBe(true);
+    // Tool events and usage from the first attempt are preserved.
+    expect(runTool).toHaveBeenCalledTimes(4);
+    expect(result.toolEvents).toHaveLength(4);
+    // Usage aggregates the two tool steps (5/3 each), the 1/1 text step, and
+    // the 5/3 rescue request.
+    expect(result.usage).toEqual({ promptTokens: 16, completionTokens: 10 });
+    // The rescue request offers only `speak`; native tools are disabled, so the
+    // tool-heavy attempt cannot duplicate web_search/fetch_url/run_code.
+    expect(offeredTools(model, 3)).toEqual(["speak"]);
+    expect(rescueRequested(model)).toBe(true);
+    expect(retryRequested(model)).toBe(false);
+    // Only validated `speak` speech is public; nothing else leaks.
+    expect(
+      progress.filter((event) => event.type === "speech").map((event) => event.text).join(""),
+    ).toBe("Rescued public speech");
+    expect(JSON.stringify(progress)).not.toContain("private reasoning");
+  });
+
+  it("does not invoke native tools during a length rescue, even if the model asks", async () => {
+    const model = modelWith(
+      streamResult([{ id: "t1", name: "web_search", input: { query: "attempt1" } }], "tool-calls"),
+      textOnlyStream({ unified: "length", raw: "length" }),
+      // The rescue response still tries a native tool call plus speak; native
+      // tools are not offered, so the call is refused and never executed.
+      streamResult(
+        [
+          { id: "t2", name: "web_search", input: { query: "rescue-should-not-run" } },
+          speak("s1", "Rescued anyway.", true),
+        ],
+        "tool-calls",
+      ),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "tool output" }));
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const result = await session.move(moveInput({ maxAffordableTools: 2, runTool }));
+
+    expect(result.speech).toBe("Rescued anyway.");
+    // Only the first attempt's tool ran; the rescue native call was refused.
+    expect(runTool).toHaveBeenCalledTimes(1);
+    expect(runTool).toHaveBeenCalledWith(
+      "web_search",
+      { query: "attempt1", timeoutMs: 8_000 },
+      undefined,
+    );
+    expect(offeredTools(model, 2)).toEqual(["speak"]);
+  });
+
+  it("reports a clear bounded error when the length rescue also omits speak", async () => {
+    const model = modelWith(
+      streamResult([{ id: "t1", name: "web_search", input: { query: "attempt1" } }], "tool-calls"),
+      textOnlyStream({ unified: "length", raw: "length" }),
+      textOnlyStream({ unified: "length", raw: "length" }),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "tool output" }));
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session
+      .move(moveInput({ phase: "standard-a-opening", runTool }))
+      .then(() => undefined, (reason: unknown) => reason as Error);
+
+    expect(error!.message).toContain("after a length rescue request");
+    expect(error!.message).toContain("attempt=rescue");
+    expect(error!.message).toContain("stop=length");
+    expect(error!.message).toMatch(/streamedSpeechChars=0/);
+    expect(error!.message).not.toContain("private reasoning");
+    // Exactly one rescue follow-up, then a hard stop.
+    expect(model.doStreamCalls).toHaveLength(3);
+    expect(rescueRequested(model)).toBe(true);
+    expect(retryRequested(model)).toBe(false);
+  });
+
+  it.each(["content-filter", "other"] as const)(
+    "does not rescue a tool-heavy %s finish",
+    async (reason) => {
+      const model = modelWith(
+        streamResult([{ id: "t1", name: "web_search", input: { query: "attempt1" } }], "tool-calls"),
+        textOnlyStream({ unified: reason, raw: reason }),
+      );
+      mocks.createWebModel.mockResolvedValue(model);
+      const runTool = vi.fn(async () => ({ ok: true, output: "tool output" }));
+
+      const session = createWebStandardAgentSession(factoryInput);
+      const error = await session
+        .move(moveInput({ runTool }))
+        .then(() => undefined, (r: unknown) => r as Error);
+
+      expect(error!.message).toContain(`stop=${reason}`);
+      // Two requests (tool step + final text), then no follow-up at all.
+      expect(model.doStreamCalls).toHaveLength(2);
+      expect(rescueRequested(model)).toBe(false);
+      expect(retryRequested(model)).toBe(false);
+    },
+  );
+
+  it("does not rescue a length finish whose raw provider reason is timeout-like", async () => {
+    const model = modelWith(
+      streamResult([{ id: "t1", name: "web_search", input: { query: "attempt1" } }], "tool-calls"),
+      textOnlyStream({ unified: "length", raw: "request_timeout" }),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "tool output" }));
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session
+      .move(moveInput({ runTool }))
+      .then(() => undefined, (r: unknown) => r as Error);
+
+    expect(error!.message).toContain("stop=request_timeout");
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(rescueRequested(model)).toBe(false);
+  });
+
+  it("does not rescue a provider stream that errors after tool activity", async () => {
+    const model = modelWith(
+      streamResult([{ id: "t1", name: "web_search", input: { query: "attempt1" } }], "tool-calls"),
+      errorStream(),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "tool output" }));
+
+    const session = createWebStandardAgentSession(factoryInput);
+    await expect(session.move(moveInput({ runTool }))).rejects.toThrow(/speak/);
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(rescueRequested(model)).toBe(false);
+  });
+
+  it("does not rescue an incomplete speak protocol on a length finish", async () => {
+    const model = modelWith(
+      streamResult([{ id: "t1", name: "web_search", input: { query: "attempt1" } }], "tool-calls"),
+      streamPartsResult(
+        [
+          { type: "tool-input-start", id: "speak-1", toolName: "speak" },
+          { type: "tool-input-delta", id: "speak-1", delta: '{"content":"partial"' },
+          { type: "tool-input-end", id: "speak-1" },
+        ],
+        "length",
+      ),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "tool output" }));
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session
+      .move(moveInput({ runTool }))
+      .then(() => undefined, (r: unknown) => r as Error);
+
+    expect(error!.message).toMatch(/did not call the speak tool/);
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(rescueRequested(model)).toBe(false);
+  });
+
+  it("does not retry a protocol failure such as a duplicate speak", async () => {
     const model = modelWith(
       streamResult([speak("s1", "First attempt.", false), speak("s2", "Second attempt.", false)]),
     );
@@ -777,6 +1072,183 @@ describe("createWebStandardAgentSession", () => {
 
     const session = createWebStandardAgentSession(factoryInput);
     await expect(session.move(moveInput())).rejects.toThrow(/more than once/);
+    // A duplicate speak is an unrecoverable protocol error, not a clean miss.
+    expect(model.doStreamCalls).toHaveLength(1);
+  });
+
+  it("does not retry when the provider stream itself errors", async () => {
+    const model = modelWith(errorStream());
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession(factoryInput);
+    await expect(session.move(moveInput())).rejects.toThrow(/speak/);
+    // An errored stream is not a clean text-only miss, so no follow-up request.
+    expect(model.doStreamCalls).toHaveLength(1);
+  });
+
+  it("does not retry when a successful non-speak tool is followed by a text-only stop", async () => {
+    const model = modelWith(
+      streamResult([{ id: "t1", name: "web_search", input: { query: "evidence" } }]),
+      textOnlyStream(),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => ({ ok: true, output: "public result" }));
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session
+      .move(moveInput({ runTool }))
+      .then(() => undefined, (reason: unknown) => reason as Error);
+
+    // A move that already spent a tool is not a clean text-only miss.
+    expect(error!.message).toMatch(/did not call the speak tool/);
+    expect(error!.message).toMatch(/tools=1/);
+    expect(runTool).toHaveBeenCalledTimes(1);
+    expect(retryRequested(model)).toBe(false);
+  });
+
+  it("does not retry when the tool executor fails before a text-only stop", async () => {
+    const model = modelWith(
+      streamResult([{ id: "t1", name: "run_code", input: { language: "python", query: "print(1)" } }]),
+      textOnlyStream(),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const runTool = vi.fn(async () => {
+      throw new Error("executor exploded");
+    });
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session
+      .move(moveInput({ runTool }))
+      .then(() => undefined, (reason: unknown) => reason as Error);
+
+    // A failed tool call still reserves the budget and is not a clean miss.
+    expect(error!.message).toMatch(/tools=1/);
+    expect(retryRequested(model)).toBe(false);
+  });
+
+  it("does not retry when the move's abort signal is already aborted", async () => {
+    const model = modelWith(
+      textOnlyStream(),
+      speakInputStream(['{"content":"Should not be requested","ready":false}']),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const controller = new AbortController();
+    controller.abort();
+
+    const session = createWebStandardAgentSession(factoryInput);
+    await expect(session.move(moveInput({ abortSignal: controller.signal }))).rejects.toThrow();
+    // The retry predicate rejects an aborted signal before any follow-up call.
+    expect(retryRequested(model)).toBe(false);
+  });
+
+  it.each(["content-filter", "other"] as const)(
+    "does not retry or rescue for a %s finish reason",
+    async (reason) => {
+      const model = modelWith(textOnlyStream({ unified: reason, raw: reason }));
+      mocks.createWebModel.mockResolvedValue(model);
+
+      const session = createWebStandardAgentSession(factoryInput);
+      const error = await session.move(moveInput()).then(() => undefined, (r: unknown) => r as Error);
+
+      expect(error!.message).toContain(`stop=${reason}`);
+      expect(retryRequested(model)).toBe(false);
+      expect(model.doStreamCalls).toHaveLength(1);
+    },
+  );
+
+  it("does not retry a stop whose raw provider reason is timeout-like", async () => {
+    const model = modelWith(textOnlyStream({ unified: "stop", raw: "request_timeout" }));
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session.move(moveInput()).then(() => undefined, (r: unknown) => r as Error);
+
+    expect(error!.message).toContain("stop=request_timeout");
+    expect(retryRequested(model)).toBe(false);
+  });
+
+  it("does not retry when a speak tool input started but never validated", async () => {
+    // A streamed speak call that never produces a validated tool-call is an
+    // invalid tool/protocol state, not a clean text-only miss.
+    const model = modelWith(
+      streamPartsResult(
+        [
+          { type: "tool-input-start", id: "speak-1", toolName: "speak" },
+          { type: "tool-input-delta", id: "speak-1", delta: '{"content":"partial"' },
+          { type: "tool-input-end", id: "speak-1" },
+        ],
+        "stop",
+      ),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession(factoryInput);
+    await expect(session.move(moveInput())).rejects.toThrow(/speak/);
+    expect(retryRequested(model)).toBe(false);
+  });
+
+  it("does not retry an incomplete non-speak tool input", async () => {
+    // A non-speak tool input that starts and ends but never produces a
+    // validated tool-call is incomplete tool protocol, not a clean miss.
+    const model = modelWith(
+      streamPartsResult(
+        [
+          { type: "tool-input-start", id: "search-1", toolName: "web_search" },
+          { type: "tool-input-delta", id: "search-1", delta: '{"query":"evidence"' },
+          { type: "tool-input-end", id: "search-1" },
+        ],
+        "stop",
+      ),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session.move(moveInput()).then(() => undefined, (r: unknown) => r as Error);
+    expect(error!.message).toMatch(/did not call the speak tool/);
+    expect(error!.message).toMatch(/tools=0/);
+    expect(retryRequested(model)).toBe(false);
+  });
+
+  it("does not retry a partial non-speak tool input that is cut off", async () => {
+    // Only a tool-input-start plus part of the arguments arrive before the
+    // stream stops: still tool protocol activity, never a retry.
+    const model = modelWith(
+      streamPartsResult(
+        [
+          { type: "tool-input-start", id: "code-1", toolName: "run_code" },
+          { type: "tool-input-delta", id: "code-1", delta: '{"language":"python","query":"print(' },
+        ],
+        "stop",
+      ),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session.move(moveInput()).then(() => undefined, (r: unknown) => r as Error);
+    expect(error!.message).toMatch(/did not call the speak tool/);
+    expect(retryRequested(model)).toBe(false);
+  });
+
+  it("clips and normalizes provider finish reasons in diagnostics", async () => {
+    const noisyRaw = `content-filter\n\t${"x".repeat(200)}`;
+    const model = modelWith(textOnlyStream({ unified: "content-filter", raw: noisyRaw }));
+    mocks.createWebModel.mockResolvedValue(model);
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const error = await session
+      .move(moveInput({ phase: "standard-a-opening" }))
+      .then(() => undefined, (reason: unknown) => reason as Error);
+    const message = error!.message;
+
+    expect(message).toContain("stop=content-filter ");
+    // Control characters are collapsed and the value stays bounded.
+    expect(message).not.toContain("\n");
+    expect(message).not.toContain("\t");
+    expect(message).not.toContain("x".repeat(41));
+    expect(message.length).toBeLessThan(400);
+    // Only bounded diagnostics, never private model text.
+    expect(message).not.toContain("private reasoning");
+    expect(model.doStreamCalls).toHaveLength(1);
   });
 
   it("reports token usage from the model stream", async () => {
