@@ -1,25 +1,30 @@
 # AI Debate Arena
 
 AI Debate Arena is a model-versus-model game in which two AI contenders argue,
-use evidence and tools, and are evaluated by a separate AI judge. Quick delivers
-the current focused six-turn version; Standard grows it into a full agent match.
-It is a Next.js web product with a public Quick experience and locally run full agent modes; bring any OpenAI-compatible provider (OpenAI, OpenRouter, local Ollama).
+use evidence and tools, and are evaluated by a separate AI judge. Quick is the
+public website's first-look mode: a fixed six-turn debate. Standard is the
+currently shipped local agentic mode, run through the same web product on the
+user's computer. Extreme is future-only and has no implementation yet.
+It is a Next.js web product; bring any OpenAI-compatible provider (OpenAI,
+OpenRouter, local Ollama).
 npm workspaces monorepo: `@arena/web` (the Next app) + `@arena/debate-engine`, `@arena/ai`, `@arena/types` packages (see `docs/architecture.md`).
 
-Quick Mode is the current fixed six-turn debate and the planned first-look mode
-on the public website. Standard Mode is the same web product run on the user's
-computer: its UI stays in the browser on `localhost`, while its local Node.js
-server powers an open-ended, resource-driven agent-versus-agent match. Each
-contender persists as one independent agent for the whole match, keeps its own
-context, skills, tools, and resources, and decides how to investigate, respond,
-continue, or finish. Agents can search the web, run code, produce visible
-evidence, challenge claims, and place match-local stakes.
+Quick is the fixed six-turn debate and the only mode intended for hosted
+execution on the public website; it serves as the immediate first look.
+Standard is the same web product run locally: its UI stays in the browser on
+`localhost`, while its local Node.js server powers a variable-length,
+resource-driven agent-versus-agent match with live `web_search`, `fetch_url`,
+and `run_code` tools and public tool results. Each contender persists as one
+independent agent for the whole match, keeps its own context, tool loadout, and
+resources, and decides how to investigate, respond, continue, or finish.
 
-The public site will preview Standard and the future Extreme mode and direct
-people to GitHub/local setup for the full experience. Extreme may eventually
-add container-backed execution and much broader capabilities, but it is not a
-current implementation target. This remains one cross-platform web codebase,
-not an Electron, Tauri, or native desktop application. See `TODO.md`.
+Challenges, claim stakes, and knockouts are planned Standard roadmap work
+(v0.5+), not current functionality. The public website previews Standard and
+the future Extreme mode and directs people to GitHub/local setup for the full
+local experience; Extreme may eventually add container-backed execution and
+broader capabilities, but it is not a current implementation target. This
+remains one cross-platform web codebase, not an Electron, Tauri, or native
+desktop application. See `TODO.md`.
 
 ## Stack
 
@@ -43,9 +48,11 @@ printed or committed. Add a second provider, or reuse one for both sides.
 
 1. Setup screen: enter a motion in the topic field.
 2. Per side, pick a provider + model and a FOR/AGAINST position (positions auto-mirror).
-3. Keep mode on Quick (Standard/Hardcore are "coming soon") and hit **Start match**. Quick alternates six times, one decisive point at a time.
+3. Pick a mode and hit **Start match**. **Quick** is the public first look: six focused alternating turns, one decisive point at a time. **Standard** runs locally through the same browser UI, backed by the local Node.js server, and plays a variable-length agent match in which each side researches with live tools before speaking.
 4. Watch each speech in the broadcast caption, advance at your pace, then let the judge panel evaluate.
 5. Verdict: animated score reveal, winner highlight, reasoning, 8-field criteria breakdown.
+
+Standard's tools (`web_search`, `fetch_url`, `run_code`) execute on the local server, never in the browser tab. The public website presents Standard as a locally run mode and links to this setup.
 
 ## Commands
 

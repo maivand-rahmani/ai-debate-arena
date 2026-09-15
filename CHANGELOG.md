@@ -4,6 +4,32 @@ All notable changes to AI Debate Arena. Versions follow the roadmap in `TODO.md`
 
 ## [Unreleased]
 
+### Standard live activity slice (2026-09-15)
+- Standard now plays as an agentic match through the local web product: one
+  match-long, private session per side decides its own tool order, consumes
+  results, and delivers public moves; the local Node server executes the
+  injected `web_search`, `fetch_url`, and `run_code` tools. The browser tab
+  never runs a tool.
+- Added the variable Standard lifecycle: two guaranteed openings, paired open
+  rounds, a `ready` signal, one closing answer round when only one side is
+  ready, forced close on depletion, and a generous emergency move ceiling. Each
+  move publishes an authoritative `standard-state` snapshot (credits, executed
+  vs refused tools, readiness, move/ceiling status).
+- Standard adds `tool-start`, `tool-result`, and `standard-state` stream events
+  with stable call identity and deterministic ordering even when parallel tool
+  calls finish out of order. Failed tools stay public and do not end the match;
+  refused over-budget attempts are visible once, flagged, and accounted
+  separately from paid executions.
+- The private per-side conversation is a bounded rolling window
+  (24,000 characters) that re-supplies current public state each move and never
+  invents a chain-of-thought summary. Completed matches persist a
+  machine-readable ending reason plus the resolved Standard limits.
+- Added a full-seam `POST /api/debate` Standard test that runs the real
+  `runDebate` and asserts ordering, tool identity, resource changes, judge
+  results, and a single secret-free persisted record.
+- This is shipped Standard work in progress, not owner approval. The v0.4
+  release gate and owner playtest remain open.
+
 ### Product direction reset (2026-09-11)
 - Rejected the infrastructure-first v0.4 plan before release. The accepted
   direction is now a playable agentic arena: live web/code tools, visible

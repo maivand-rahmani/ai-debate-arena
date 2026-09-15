@@ -22,8 +22,8 @@ ai-debate-arena/
 
 | Package | npm name | Responsibility | Deps (ours) | Consumers | Forbidden imports |
 | ------- | -------- | -------------- | ----------- | --------- | ----------------- |
-| apps/web | `@arena/web` | Routes, UI, server-only provider/match stores, web adapter | engine, ai, types | — (leaf) | engine internals via `@arena/*/src/*` deep paths (barrels only) |
-| packages/debate-engine | `@arena/debate-engine` | Format runner, prompts, rubric, verdict, contracts, `runDebate`/`runJudge` | types | web, future `apps/api` + `apps/worker` | react/next/three/`@ai-sdk/*`/`ai`/node:fs/path/os/`server-only`/`@arena/ai` (node:crypto is the only approved builtin) |
+| apps/web | `@arena/web` | Routes, UI, server-only provider/match stores, web adapter, Standard session adapter | engine, ai, types | — (leaf) | engine internals via `@arena/*/src/*` deep paths (barrels only) |
+| packages/debate-engine | `@arena/debate-engine` | Quick format runner, Standard agent lifecycle + session/tool ports, prompts, rubric, verdict, contracts, `runDebate`/`runJudge` | types | web, future `apps/api` + `apps/worker` | react/next/three/`@ai-sdk/*`/`ai`/`server-only`/`@arena/ai`. Core orchestration uses `node:crypto` only; the Standard `run_code` executor in `standard.ts` additionally uses portable Node runtime builtins (`node:child_process`, `node:fs/promises`, `node:os`, `node:path`) |
 | packages/ai | `@arena/ai` | `buildAiModel` (chat vs responses branching) + `toSafeErrorMessage` | none | web, future `apps/api` + `apps/worker` | fs/secrets — provider resolution stays in web |
 | packages/types | `@arena/types` | Canonical NDJSON event types (`v:1`/`matchId`/`seq`), `DebateSide`, `MatchMode` | none | engine, ai (via engine), web | everything (leaf, types only) |
 
@@ -44,8 +44,11 @@ Enforcement:
 - `exports` maps expose `"."` only (`debate-engine` adds `"./testing"`
   for golden fixtures) — deep `@arena/*/src/*` imports fail lint.
 - `eslint.config.mjs` bans deep imports repo-wide and bans
-  react/next/three/ai-sdk/fs/path/os/`server-only`/`@arena/ai` inside
-  `debate-engine`/`types`.
+  react/next/three/ai-sdk/`server-only`/`@arena/ai` inside
+  `debate-engine`/`types`. `node:crypto` is the only approved builtin for the
+  runner/domain core. The Standard tool registry (`standard.ts`) deliberately
+  reaches the local Node runtime for `run_code`; that executor is the one
+  approved exception and stays behind the injected tool port.
 - `ssr-boundary.test.ts` keeps three/rapier markers out of server output;
   Three.js/R3F/Rapier stay confined to `widgets/broadcast-stage/3d/`.
 
@@ -90,15 +93,34 @@ type-only imports remain; new cross-layer imports should follow FSD
 
 ## Data flow
 
+All of the following runs on the local Next.js/Node server; the browser only
+sends the request and reads the NDJSON stream back.
+
 ```
 Client (arena-screen → use-debate-stream → debate-stream.ts)
-  │  POST /api/debate { topic, mode:"quick", agentA, agentB }   (zod, 400 on invalid)
+  │  POST /api/debate { topic, mode:"quick"|"standard", agentA, agentB }  (zod, 400 on invalid)
   ▼
 ReadableStream NDJSON  ←  runDebate() generator (@arena/debate-engine/runner)
-  │  per format turn: webCallModel (provider-db.getProvider → @arena/ai buildAiModel → streamText)
-  ▼  AI provider (OpenAI-compatible baseUrl + apiKey, server-only)
+  │
+  ├─ Quick: per format turn → webCallModel (streamText)
+  │
+  └─ Standard: opening + paired ready/depletion lifecycle
+       per side: createStandardAgentSession (match-long private session)
+         move: observe public state → AI SDK ToolLoopAgent → createWebModel
+               → native tool calls → webRunStandardTool (web_search/fetch_url/run_code)
+               → consume results → speak (one public move)
+       runner emits tool-start/tool-result/standard-state + turn events
+  │
+  ▼  judge leg (both modes) → webCallModel → generateText → parseDebateVerdict
+  ▼  model calls resolve through provider-store.getProvider → @arena/ai buildAiModel
+     → AI provider (OpenAI-compatible baseUrl + apiKey, server-only)
+  ▼  verdict; webSaveMatch persists the redacted MatchRecord
 Client reducer appends tokens → turns → verdict; abort() cancels fetch.
 ```
+
+Standard agent model calls therefore go `createStandardAgentSession` → AI SDK
+`ToolLoopAgent` → `createWebModel`; `webCallModel` owns Quick's per-turn model
+calls and the judge leg for both modes.
 
 ## Deployment shapes
 
@@ -129,9 +151,11 @@ Do not add Electron, Tauri, or another native desktop wrapper.
 
 ## Judge path
 
-After the selected format's agent turns (six in Quick) the runner emits `judge-start`, calls `generateText`
-(default: agent A's provider) with the full transcript + rubric, parses strict
-JSON via `parseDebateVerdict`, emits `verdict`, then `done`.
+After the match's agent moves — six fixed turns in Quick, or the Standard
+lifecycle's variable number of moves — the runner emits `judge-start`, calls
+`generateText` (default: agent A's provider) with the full transcript, rubric,
+and public Standard tool events, parses strict JSON via `parseDebateVerdict`,
+emits `verdict`, then `done`.
 
 ## Boundary rule
 
@@ -141,34 +165,51 @@ partial-payload guards) plus `shared/api/matches.ts`; canonical types are
 re-exported from `@arena/types` where identical. Credentials and
 `provider-store`/`provider-db` are `server-only`.
 
-## Next product extension
+## Standard agent runtime (shipped)
 
 Quick keeps its fixed six-turn format and is the public website's playable
-first look. Standard is an agent-versus-agent game run through the local web
-server and browser UI.
-The match orchestrator creates two lightweight, independent agent sessions and
-keeps them alive for the full match. Each session owns its selected model,
-fixed side and objective, private working context, available skills and tools,
-and match-local resources. The sessions share only public match events; neither
-agent receives the other's private context.
+first look. Standard is the agent-versus-agent game run through the local web
+server and browser UI. The match orchestrator creates two independent,
+match-long agent sessions and keeps them alive for the whole match. Each session
+owns its selected model, fixed side and objective, private working context,
+tool loadout, and match-local resources. The sessions share only public match
+events; neither receives the other's private context.
 
-For each open move, the orchestrator gives the active agent the current public
-state. The agent chooses its next action: use a tool, use another tool after
-seeing the result, make or challenge a claim, stake resources, speak, or signal
-readiness. Tool results return to that same session so it can adapt before
-committing its public move. This loop may contain zero or multiple tool actions;
-the orchestrator applies rules and costs but never scripts the strategy.
+**Lifecycle.** Both sides always receive an opening move. The runner then plays
+paired open rounds. A side signals `ready` on a move; when both are ready the
+match ends, and when only one is ready one paired answer round runs so neither
+loses the right to reply. A side that can no longer afford a speech is forced to
+close, and a generous move ceiling only prevents broken matches. The resolved
+ceiling is `profile.rounds` (never below the two mandatory openings).
 
-Public actions, tool calls, results, evidence, resource changes, speeches, and
-readiness decisions join the existing ordered event stream. The arena,
-transcript, separate judge, and later replay therefore observe one coherent
-match story without exposing private chain-of-thought. Implement this as the
-smallest abstraction needed by Standard, not as a generic agent framework.
+**Per-move loop.** The runner hands the active session the current public state
+and its remaining resources. The session decides its own order: it may run zero
+or more tools through the injected `runTool` port, consume each result back into
+the same conversation, adapt, and then deliver one public move through its
+internal `speak` call. Tool choice, sequencing, and strategy belong to the
+agent; the runner applies costs, capture order, and ending rules.
 
-Standard ends when both contenders are ready, resources force a finish, or a
-decisive challenge creates a knockout; a generous emergency ceiling only
-prevents broken infinite matches. Start with `web_search`, `fetch_url`, and
-`run_code`. Stakes and challenges are match actions built on the same event
-stream after the tool-enabled match is fun. Extreme may later extend this local
-web-server model with container-backed execution such as Docker, but it has no
-detailed architecture until Standard is complete.
+**Sessions and tools.** `createWebStandardAgentSession`
+(`apps/web/.../server/standard-agent-adapter.ts`) is the local-server binding:
+one match-long AI SDK session per side with a bounded rolling private
+conversation, native tools, and the `speak` delivery tool. `webRunStandardTool`
+(`web-adapter.ts`) dispatches `web_search`, `fetch_url`, and `run_code` to the
+engine registry; the browser never executes a tool. Private chain-of-thought is
+never streamed or persisted.
+
+**Stream events.** Standard adds three public event types to the ordered v1
+stream: `tool-start` and `tool-result` (stable call identity, side, bounded
+output/error, and a `rejected` flag for refused over-budget attempts) and
+`standard-state` (authoritative per-side credits, executed vs refused tool
+counts, accumulated `ready` intent, and move/ceiling status). Turn ordering is
+`phase → tool-start/tool-result* → token* → turn → standard-state`, then
+`judge-start → verdict → done`. The runner publishes tool results in invocation
+order even when they complete in parallel.
+
+**Current limits** (`MATCH_PROFILES.standard` + Standard defaults): starting
+credits 12, speech cost 1, tool cost 2, up to 2 tools per move, 8 s per-tool
+timeout, an emergency ceiling of 12 moves, and a 24,000-character per-side
+private context budget. Stakes, live challenges, and knockouts are later
+Standard gameplay built on this same stream; Extreme may later extend the local
+web-server model with container-backed execution, but it has no detailed
+architecture until Standard is complete.
