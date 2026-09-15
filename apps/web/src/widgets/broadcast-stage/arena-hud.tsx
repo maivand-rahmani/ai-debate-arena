@@ -84,8 +84,8 @@ export function ArenaHud(props: ArenaHudProps) {
         />
       </div>
 
-      {/* The five-step spine tells viewers where the match is, rather than
-          only naming the current speaker. */}
+      {/* The dynamic spine tells viewers where the match is, rather than
+          pretending Standard has a fixed number of rounds. */}
       {broadcastLive ? (
         <div className="arena-hud__round arena-hud__round--progress">
           <MatchProgress state={state} viewingPhase={playback?.focusedPanel?.phase} />
@@ -113,7 +113,13 @@ export function ArenaHud(props: ArenaHudProps) {
       {/* Live caption — the new single bottom-center speech surface. */}
       {showPlaybackCaption ? (
         <div className="arena-hud__caption">
-          <LiveCaption state={state} focusedPanel={playback?.focusedPanel} />
+          <LiveCaption
+            state={state}
+            focusedPanel={playback?.focusedPanel}
+            onNextResponse={props.onNextResponse}
+            canAdvanceNextResponse={props.canAdvanceNextResponse}
+            isWaitingForNextResponse={props.isWaitingForNextResponse}
+          />
           {playback ? <PlaybackControls state={state} playback={playback} /> : null}
         </div>
       ) : null}

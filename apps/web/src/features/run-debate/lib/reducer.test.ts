@@ -104,8 +104,77 @@ describe("Standard public tool timeline", () => {
 
     expect(state.mode).toBe("standard");
     expect(state.standardEvents.map((event) => event.type)).toEqual(["tool-start", "tool-result"]);
+    expect(state.activeStandardEvents.map((event) => event.type)).toEqual(["tool-start", "tool-result"]);
     expect(state.standardEvents[1]?.type === "tool-result" && state.standardEvents[1].result.output).toBe("A bounded result");
     expect(state.panels).toHaveLength(0);
+  });
+
+  it("scopes active tools to one move while retaining the complete archive", () => {
+    let state = reduceDebateRuntime(initialRuntimeState, { type: "start", topic: "Topic", mode: "standard" });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "phase", phase: "standard-a-round-1", side: "A" },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-start", tool: { callId: "a-1", side: "A", tool: "web_search", query: "first", createdAt: "1" } },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-result", result: { callId: "a-1", side: "A", tool: "web_search", query: "first", ok: true, output: "A result", createdAt: "2" } },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-start", tool: { callId: "a-2", side: "A", tool: "run_code", query: "second", createdAt: "3" } },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-result", result: { callId: "a-2", side: "A", tool: "run_code", query: "second", ok: true, output: "Another result", createdAt: "4" } },
+    });
+
+    expect(state.activeStandardEvents.map((event) => event.type)).toEqual([
+      "tool-start", "tool-result", "tool-start", "tool-result",
+    ]);
+    expect(state.standardEvents).toHaveLength(4);
+
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "phase", phase: "standard-b-round-1", side: "B" },
+    });
+    expect(state.activeStandardEvents).toHaveLength(0);
+    expect(state.standardEvents).toHaveLength(4);
+
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-start", tool: { callId: "b-1", side: "B", tool: "fetch_url", query: "third", createdAt: "5" } },
+    });
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: { type: "tool-result", result: { callId: "b-1", side: "B", tool: "fetch_url", query: "third", ok: false, output: "Fetch failed", error: "Unavailable", createdAt: "6" } },
+    });
+    expect(state.activeStandardEvents).toHaveLength(2);
+    expect(state.activeStandardEvents.every((event) =>
+      event.type === "tool-start" ? event.tool.callId.startsWith("b-") : event.result.callId.startsWith("b-"),
+    )).toBe(true);
+    expect(state.standardEvents).toHaveLength(6);
+
+    state = reduceDebateRuntime(state, {
+      type: "stream-event",
+      event: {
+        type: "turn",
+        turn: {
+          id: "standard-b-round-1",
+          side: "B",
+          phase: "standard-b-round-1",
+          content: "B's sealed response",
+          model: "model-b",
+          createdAt: "7",
+        },
+      },
+    });
+    expect(state.activeStandardEvents).toHaveLength(0);
+    expect(state.standardEvents).toHaveLength(6);
+    expect(state.panels.find((panel) => panel.id === "B:standard-b-round-1")?.sealed).toBe(true);
   });
 });
 

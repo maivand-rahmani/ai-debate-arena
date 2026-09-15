@@ -1,8 +1,8 @@
 "use client";
 
-import { findMatchTurn } from "@arena/types";
+import { findMatchTurn, parseStandardRoundTurn } from "@arena/types";
 import type { DebateStreamSideResources, DebateStreamToolName } from "@arena/types";
-import { currentSidePanel, isInMatch, type DebateRuntimeState, type SpeechPanel } from "@/features/run-debate/lib/reducer";
+import { currentSidePanel, isInMatch, type DebateRuntimeState, type SpeechPanel, type StandardTimelineEvent } from "@/features/run-debate/lib/reducer";
 import type { MatchPlayback } from "@/features/arena/match/use-match-playback";
 
 export interface ArenaResourceLimits {
@@ -43,12 +43,21 @@ interface RailAction {
   readonly callId: string;
   readonly tool: DebateStreamToolName;
   readonly query: string;
-  readonly status: "working" | "complete" | "failed";
+  readonly status: "working" | "complete" | "failed" | "rejected";
+}
+
+interface RailEvidence {
+  readonly callId: string;
+  readonly tool: DebateStreamToolName;
+  readonly query: string;
+  readonly output: string;
+  readonly status: "evidence" | "failed" | "rejected";
 }
 
 /**
- * The two quiet commentary desks that sit over both arena worlds. This is one
- * shared presentation component: the WebGL HUD and the CSS fallback only
+ * The two quiet commentary desks that sit over both arena worlds. Each desk
+ * keeps the complete public tool record in a bounded activity surface. This is
+ * one shared presentation component: the WebGL HUD and the CSS fallback only
  * decide where it is mounted, never what it says.
  */
 export function ArenaRails({ state, playback, standardLimits }: ArenaRailsProps) {
@@ -63,7 +72,7 @@ export function ArenaRails({ state, playback, standardLimits }: ArenaRailsProps)
   const focusSide = activeSide?.toLowerCase() ?? "none";
 
   return (
-    <div className="arena-rails" role="group" aria-label="Contender commentary desks">
+    <div className="arena-rails" data-caption-region="reserved" role="group" aria-label="Contender commentary desks">
       <div className="arena-rails__grid" data-focus-side={focusSide}>
         <ArenaRail
           identity={IDENTITIES.A}
@@ -101,7 +110,9 @@ function ArenaRail({ identity, state, focusedPanel, activeSide, hasPlayback, sta
     ? focusedPanel ?? currentSidePanel(state) ?? latestSealedPanel(state, identity.side)
     : latestSealedPanel(state, identity.side);
   const actions = deriveActions(state, identity.side);
+  const evidence = deriveEvidence(state, identity.side);
   const resources = deriveResources(state, identity.side, standardLimits);
+  const moveSealed = isCurrentStandardMoveSealed(state);
   // A preview is only a preview while another speech is selected. During a
   // live stream the current side is the primary contestant; terminal frames
   // return to a balanced archive view.
@@ -144,33 +155,46 @@ function ArenaRail({ identity, state, focusedPanel, activeSide, hasPlayback, sta
         )}
         {panel ? (
           <span className="arena-rail__phase">
-            {phaseLabel(panel)}{preview ? " · latest sealed" : ""}
+            {phaseLabel(state.mode, panel)}{preview ? " · latest sealed" : ""}
           </span>
         ) : null}
       </div>
 
-      <div className="arena-rail__section">
-        <div className="arena-rail__section-head">
-          <h3>Public actions</h3>
-          <span>{actions.length ? `${actions.length} shown` : "No calls yet"}</span>
+      {!moveSealed ? (
+        <div className="arena-rail__activity" role="region" aria-label={`${identity.name} public tool activity`}>
+          <div className="arena-rail__section">
+            <div className="arena-rail__section-head">
+              <h3>Public actions</h3>
+              <span>{actions.length ? `${actions.length} total` : "No calls yet"}</span>
+            </div>
+            {actions.length ? (
+              <ol className="arena-rail__actions">
+                {actions.map((action) => (
+                  <li
+                    key={action.callId}
+                    className={`arena-rail__action arena-rail__action--${action.status}`}
+                    data-call-id={action.callId}
+                  >
+                    <span className="arena-rail__tool-mark" data-tool={action.tool} aria-hidden="true" />
+                    <span className="arena-rail__action-copy">
+                      <strong>{TOOL_LABEL[action.tool]}</strong>
+                      <span>{compactQuery(action.query)}</span>
+                      <span className="arena-rail__action-id">Call {action.callId}</span>
+                    </span>
+                    <span className="arena-rail__action-status">{actionStatus(action.status)}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="arena-rail__empty">Research and execution will appear here.</p>
+            )}
+          </div>
+
+          {state.mode === "standard" && evidence.length ? (
+            <EvidenceReceipts identity={identity} evidence={evidence} />
+          ) : null}
         </div>
-        {actions.length ? (
-          <ol className="arena-rail__actions">
-            {actions.map((action) => (
-              <li key={action.callId} className={`arena-rail__action arena-rail__action--${action.status}`}>
-                <span className="arena-rail__tool-mark" data-tool={action.tool} aria-hidden="true" />
-                <span className="arena-rail__action-copy">
-                  <strong>{TOOL_LABEL[action.tool]}</strong>
-                  <span>{compactQuery(action.query)}</span>
-                </span>
-                <span className="arena-rail__action-status">{actionStatus(action.status)}</span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="arena-rail__empty">Research and execution will appear here.</p>
-        )}
-      </div>
+      ) : null}
 
       <ResourceStrip resources={resources} />
     </aside>
@@ -266,7 +290,7 @@ function authoritativeResources(
 
 function deriveActions(state: DebateRuntimeState, side: RailSide): readonly RailAction[] {
   const actions = new Map<string, RailAction>();
-  for (const event of state.standardEvents) {
+  for (const event of liveToolEvents(state)) {
     if (event.type === "tool-start" && event.tool.side === side) {
       actions.set(event.tool.callId, {
         callId: event.tool.callId,
@@ -280,11 +304,78 @@ function deriveActions(state: DebateRuntimeState, side: RailSide): readonly Rail
         callId: event.result.callId,
         tool: event.result.tool,
         query: event.result.query,
-        status: event.result.ok ? "complete" : "failed",
+        status: event.result.rejected ? "rejected" : event.result.ok ? "complete" : "failed",
       });
     }
   }
-  return [...actions.values()].slice(-3).reverse();
+  return [...actions.values()];
+}
+
+function deriveEvidence(state: DebateRuntimeState, side: RailSide): readonly RailEvidence[] {
+  return liveToolEvents(state).reduce<RailEvidence[]>((evidence, event) => {
+    if (event.type !== "tool-result" || event.result.side !== side) return evidence;
+    const result = event.result;
+    const status: RailEvidence["status"] = result.rejected ? "rejected" : result.ok ? "evidence" : "failed";
+    evidence.push({
+      callId: result.callId,
+      tool: result.tool,
+      query: result.query,
+      output: result.error ?? result.output,
+      status,
+    });
+    return evidence;
+  }, []);
+}
+
+function liveToolEvents(state: DebateRuntimeState): readonly StandardTimelineEvent[] {
+  return state.mode === "standard" ? state.activeStandardEvents : state.standardEvents;
+}
+
+function isCurrentStandardMoveSealed(state: DebateRuntimeState): boolean {
+  if (state.mode !== "standard" || !state.currentSide || !state.currentPhase.startsWith("standard-")) return false;
+  return state.panels.some((panel) =>
+    panel.side === state.currentSide && panel.phase === state.currentPhase && panel.sealed,
+  );
+}
+
+function EvidenceReceipts({
+  identity,
+  evidence,
+}: {
+  readonly identity: RailIdentity;
+  readonly evidence: readonly RailEvidence[];
+}) {
+  return (
+    <section className="arena-rail__evidence" aria-label={`${identity.name} public evidence receipts`}>
+      <div className="arena-rail__section-head">
+        <h3>Evidence receipts</h3>
+        <span>{identity.name} · {evidence.length}</span>
+      </div>
+      <ol className="arena-rail__evidence-list">
+        {evidence.map((item) => (
+          <li key={item.callId} className={`arena-rail__evidence-item arena-rail__evidence-item--${item.status}`}>
+            <div className="arena-rail__evidence-head">
+              <strong>{TOOL_LABEL[item.tool]}</strong>
+              <span>{evidenceStatus(item.status)}</span>
+            </div>
+            <p className="arena-rail__evidence-query"><span>Target</span>{compactQuery(item.query)}</p>
+            <p className="arena-rail__evidence-output">
+              <span>{evidenceOutputLabel(item.status)}</span>
+              {compactEvidence(item.output)}
+            </p>
+            <details>
+              <summary>Inspect result</summary>
+              <dl>
+                <div><dt>Call</dt><dd>{item.callId}</dd></div>
+                <div><dt>Request</dt><dd>{item.query || "No request recorded."}</dd></div>
+                <div><dt>Output</dt><dd>{item.output || "No public result recorded."}</dd></div>
+              </dl>
+            </details>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }
 
 function latestSealedPanel(state: DebateRuntimeState, side: RailSide): SpeechPanel | null {
@@ -298,9 +389,14 @@ function panelOrder(panel: SpeechPanel): number {
   return panel.turn?.order ?? findMatchTurn("standard", panel.phase)?.order ?? Number.MAX_SAFE_INTEGER;
 }
 
-function phaseLabel(panel: SpeechPanel): string {
+function phaseLabel(mode: DebateRuntimeState["mode"], panel: SpeechPanel): string {
   const turn = panel.turn ?? findMatchTurn("standard", panel.phase);
   if (!turn) return panel.phase;
+  if (mode === "standard" && turn.role === "response") {
+    const standardRound = parseStandardRoundTurn(panel.phase);
+    const round = standardRound ? Math.floor((standardRound.order - 3) / 2) + 1 : 1;
+    return `Open round ${round} · Response`;
+  }
   return `${turn.role === "opening" ? "Opening" : "Response"} · turn ${turn.order}`;
 }
 
@@ -320,13 +416,31 @@ function speechStatus(state: DebateRuntimeState, panel: SpeechPanel | null, isFo
 
 function actionStatus(status: RailAction["status"]): string {
   if (status === "working") return "Working";
+  if (status === "rejected") return "Not run";
   if (status === "failed") return "Failed";
   return "Complete";
+}
+
+function evidenceStatus(status: RailEvidence["status"]): string {
+  if (status === "rejected") return "Not run";
+  if (status === "failed") return "Failed";
+  return "Public result";
+}
+
+function evidenceOutputLabel(status: RailEvidence["status"]): string {
+  if (status === "rejected") return "Reason";
+  if (status === "failed") return "Failure";
+  return "Result";
 }
 
 function compactQuery(query: string): string {
   const compact = query.trim().replace(/\s+/g, " ");
   return compact.length > 48 ? `${compact.slice(0, 45)}…` : compact || "Public tool call";
+}
+
+function compactEvidence(output: string): string {
+  const compact = output.trim().replace(/\s+/g, " ");
+  return compact.length > 118 ? `${compact.slice(0, 115)}…` : compact || "No public result recorded.";
 }
 
 function formatTimeout(timeoutMs: number): string {

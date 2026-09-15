@@ -1,7 +1,7 @@
 "use client";
 
 import type { DebateRuntimeState, SpeechPhase } from "@/features/run-debate/lib/reducer";
-import { findMatchTurn, getMatchFormat } from "@arena/types";
+import { findMatchTurn, getMatchFormat, parseStandardRoundTurn } from "@arena/types";
 
 interface MatchProgressProps {
   readonly state: DebateRuntimeState;
@@ -14,13 +14,23 @@ type ProgressState = "upcoming" | "current" | "complete";
 interface ProgressStep {
   readonly phase: string;
   readonly label: string;
+  readonly phases?: readonly string[];
 }
 
 function stepsFor(state: DebateRuntimeState): readonly ProgressStep[] {
   if (state.mode === "standard") {
+    const rounds = standardRoundsInView(state);
     return [
-      { phase: "STANDARD_OPENING", label: "Openings" },
-      { phase: "STANDARD_OPEN_ROUNDS", label: "Open rounds" },
+      {
+        phase: "STANDARD_OPENING",
+        label: "Opening moves",
+        phases: ["standard-a-opening", "standard-b-opening"],
+      },
+      ...rounds.map((round) => ({
+        phase: `STANDARD_ROUND_${round}`,
+        label: standardRoundLabel(state, round),
+        phases: [`standard-a-round-${round}`, `standard-b-round-${round}`],
+      })),
       { phase: "JUDGING", label: "Judge's verdict" },
     ];
   }
@@ -37,7 +47,9 @@ function stepsFor(state: DebateRuntimeState): readonly ProgressStep[] {
  */
 export function MatchProgress({ state, viewingPhase }: MatchProgressProps) {
   const steps = stepsFor(state);
-  const activeIndex = viewingPhase ? steps.findIndex((step) => step.phase === viewingPhase) : progressIndex(state, steps);
+  const activeIndex = viewingPhase
+    ? steps.findIndex((step) => step.phase === viewingPhase || step.phases?.includes(viewingPhase))
+    : progressIndex(state, steps);
   const resolvedIndex = activeIndex === -1 ? progressIndex(state, steps) : activeIndex;
   const completed = state.status === "finished" && viewingPhase === undefined;
 
@@ -71,8 +83,13 @@ function progressIndex(state: DebateRuntimeState, steps: readonly ProgressStep[]
   if (state.status === "judging" || state.status === "finished" || state.currentPhase === "JUDGING" || state.currentPhase === "FINISHED") {
     return steps.length - 1;
   }
-  if (state.mode === "standard" && state.currentPhase.startsWith("standard-")) {
-    return state.currentPhase.endsWith("opening") ? 0 : 1;
+  if (state.mode === "standard") {
+    if (state.currentPhase.endsWith("opening")) return 0;
+    const round = parseStandardRoundTurn(state.currentPhase);
+    if (round) {
+      const index = steps.findIndex((step) => step.phases?.includes(state.currentPhase));
+      return index === -1 ? Math.max(0, steps.length - 2) : index;
+    }
   }
   const turn = findMatchTurn(state.mode, state.currentPhase);
   return turn ? turn.order - 1 : 0;
@@ -93,11 +110,32 @@ function progressSummary(
   if (completed) return "Match complete · verdict ready";
   if (state.mode === "standard") {
     if (viewerControlled) return `Viewing ${steps[activeIndex]?.label.toLowerCase() ?? "match"}`;
-    if (state.status === "starting") return "Preparing the opening moves";
-    if (state.currentPhase.startsWith("standard-") && !state.currentPhase.endsWith("opening")) return "Open rounds · agents choose when to continue";
-    return `${steps[activeIndex]?.label ?? "Match"} · no fixed round count`;
+    if (state.status === "starting") return "Preparing both opening moves";
+    if (state.status === "judging") return "Judge is reviewing the public record";
+    if (state.standardState?.closingRound) return "Closing round · final replies before judging";
+    if (state.currentPhase.endsWith("opening")) return "Opening moves · both sides get a first word";
+    const moveCount = state.standardState?.movesUsed;
+    return moveCount === undefined
+      ? `${steps[activeIndex]?.label ?? "Match"} · agents choose when to continue`
+      : `${steps[activeIndex]?.label ?? "Match"} · ${moveCount} moves used · agents choose when to continue`;
   }
   if (viewerControlled) return `Viewing step ${activeIndex + 1} of ${steps.length} · ${steps[activeIndex]?.label ?? "match"}`;
   if (state.status === "starting") return "Preparing the opening round";
   return `Step ${activeIndex + 1} of ${steps.length} · ${steps[activeIndex]?.label ?? "match"}`;
+}
+
+function standardRoundsInView(state: DebateRuntimeState): readonly number[] {
+  let highestRound = 0;
+  const phases = [...state.panels.map((panel) => panel.phase), state.currentPhase];
+  for (const phase of phases) {
+    const turn = parseStandardRoundTurn(phase);
+    if (turn) highestRound = Math.max(highestRound, Math.floor((turn.order - 3) / 2) + 1);
+  }
+  return Array.from({ length: highestRound }, (_, index) => index + 1);
+}
+
+function standardRoundLabel(state: DebateRuntimeState, round: number): string {
+  return state.standardState?.closingRound && round === standardRoundsInView(state).at(-1)
+    ? `Closing round · ${round}`
+    : `Open round ${round}`;
 }

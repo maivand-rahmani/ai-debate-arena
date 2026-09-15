@@ -68,16 +68,119 @@ describe("LiveCaption", () => {
     expect(html).toContain("The Advocate");
   });
 
-  it("explains that the caption is waiting when the first token has not arrived", () => {
+  it("shows a compact public activity overview before the first token", () => {
     const state: DebateRuntimeState = {
       ...initialRuntimeState,
+      mode: "standard",
       status: "streaming",
-      currentPhase: "OPENING_A",
+      currentPhase: "standard-a-opening",
       currentSide: "A",
     };
     const html = renderToStaticMarkup(<LiveCaption state={state} />);
-    expect(html).toContain("Waiting for the first words");
+    expect(html).toContain("Public activity");
+    expect(html).toContain("Preparing a public response…");
+    expect(html).not.toContain("Waiting for the first words");
     expect(html).not.toContain(">…<");
+  });
+
+  it("changes the activity overview from research to evidence review", () => {
+    const state: DebateRuntimeState = {
+      ...initialRuntimeState,
+      mode: "standard",
+      status: "streaming",
+      currentPhase: "standard-a-round-1",
+      currentSide: "A",
+      activeStandardEvents: [{
+        type: "tool-start",
+        tool: {
+          callId: "call-1",
+          side: "A",
+          tool: "web_search",
+          query: "public source",
+          createdAt: "2026-09-14T12:00:00.000Z",
+        },
+      }, {
+        type: "tool-result",
+        result: {
+          callId: "call-1",
+          side: "A",
+          tool: "web_search",
+          query: "public source",
+          ok: true,
+          output: "A public result",
+          createdAt: "2026-09-14T12:00:00.000Z",
+        },
+      }],
+    };
+    const researchHtml = renderToStaticMarkup(
+      <LiveCaption state={{ ...state, activeStandardEvents: state.activeStandardEvents.slice(0, 1) }} />,
+    );
+    const html = renderToStaticMarkup(<LiveCaption state={state} />);
+    expect(html).toContain("Open round 1 · Response");
+    expect(researchHtml).toContain("Researching with Web search…");
+    expect(html).toContain("Reviewing public evidence…");
+    expect(html).toContain("Ember&#x27;s web search returned a public result.");
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-live="off"');
+  });
+
+  it("removes the activity overview as soon as public text arrives", () => {
+    const state: DebateRuntimeState = {
+      ...initialRuntimeState,
+      mode: "standard",
+      status: "streaming",
+      currentPhase: "standard-a-round-1",
+      currentSide: "A",
+      panels: [{
+        id: "A:standard-a-round-1",
+        side: "A",
+        phase: "standard-a-round-1",
+        content: "Here is the public answer.",
+        sealed: false,
+      }],
+      activeStandardEvents: [{
+        type: "tool-start",
+        tool: {
+          callId: "call-1",
+          side: "A",
+          tool: "web_search",
+          query: "public source",
+          createdAt: "2026-09-14T12:00:00.000Z",
+        },
+      }],
+    };
+    const html = renderToStaticMarkup(<LiveCaption state={state} />);
+    expect(html).toContain("Here is the public answer.");
+    expect(html).not.toContain("Public activity");
+    expect(html).not.toContain("Researching with Web search…");
+  });
+
+  it("renders Next response as a native keyboard-accessible button", () => {
+    const state: DebateRuntimeState = {
+      ...initialRuntimeState,
+      mode: "standard",
+      status: "streaming",
+      currentPhase: "standard-a-opening",
+      currentSide: "A",
+      panels: [{
+        id: "A:standard-a-opening",
+        side: "A",
+        phase: "standard-a-opening",
+        content: "Opening case.",
+        sealed: true,
+      }],
+    };
+    const html = renderToStaticMarkup(
+      <LiveCaption
+        state={state}
+        canAdvanceNextResponse
+        onNextResponse={() => undefined}
+      />,
+    );
+    expect(html).toContain('<button type="button"');
+    expect(html).toContain('aria-label="Show next response"');
+    expect(html).toContain("Next response");
+    expect(html).toContain("Enter");
   });
 });
 

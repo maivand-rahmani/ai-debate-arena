@@ -30,7 +30,16 @@ import { ArenaFrame } from "@/widgets/broadcast-stage";
  */
 export default function ArenaScreen() {
   const { providers } = useProviders();
-  const { state, start, reset, cancel, dispatch } = useDebateStream();
+  const {
+    state,
+    start,
+    reset,
+    cancel,
+    dispatch,
+    canAdvanceNextResponse,
+    isWaitingForNextResponse,
+    nextResponse,
+  } = useDebateStream();
   const [matchDraft, setMatchDraft] = useState<MatchDraft | null>(null);
   const [rejudgeStatus, setRejudgeStatus] = useState<RejudgeStatus>("idle");
   const [rejudgeError, setRejudgeError] = useState<string | undefined>(undefined);
@@ -68,7 +77,11 @@ export default function ArenaScreen() {
   }, []);
 
   const inMatch = isInMatch(state);
-  const playback = useMatchPlayback(state);
+  const streamPlayback = useMatchPlayback(state);
+  // Standard has a stream-level reveal gate. The older panel playback would
+  // otherwise select an earlier speech while the viewer waits for Next response.
+  // Quick keeps its existing playback behavior.
+  const playback = state.mode === "standard" ? undefined : streamPlayback;
 
   const handleStart = useCallback(
     (draft: MatchDraft) => {
@@ -179,6 +192,9 @@ export default function ArenaScreen() {
           onOpenHistory={handleOpenHistory}
           playback={playback}
           standardLimits={matchDraft?.standard}
+          onNextResponse={nextResponse}
+          canAdvanceNextResponse={canAdvanceNextResponse}
+          isWaitingForNextResponse={isWaitingForNextResponse}
         />
         {/* v0.3.1 idle: minimal hero with one CTA + a small
             recent-matches link. Both open modals that sit on top of

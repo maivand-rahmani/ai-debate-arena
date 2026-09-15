@@ -81,6 +81,41 @@ function speakInputStream(deltas: readonly string[], prefix: readonly LanguageMo
   ]);
 }
 
+/**
+ * A provider stream that emits its parts immediately, then stays open until
+ * `gate` resolves before finishing. Lets a test observe progress that the
+ * adapter emitted while the move is still streaming.
+ */
+function gatedStreamResult(parts: readonly LanguageModelV4StreamPart[], gate: Promise<void>): LanguageModelV4StreamResult {
+  return {
+    stream: new ReadableStream<LanguageModelV4StreamPart>({
+      start(controller) {
+        controller.enqueue({ type: "stream-start", warnings: [] });
+        for (const part of parts) controller.enqueue(part);
+        void gate.then(() => {
+          controller.enqueue({
+            type: "finish",
+            finishReason: { unified: "tool-calls", raw: "tool-calls" },
+            usage: {
+              inputTokens: { total: 5, noCache: 5, cacheRead: 0, cacheWrite: 0 },
+              outputTokens: { total: 3, text: 3, reasoning: 0 },
+            },
+          });
+          controller.close();
+        });
+      },
+    }),
+  };
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
+  const startedAt = Date.now();
+  while (!predicate()) {
+    if (Date.now() - startedAt > timeoutMs) throw new Error("waitFor timed out");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 function textOnlyStream(): LanguageModelV4StreamResult {
   const parts: LanguageModelV4StreamPart[] = [
     { type: "stream-start", warnings: [] },
@@ -421,6 +456,145 @@ describe("createWebStandardAgentSession", () => {
     ]);
   });
 
+  it("emits ordered word-by-word chunks across fragmented tool-input deltas", async () => {
+    // The deltas deliberately split the JSON key, the value opening, and the
+    // content itself, matching how a provider streams raw tool arguments.
+    const model = modelWith(
+      speakInputStream([
+        "{",
+        '"con',
+        'tent":',
+        '"Alpha',
+        " beta",
+        " gamma",
+        ' delta"',
+        ',"ready":true}',
+      ]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const progress: Array<{ type: string; text?: string }> = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const result = await session.move(moveInput({ onProgress: (event) => progress.push(event) }));
+
+    expect(result.speech).toBe("Alpha beta gamma delta");
+    const speechChunks = progress
+      .filter((event) => event.type === "speech")
+      .map((event) => event.text ?? "");
+    // Multiple ordered chunks, one per content growth, with no JSON syntax or
+    // duplicated content.
+    expect(speechChunks).toEqual(["Alpha", " beta", " gamma", " delta"]);
+    expect(speechChunks.length).toBeGreaterThan(1);
+    expect(speechChunks.join("")).toBe(result.speech);
+  });
+
+  it("streams public speech chunks before the move resolves", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const model = modelWith(
+      gatedStreamResult(
+        [
+          { type: "tool-input-start", id: "speak-1", toolName: "speak" },
+          { type: "tool-input-delta", id: "speak-1", delta: '{"content":"First ' },
+          { type: "tool-input-delta", id: "speak-1", delta: "second " },
+          { type: "tool-input-delta", id: "speak-1", delta: 'third","ready":false}' },
+          { type: "tool-input-end", id: "speak-1" },
+          {
+            type: "tool-call",
+            toolCallId: "speak-1",
+            toolName: "speak",
+            input: '{"content":"First second third","ready":false}',
+          },
+        ],
+        gate,
+      ),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const progress: StandardAgentProgressEvent[] = [];
+    const session = createWebStandardAgentSession(factoryInput);
+    let settled = false;
+    const movePromise = session.move(moveInput({ onProgress: (event) => progress.push(event) }));
+    void movePromise.finally(() => {
+      settled = true;
+    });
+
+    // The provider stream is still open, yet the adapter has already delivered
+    // ordered public chunks through the progress callback.
+    await waitFor(() => progress.filter((event) => event.type === "speech").length >= 3);
+    expect(settled).toBe(false);
+    const chunks = progress.flatMap((event) => (event.type === "speech" ? [event.text] : []));
+    expect(chunks).toEqual(["First ", "second ", "third"]);
+    expect(JSON.stringify(progress)).not.toContain("private");
+
+    release();
+    const result = await movePromise;
+    expect(result.speech).toBe("First second third");
+  });
+
+  it("returns the public speech through the fallback when only a final tool call is sent", async () => {
+    const model = modelWith(
+      streamPartsResult([
+        { type: "text-start", id: "t" },
+        { type: "text-delta", id: "t", delta: "private reasoning that must stay hidden" },
+        { type: "text-end", id: "t" },
+        {
+          type: "tool-call",
+          toolCallId: "speak-1",
+          toolName: "speak",
+          input: '{"content":"Fallback public speech","ready":true}',
+        },
+      ]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const progress: StandardAgentProgressEvent[] = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const result = await session.move(moveInput({ onProgress: (event) => progress.push(event) }));
+
+    expect(result.speech).toBe("Fallback public speech");
+    expect(result.ready).toBe(true);
+    // With no tool-input deltas the whole public speech is still delivered once
+    // through the execute fallback, and private text never leaks.
+    const speech = progress.flatMap((event) => (event.type === "speech" ? [event.text] : []));
+    expect(speech).toEqual(["Fallback public speech"]);
+    expect(JSON.stringify(progress)).not.toContain("private reasoning");
+  });
+
+  it("delivers the validated public speech when it differs from the streamed deltas", async () => {
+    const model = modelWith(
+      streamPartsResult([
+        { type: "tool-input-start", id: "speak-1", toolName: "speak" },
+        // Duplicate `content` keys: the streamed decoder takes the first, while
+        // JSON.parse (and therefore the SDK's validated input) keeps the last.
+        {
+          type: "tool-input-delta",
+          id: "speak-1",
+          delta: '{"content":"Draft wording","content":"Final wording","ready":false}',
+        },
+        { type: "tool-input-end", id: "speak-1" },
+        {
+          type: "tool-call",
+          toolCallId: "speak-1",
+          toolName: "speak",
+          input: '{"content":"Draft wording","content":"Final wording","ready":false}',
+        },
+      ]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const progress: StandardAgentProgressEvent[] = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    const result = await session.move(moveInput({ onProgress: (event) => progress.push(event) }));
+
+    expect(result.speech).toBe("Final wording");
+    const speech = progress.flatMap((event) => (event.type === "speech" ? [event.text] : [])).join("");
+    // The validated speech is delivered through the fallback even though the
+    // streamed prefix diverged, so the caption is never left with stale words.
+    expect(speech.endsWith("Final wording")).toBe(true);
+  });
+
   it("decodes escaped speech content across deltas", async () => {
     const model = modelWith(
       speakInputStream(['{"content":"line\\nquote: \\"', 'x\\\\tab\\t","ready":false}']),
@@ -487,6 +661,47 @@ describe("createWebStandardAgentSession", () => {
 
     expect(progress.map((event) => event.text ?? "").join(""))
       .toBe("Already public");
+  });
+
+  it("ignores a second streamed speak call instead of mixing its speech", async () => {
+    const model = modelWith(
+      streamPartsResult([
+        { type: "tool-input-start", id: "speak-1", toolName: "speak" },
+        { type: "tool-input-delta", id: "speak-1", delta: '{"content":"First","ready":false}' },
+        { type: "tool-input-end", id: "speak-1" },
+        { type: "tool-input-start", id: "speak-2", toolName: "speak" },
+        { type: "tool-input-delta", id: "speak-2", delta: '{"content":"Second","ready":false}' },
+        { type: "tool-input-end", id: "speak-2" },
+        {
+          type: "tool-call",
+          toolCallId: "speak-1",
+          toolName: "speak",
+          input: '{"content":"First","ready":false}',
+        },
+        {
+          type: "tool-call",
+          toolCallId: "speak-2",
+          toolName: "speak",
+          input: '{"content":"Second","ready":false}',
+        },
+      ]),
+    );
+    mocks.createWebModel.mockResolvedValue(model);
+    const progress: Array<{ type: string; text?: string }> = [];
+
+    const session = createWebStandardAgentSession(factoryInput);
+    await expect(
+      session.move(moveInput({ onProgress: (event) => progress.push(event) })),
+    ).rejects.toThrow(/more than once/);
+
+    // Only the first speech was streamed; the duplicate is a protocol error,
+    // not extra public text.
+    const speechText = progress
+      .filter((event) => event.type === "speech")
+      .map((event) => event.text ?? "")
+      .join("");
+    expect(speechText).toBe("First");
+    expect(speechText).not.toContain("Second");
   });
 
   it("normalizes a thrown executor error to a bounded event without provider internals", async () => {

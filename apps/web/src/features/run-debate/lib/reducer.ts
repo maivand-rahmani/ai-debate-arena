@@ -61,6 +61,12 @@ export interface DebateRuntimeState {
   readonly panels: readonly SpeechPanel[];
   readonly standardEvents: readonly StandardTimelineEvent[];
   /**
+   * Public tool activity for the Standard move currently on air. The complete
+   * event history above remains available for transcript/replay; this shorter
+   * view is deliberately retired when the move seals or the next phase starts.
+   */
+  readonly activeStandardEvents: readonly StandardTimelineEvent[];
+  /**
    * Most recent authoritative Standard resource snapshot from the runner
    * (`standard-state`). Stays `undefined` for Quick and before the first
    * Standard move completes, so the UI never re-derives accounting itself.
@@ -102,6 +108,7 @@ export const initialRuntimeState: DebateRuntimeState = {
   judgeReasoning: "",
   panels: [],
   standardEvents: [],
+  activeStandardEvents: [],
   standardState: undefined,
   matchId: undefined,
   judgedAt: undefined,
@@ -197,30 +204,34 @@ function applyStreamEvent(state: DebateRuntimeState, event: DebateStreamEvent): 
     case "phase":
       {
         const currentTurn = findMatchTurn(withMatchId.mode, event.phase) ?? null;
-      return {
-        ...withMatchId,
-        status: currentTurn ? "streaming" : event.phase === "JUDGING" ? "judging" : withMatchId.status,
-        currentPhase: event.phase,
-        currentSide: event.side,
-        currentTurn,
-      };
+        return {
+          ...withMatchId,
+          status: currentTurn ? "streaming" : event.phase === "JUDGING" ? "judging" : withMatchId.status,
+          currentPhase: event.phase,
+          currentSide: event.side,
+          currentTurn,
+          activeStandardEvents: isStandardMovePhase(withMatchId.mode, event.phase)
+            ? []
+            : withMatchId.activeStandardEvents,
+        };
       }
     case "token":
       return appendToken(withMatchId, event.side, event.text, deriveSpeechPhase(withMatchId.currentPhase));
     case "tool-start":
-      return { ...withMatchId, standardEvents: [...withMatchId.standardEvents, event] };
+      return appendToolEvent(withMatchId, event);
     case "tool-result":
-      return { ...withMatchId, standardEvents: [...withMatchId.standardEvents, event] };
+      return appendToolEvent(withMatchId, event);
     case "standard-state":
       // Authoritative runner-owned accounting; replace the last snapshot and
       // leave the public tool timeline untouched. Older snapshots are
       // normalized so optional post-v1 fields are always concrete.
       return { ...withMatchId, standardState: normalizeStandardState(event.state) };
     case "turn":
-      return sealTurn(withMatchId, event.turn);
+      return sealTurn({ ...withMatchId, activeStandardEvents: [] }, event.turn);
     case "judge-start":
       return {
         ...withMatchId,
+        activeStandardEvents: [],
         status: "judging",
         judgeActive: true,
         judgeReasoning: "",
@@ -346,6 +357,23 @@ function sealTurn(state: DebateRuntimeState, turn: DebateStreamTurn): DebateRunt
     };
   }
   return { ...state, panels: [...state.panels, next] };
+}
+
+function appendToolEvent(
+  state: DebateRuntimeState,
+  event: Extract<DebateStreamEvent, { readonly type: "tool-start" | "tool-result" }>,
+): DebateRuntimeState {
+  return {
+    ...state,
+    standardEvents: [...state.standardEvents, event],
+    activeStandardEvents: isStandardMovePhase(state.mode, state.currentPhase)
+      ? [...state.activeStandardEvents, event]
+      : state.activeStandardEvents,
+  };
+}
+
+function isStandardMovePhase(mode: MatchMode, phase: DebateStreamPhase): boolean {
+  return mode === "standard" && phase.startsWith("standard-") && findMatchTurn("standard", phase) !== undefined;
 }
 
 function isAgentPhase(phase: DebateStreamPhase): boolean {

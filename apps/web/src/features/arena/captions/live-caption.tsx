@@ -8,6 +8,10 @@ interface LiveCaptionProps {
   readonly state: DebateRuntimeState;
   /** A spectator-selected speech that should remain on screen while later turns generate. */
   readonly focusedPanel?: SpeechPanel | null;
+  /** Standard-only spectator pacing control. */
+  readonly onNextResponse?: () => void;
+  readonly canAdvanceNextResponse?: boolean;
+  readonly isWaitingForNextResponse?: boolean;
   /**
    * Optional status row that the caption sits above (typically the
    * compact round/status chip from the broadcast header). Rendered
@@ -23,13 +27,39 @@ interface LiveCaptionProps {
  * speaker / judge / verdict / cancelled / error. Designed to stay
  * readable when the 3D scene is dimmed behind it.
  */
-export function LiveCaption({ state, focusedPanel }: LiveCaptionProps) {
+export function LiveCaption({
+  state,
+  focusedPanel,
+  onNextResponse,
+  canAdvanceNextResponse = false,
+  isWaitingForNextResponse = false,
+}: LiveCaptionProps) {
   const view = deriveCaptionView(state, focusedPanel);
   if (!view.visible) return null;
-  return <CaptionPanel view={view} />;
+  return (
+    <CaptionPanel
+      state={state}
+      view={view}
+      onNextResponse={onNextResponse}
+      canAdvanceNextResponse={canAdvanceNextResponse}
+      isWaitingForNextResponse={isWaitingForNextResponse}
+    />
+  );
 }
 
-function CaptionPanel({ view }: { view: CaptionView }) {
+function CaptionPanel({
+  state,
+  view,
+  onNextResponse,
+  canAdvanceNextResponse,
+  isWaitingForNextResponse,
+}: {
+  readonly state: DebateRuntimeState;
+  readonly view: CaptionView;
+  readonly onNextResponse?: () => void;
+  readonly canAdvanceNextResponse: boolean;
+  readonly isWaitingForNextResponse: boolean;
+}) {
   const status = statusLabel(view);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -53,12 +83,25 @@ function CaptionPanel({ view }: { view: CaptionView }) {
           {view.speakerLabel}
         </span>
         <span className="live-caption__phase">{view.phaseLabel}</span>
-        <span className="live-caption__status" aria-live="polite">
+        <span className="live-caption__status">
           {status}
         </span>
       </header>
+      <span className="live-caption__announcement" role="status" aria-live="polite">
+        {captionAnnouncement(view)}
+      </span>
+      {toolAnnouncement(state) ? (
+        <span className="live-caption__announcement" role="status" aria-live="polite">
+          {toolAnnouncement(state)}
+        </span>
+      ) : null}
       <div ref={bodyRef} className="live-caption__body" aria-live="off">
-        {view.text ? (
+        {publicActivity(state, view) ? (
+          <div className="live-caption__activity">
+            <span className="live-caption__activity-label">Public activity</span>
+            <span>{publicActivity(state, view)}</span>
+          </div>
+        ) : view.text ? (
           <p className="live-caption__text">
             {view.text}
             {view.isLive ? (
@@ -71,6 +114,25 @@ function CaptionPanel({ view }: { view: CaptionView }) {
           </p>
         )}
       </div>
+      {canAdvanceNextResponse && onNextResponse ? (
+        <div className="playback-controls live-caption__next-response" role="status">
+          <span className="playback-controls__status">Next response is ready</span>
+          <button
+            type="button"
+            className="playback-controls__next"
+            aria-label="Show next response"
+            onClick={() => onNextResponse()}
+          >
+            <span>Next response</span>
+            <kbd>Enter</kbd>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      ) : isWaitingForNextResponse ? (
+        <p className="playback-controls playback-controls--waiting live-caption__next-response" role="status">
+          Preparing the next response…
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -97,4 +159,50 @@ function idleMessage(view: CaptionView): string {
   if (view.kind.kind === "cancelled") return "The match ended before a verdict.";
   if (view.kind.kind === "error") return view.kind.message;
   return "";
+}
+
+function publicActivity(state: DebateRuntimeState, view: CaptionView): string | null {
+  if (view.kind?.kind !== "speaker" || view.text.trim().length > 0) return null;
+
+  const event = state.activeStandardEvents[state.activeStandardEvents.length - 1];
+  if (!event) return "Preparing a public response…";
+  if (event.type === "tool-start") return `Researching with ${toolLabel(event.tool.tool)}…`;
+  if (event.result.rejected || !event.result.ok) return "Adjusting after a tool issue…";
+  return "Reviewing public evidence…";
+}
+
+function captionAnnouncement(view: CaptionView): string {
+  if (!view.kind) return "";
+  if (view.kind.kind === "speaker") {
+    return `${view.speakerLabel} · ${view.phaseLabel} · ${view.isLive ? "speaking" : "speech ready"}`;
+  }
+  if (view.kind.kind === "judge-evaluating") return "The judge is evaluating the public match record.";
+  if (view.kind.kind === "verdict") return "The judge has reached a verdict.";
+  if (view.kind.kind === "cancelled") return "The match has ended before a verdict.";
+  return `Match error: ${view.kind.message}`;
+}
+
+function toolAnnouncement(state: DebateRuntimeState): string | null {
+  const event = state.activeStandardEvents[state.activeStandardEvents.length - 1];
+  if (!event) return null;
+  const speaker = event.type === "tool-start"
+    ? event.tool.side === "A" ? "Ember" : "Vesper"
+    : event.result.side === "A" ? "Ember" : "Vesper";
+  const tool = event.type === "tool-start" ? event.tool.tool : event.result.tool;
+  const label = toolLabel(tool).toLowerCase();
+  if (event.type === "tool-start") return `${speaker} started ${label}.`;
+  if (event.result.rejected) return `${speaker}'s ${label} was not run${toolReason(event.result.error)}.`;
+  if (!event.result.ok) return `${speaker}'s ${label} failed${toolReason(event.result.error)}.`;
+  return `${speaker}'s ${label} returned a public result.`;
+}
+
+function toolLabel(tool: string): string {
+  if (tool === "web_search") return "Web search";
+  if (tool === "fetch_url") return "URL fetch";
+  return "Code execution";
+}
+
+function toolReason(reason: string | undefined): string {
+  const clean = reason?.trim().replace(/\s+/g, " ");
+  return clean ? `: ${clean.length > 90 ? `${clean.slice(0, 87)}…` : clean}` : "";
 }

@@ -47,6 +47,10 @@ export interface BroadcastStageProps {
     readonly maxToolsPerMove?: number;
     readonly toolTimeoutMs?: number;
   };
+  /** Standard spectator gate: release one complete response block. */
+  readonly onNextResponse?: () => void;
+  readonly canAdvanceNextResponse?: boolean;
+  readonly isWaitingForNextResponse?: boolean;
 }
 
 /**
@@ -80,6 +84,9 @@ export function BroadcastStage({
   onOpenHistory,
   reactionsMuted = false,
   playback,
+  onNextResponse,
+  canAdvanceNextResponse = false,
+  isWaitingForNextResponse = false,
 }: BroadcastStageProps) {
   const view = deriveStageView(state, playback?.focusedPanel ?? null);
 
@@ -176,7 +183,13 @@ export function BroadcastStage({
 
       {showPlaybackCaption ? (
         <div className="broadcast-stage__caption">
-          <LiveCaption state={state} focusedPanel={playback?.focusedPanel} />
+          <LiveCaption
+            state={state}
+            focusedPanel={playback?.focusedPanel}
+            onNextResponse={onNextResponse}
+            canAdvanceNextResponse={canAdvanceNextResponse}
+            isWaitingForNextResponse={isWaitingForNextResponse}
+          />
           {playback ? <PlaybackControls state={state} playback={playback} /> : null}
         </div>
       ) : null}

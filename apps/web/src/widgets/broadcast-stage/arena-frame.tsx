@@ -39,7 +39,13 @@ export function ArenaFrame(props: BroadcastStageProps) {
   const focusedPanel = props.playback?.focusedPanel ?? null;
   // A missing playback snapshot means there is no spectator hold in front of
   // the terminal surface, so the verdict is already presentable.
-  const isTerminalFrame = props.playback?.isTerminalFrame ?? true;
+  const renderRails = shouldRenderArenaRails(props.state, props.playback);
+  // Standard's live frame has no legacy playback snapshot. Give the scene the
+  // same live/terminal distinction as the rails instead of defaulting to the
+  // playback hook's terminal sentinel.
+  const isTerminalFrame = props.playback === undefined && props.state.mode === "standard"
+    ? !renderRails
+    : props.playback?.isTerminalFrame ?? true;
   const signal = useMemo(
     () => deriveSceneSignal(props.state, isReducedMotion, undefined, focusedPanel, isTerminalFrame),
     [props.state, isReducedMotion, focusedPanel, isTerminalFrame],
@@ -56,16 +62,33 @@ export function ArenaFrame(props: BroadcastStageProps) {
         <BroadcastStage {...props} />
       </CanvasGate>
       <ArenaHud {...props} />
-      {/* Single source for the contender rails across both worlds. They are
-          omitted on the terminal frame so the verdict surface can never be
-          covered (the rails sit above the HUD in the stacking order). */}
-      {isTerminalFrame ? null : (
+      {/* Single source for the contender rails across both worlds. Standard
+          live frames do not have a playback snapshot; terminal frames still
+          omit the rails so they cannot cover judge/error surfaces. */}
+      {renderRails ? (
         <ArenaRails
           state={props.state}
           playback={props.playback}
           standardLimits={props.standardLimits}
         />
-      )}
+      ) : null}
     </section>
   );
+}
+
+/**
+ * Quick uses the legacy playback snapshot to decide when the terminal frame
+ * has been reached. Standard live play normally has no playback snapshot: its
+ * stream gate controls reveal pacing, while this frame keeps the rails present
+ * during starting/streaming and out of terminal judge surfaces. If a playback
+ * snapshot is supplied, its explicit terminal choice remains authoritative.
+ */
+export function shouldRenderArenaRails(
+  state: BroadcastStageProps["state"],
+  playback: BroadcastStageProps["playback"],
+): boolean {
+  if (state.mode === "standard" && playback === undefined) {
+    return state.status === "starting" || state.status === "streaming";
+  }
+  return playback?.isTerminalFrame === false;
 }

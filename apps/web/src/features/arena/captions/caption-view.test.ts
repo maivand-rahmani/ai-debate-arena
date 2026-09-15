@@ -72,6 +72,22 @@ describe("deriveCaptionView — streaming phases", () => {
     expect(view.text).toBe("Sealed text");
     expect(view.isLive).toBe(false);
   });
+
+  it("resolves dynamic Standard phases instead of treating them as Quick turns", () => {
+    const view = deriveCaptionView({
+      ...base,
+      mode: "standard",
+      status: "streaming",
+      currentPhase: "standard-a-round-3",
+      currentSide: "A",
+      panels: [
+        { id: "A:standard-a-round-3", side: "A", phase: "standard-a-round-3", content: "A researched response.", sealed: false },
+      ],
+    });
+    expect(view.kind?.kind).toBe("speaker");
+    expect(view.phaseLabel).toBe("Open round 3 · Response");
+    expect(view.text).toBe("A researched response.");
+  });
 });
 
 describe("deriveCaptionView — judge evaluating", () => {

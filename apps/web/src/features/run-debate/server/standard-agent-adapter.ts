@@ -344,6 +344,14 @@ function decodeSpeakContent(input: string): { readonly text: string; readonly in
   return { text: safeDecodedPrefix(parsed.value), invalid: false };
 }
 
+/** Number of leading characters two strings share. */
+function sharedPrefixLength(left: string, right: string): number {
+  const limit = Math.min(left.length, right.length);
+  let index = 0;
+  while (index < limit && left[index] === right[index]) index += 1;
+  return index;
+}
+
 /**
  * Server-owned Standard agent session backed by the AI SDK v7 `ToolLoopAgent`.
  *
@@ -463,11 +471,13 @@ export function createWebStandardAgentSession(input: StandardAgentSessionFactory
           return { ok: false, error: "speak was already called for this move" };
         }
         state.speak = { content: args.content, ready: args.ready === true };
-        const suffix = args.content.startsWith(state.streamedSpeakText)
-          ? args.content.slice(state.streamedSpeakText.length)
-          : state.streamedSpeakText.length === 0
-            ? args.content
-            : "";
+        // Emit the public content not streamed yet. Normally the deltas are an
+        // exact prefix of the validated content; if the provider's parsed input
+        // differs (repair, duplicate keys), resume after the shared prefix so
+        // the caption is never left with stale partial words. Private
+        // text/reasoning is never read here.
+        const sharedPrefix = sharedPrefixLength(state.streamedSpeakText, args.content);
+        const suffix = args.content.slice(sharedPrefix);
         if (suffix) state.onProgress?.({ type: "speech", text: suffix });
         state.streamedSpeakText = args.content;
         return { ok: true };
@@ -529,7 +539,10 @@ export function createWebStandardAgentSession(input: StandardAgentSessionFactory
       // Text and reasoning are private: the public speech must arrive through
       // the speak tool, and a missing speak is a protocol error.
       for await (const part of result.stream) {
-        if (part.type === "tool-input-start" && part.toolName === "speak" && !state.speak) {
+        // Latch onto the first streamed speak call only. A duplicate speak is a
+        // protocol error handled after the stream; ignoring its deltas here
+        // keeps the first speech's text from being mixed or re-emitted.
+        if (part.type === "tool-input-start" && part.toolName === "speak" && state.speakInputId === null) {
           state.speakInputId = part.id;
           state.speakInputBuffer = "";
           state.streamedSpeakText = "";

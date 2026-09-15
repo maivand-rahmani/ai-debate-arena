@@ -12,7 +12,7 @@
  */
 
 import type { DebateSide } from "@arena/debate-engine";
-import { findMatchTurn } from "@arena/types";
+import { findMatchTurn, parseStandardRoundTurn } from "@arena/types";
 import type {
   DebateRuntimeState,
   SpeechPanel,
@@ -55,26 +55,32 @@ const SPEAKER_LABEL: Readonly<Record<DebateSide, string>> = {
  * A before B within a round. Used so the "last line" pick is the
  * most recent thing the audience just heard.
  */
-function panelOrder(panel: SpeechPanel): number {
-  return findMatchTurn("quick", panel.phase)?.order ?? Number.MAX_SAFE_INTEGER;
+function panelOrder(mode: DebateRuntimeState["mode"], panel: SpeechPanel): number {
+  return findMatchTurn(mode, panel.phase)?.order ?? Number.MAX_SAFE_INTEGER;
 }
 
-function phaseLabel(phase: SpeechPhase): string {
+function phaseLabel(mode: DebateRuntimeState["mode"], phase: SpeechPhase): string {
   const legacy: Readonly<Record<string, string>> = {
     OPENING_A: "Round 1 · Opening",
     OPENING_B: "Round 1 · Opening",
     REBUTTAL_A: "Round 2 · Rebuttal",
     REBUTTAL_B: "Round 2 · Rebuttal",
   };
-  if (legacy[phase]) return legacy[phase];
-  const turn = findMatchTurn("quick", phase);
+  if (mode !== "standard" && legacy[phase]) return legacy[phase];
+  const turn = findMatchTurn(mode, phase);
   if (!turn) return phase;
+  if (mode === "standard") {
+    if (turn.role === "opening") return "Round 1 · Opening";
+    const standardRound = parseStandardRoundTurn(phase);
+    const round = standardRound ? Math.floor((standardRound.order - 3) / 2) + 1 : 1;
+    return `Open round ${round} · Response`;
+  }
   return `Turn ${turn.order} · ${turn.role === "opening" ? "Opening" : "Response"}`;
 }
 
 function lastPanel(state: DebateRuntimeState): SpeechPanel | null {
   if (state.panels.length === 0) return null;
-  const sorted = [...state.panels].sort((a, b) => panelOrder(a) - panelOrder(b));
+  const sorted = [...state.panels].sort((a, b) => panelOrder(state.mode, a) - panelOrder(state.mode, b));
   return sorted[sorted.length - 1] ?? null;
 }
 
@@ -89,7 +95,7 @@ export function deriveCaptionView(state: DebateRuntimeState, focusedPanel?: Spee
     return {
       kind: { kind: "speaker", side: focusedPanel.side, phase: focusedPanel.phase, sealed: focusedPanel.sealed },
       speakerLabel: SPEAKER_LABEL[focusedPanel.side],
-      phaseLabel: phaseLabel(focusedPanel.phase),
+      phaseLabel: phaseLabel(state.mode, focusedPanel.phase),
       text: focusedPanel.content,
       tone: focusedPanel.side === "A" ? "coral" : "violet",
       isLive: isCurrent && !focusedPanel.sealed,
@@ -102,14 +108,14 @@ export function deriveCaptionView(state: DebateRuntimeState, focusedPanel?: Spee
   //      sealed `turn` event hasn't arrived, we still surface the
   //      half-streamed content.
   if (state.status === "streaming" && state.currentSide) {
-    const phase = isAgentPhase(state.currentPhase) ? state.currentPhase : null;
+    const phase = isAgentPhase(state) ? state.currentPhase : null;
     if (phase) {
       const id = `${state.currentSide}:${phase}`;
       const panel = state.panels.find((entry) => entry.id === id);
       return {
         kind: { kind: "speaker", side: state.currentSide, phase, sealed: panel?.sealed === true },
         speakerLabel: SPEAKER_LABEL[state.currentSide],
-        phaseLabel: phaseLabel(phase),
+        phaseLabel: phaseLabel(state.mode, phase),
         text: panel?.content ?? "",
         tone: state.currentSide === "A" ? "coral" : "violet",
         isLive: panel?.sealed !== true,
@@ -126,7 +132,7 @@ export function deriveCaptionView(state: DebateRuntimeState, focusedPanel?: Spee
       return {
         kind: { kind: "judge-evaluating" },
         speakerLabel: SPEAKER_LABEL[last.side],
-        phaseLabel: phaseLabel(last.phase),
+        phaseLabel: phaseLabel(state.mode, last.phase),
         text: last.content,
         tone: last.side === "A" ? "coral" : "violet",
         isLive: false,
@@ -164,7 +170,7 @@ export function deriveCaptionView(state: DebateRuntimeState, focusedPanel?: Spee
     return {
       kind: { kind: "verdict" },
       speakerLabel: last ? SPEAKER_LABEL[last.side] : "The Judge",
-      phaseLabel: last ? phaseLabel(last.phase) : "Verdict",
+      phaseLabel: last ? phaseLabel(state.mode, last.phase) : "Verdict",
       text: last?.content ?? "The judge has reached a verdict.",
       tone: "honey",
       isLive: false,
@@ -180,7 +186,7 @@ export function deriveCaptionView(state: DebateRuntimeState, focusedPanel?: Spee
       return {
         kind: { kind: "cancelled" },
         speakerLabel: SPEAKER_LABEL[last.side],
-        phaseLabel: phaseLabel(last.phase),
+        phaseLabel: phaseLabel(state.mode, last.phase),
         text: last.content,
         tone: last.side === "A" ? "coral" : "violet",
         isLive: false,
@@ -207,7 +213,7 @@ export function deriveCaptionView(state: DebateRuntimeState, focusedPanel?: Spee
       return {
         kind: { kind: "error", message: state.errorMessage ?? "Something went wrong." },
         speakerLabel: SPEAKER_LABEL[last.side],
-        phaseLabel: phaseLabel(last.phase),
+        phaseLabel: phaseLabel(state.mode, last.phase),
         text: last.content,
         tone: "coral",
         isLive: false,
@@ -236,6 +242,6 @@ export function deriveCaptionView(state: DebateRuntimeState, focusedPanel?: Spee
   };
 }
 
-function isAgentPhase(phase: DebateRuntimeState["currentPhase"]): phase is SpeechPhase {
-  return findMatchTurn("quick", phase) !== undefined;
+function isAgentPhase(state: DebateRuntimeState): state is DebateRuntimeState & { readonly currentPhase: SpeechPhase } {
+  return findMatchTurn(state.mode, state.currentPhase) !== undefined;
 }
