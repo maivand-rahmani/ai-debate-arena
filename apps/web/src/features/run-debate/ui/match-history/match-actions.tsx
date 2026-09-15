@@ -3,11 +3,15 @@
 import { markdownDownloadUrl } from "@/shared/api/matches";
 
 export type RejudgeStatus = "idle" | "flying" | "error";
+export type ExportStatus = "idle" | "flying" | "error";
 
 interface MatchActionsProps {
   readonly matchId: string;
   readonly rejudgeStatus: RejudgeStatus;
   readonly rejudgeError?: string;
+  readonly refreshError?: string;
+  readonly exportStatus?: ExportStatus;
+  readonly exportError?: string;
   readonly canRejudge: boolean;
   readonly onExportJson: (matchId: string) => void | Promise<unknown>;
   readonly onRejudge: (matchId: string) => void | Promise<unknown>;
@@ -24,11 +28,14 @@ export function MatchActions({
   matchId,
   rejudgeStatus,
   rejudgeError,
+  refreshError,
+  exportStatus = "idle",
+  exportError,
   canRejudge,
   onExportJson,
   onRejudge,
 }: MatchActionsProps) {
-  const disabled = rejudgeStatus === "flying";
+  const disabled = rejudgeStatus === "flying" || exportStatus === "flying";
   return (
     <div className="match-actions">
       <div className="match-actions__row">
@@ -45,7 +52,7 @@ export function MatchActions({
           disabled={disabled}
           className="match-actions__secondary ghost-action"
         >
-          Export JSON
+          {exportStatus === "flying" ? "Exporting…" : "Export JSON"}
         </button>
         <button
           type="button"
@@ -66,6 +73,16 @@ export function MatchActions({
       {rejudgeStatus === "error" && rejudgeError ? (
         <p role="alert" className="match-actions__error">
           Could not re-judge: {rejudgeError}
+        </p>
+      ) : null}
+      {exportError ? (
+        <p role="alert" className="match-actions__error">
+          Could not export: {exportError}
+        </p>
+      ) : null}
+      {refreshError ? (
+        <p role="alert" className="match-actions__error">
+          Re-judge succeeded, but the refreshed match could not be loaded: {refreshError}
         </p>
       ) : null}
     </div>

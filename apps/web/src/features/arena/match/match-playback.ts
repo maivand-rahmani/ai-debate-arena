@@ -21,6 +21,11 @@ export interface MatchPlaybackSnapshot {
    * reaches the terminal frame.
    */
   readonly isTerminalFrame: boolean;
+  /** Whether a previous speech can be selected from the live arena. */
+  readonly canGoPrevious?: boolean;
+  /** Whether the live arena is behind the newest available presentation. */
+  readonly canCatchUp?: boolean;
+  readonly isAtLive?: boolean;
 }
 
 /** Stable natural order, independent of network arrival timing. */
@@ -62,6 +67,10 @@ export function deriveMatchPlayback(state: DebateRuntimeState, requestedIndex: n
   // terminal surface, so that is already the terminal frame. Otherwise the
   // terminal frame begins only once the sentinel index is selected.
   const isTerminalFrame = panels.length === 0 || terminalSelected;
+  const liveIndex = state.status === "judging" || state.status === "finished"
+    ? panels.length
+    : Math.max(0, panels.length - 1);
+  const isAtLive = focusedIndex === liveIndex;
 
   return {
     focusedPanel,
@@ -71,5 +80,8 @@ export function deriveMatchPlayback(state: DebateRuntimeState, requestedIndex: n
     canAdvance,
     holdTerminal,
     isTerminalFrame,
+    canGoPrevious: focusedIndex > 0,
+    canCatchUp: panels.length > 0 && !isAtLive,
+    isAtLive,
   };
 }

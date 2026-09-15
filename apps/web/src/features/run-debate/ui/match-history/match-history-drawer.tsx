@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { fetchMatchList, type MatchSummary, MatchesApiError } from "@/shared/api/matches";
 import { MatchSummaryRow } from "./match-summary-row";
 import { useMatchListDetails } from "./use-match-list-details";
@@ -31,27 +31,35 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const requestRef = useRef(0);
   const titleId = useId();
   const descriptionId = useId();
 
-  // Fetch the list once when the body mounts.
-  useEffect(() => {
-    let cancelled = false;
-    fetchMatchList()
+  const loadMatches = useCallback(() => {
+    const requestId = ++requestRef.current;
+    void fetchMatchList()
       .then((matches) => {
-        if (cancelled) return;
+        if (requestId !== requestRef.current) return;
         setList(matches);
         setStatus("ready");
       })
       .catch((reason: unknown) => {
-        if (cancelled) return;
+        if (requestId !== requestRef.current) return;
         setError(reason instanceof MatchesApiError ? reason.message : "Could not load matches.");
         setStatus("error");
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    loadMatches();
+    return () => { requestRef.current += 1; };
+  }, [loadMatches]);
+
+  const retry = () => {
+    setError(null);
+    setStatus("loading");
+    loadMatches();
+  };
 
   // Esc closes, focus stays in the drawer, and focus returns to its trigger.
   useEffect(() => {
@@ -124,9 +132,10 @@ function MatchHistoryDrawerBody({ onClose }: { onClose: () => void }) {
           {status === "loading" ? (
             <p className="drawer-shell__status">Loading matches…</p>
           ) : status === "error" ? (
-            <p className="drawer-shell__status" role="alert">
-              {error ?? "The matches endpoint is unreachable."}
-            </p>
+            <div className="drawer-shell__error" role="alert">
+              <p className="drawer-shell__status">{error ?? "The matches endpoint is unreachable."}</p>
+              <button type="button" className="modal__ghost" onClick={retry}>Try again</button>
+            </div>
           ) : list.length === 0 ? (
             <p className="drawer-shell__status">
               No saved matches yet. Run a match and it will appear here.

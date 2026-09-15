@@ -30,14 +30,10 @@ export function MatchHistoryRow({ summary, callbacks }: MatchHistoryRowProps) {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [rejudgeStatus, setRejudgeStatus] = useState<RejudgeStatus>("idle");
   const [rejudgeError, setRejudgeError] = useState<string | undefined>(undefined);
+  const [exportError, setExportError] = useState<string | undefined>(undefined);
   const [localJudgedAt, setLocalJudgedAt] = useState<string | undefined>(summary.judgedAt);
 
-  const toggle = async () => {
-    if (open) {
-      setOpen(false);
-      return;
-    }
-    setOpen(true);
+  const loadDetail = async () => {
     if (record || loadingDetail) return;
     setLoadingDetail(true);
     setDetailError(null);
@@ -51,9 +47,19 @@ export function MatchHistoryRow({ summary, callbacks }: MatchHistoryRowProps) {
     }
   };
 
+  const toggle = async () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    await loadDetail();
+  };
+
   const handleRejudge = async () => {
     setRejudgeStatus("flying");
     setRejudgeError(undefined);
+    setExportError(undefined);
     try {
       const { judgedAt } = await callbacks.onRejudge(summary.id);
       setRejudgeStatus("idle");
@@ -74,6 +80,7 @@ export function MatchHistoryRow({ summary, callbacks }: MatchHistoryRowProps) {
   };
 
   const handleExportJson = async () => {
+    setExportError(undefined);
     // Make sure we have the freshest record, then trigger a local download.
     let snapshot = record;
     if (!snapshot) {
@@ -81,8 +88,7 @@ export function MatchHistoryRow({ summary, callbacks }: MatchHistoryRowProps) {
         snapshot = await callbacks.onLoadDetail(summary.id);
         setRecord(snapshot);
       } catch (error) {
-        setRejudgeStatus("error");
-        setRejudgeError(error instanceof Error ? error.message : "Could not export this match.");
+        setExportError(error instanceof Error ? error.message : "Could not export this match.");
         return;
       }
     }
@@ -130,9 +136,14 @@ export function MatchHistoryRow({ summary, callbacks }: MatchHistoryRowProps) {
             {loadingDetail ? (
               <p className="text-sm text-arena-300">Loading transcript…</p>
             ) : detailError ? (
-              <p role="alert" className="text-sm text-arena-coral-200">
-                Could not load this match: {detailError}
-              </p>
+              <div role="alert" className="grid gap-3">
+                <p className="text-sm text-arena-coral-200">
+                  Could not load this match: {detailError}
+                </p>
+                <button type="button" onClick={() => void loadDetail()} className="match-history__retry modal__ghost">
+                  Try again
+                </button>
+              </div>
             ) : record ? (
               <>
                 <section>
@@ -151,6 +162,7 @@ export function MatchHistoryRow({ summary, callbacks }: MatchHistoryRowProps) {
               matchId={summary.id}
               rejudgeStatus={rejudgeStatus}
               rejudgeError={rejudgeError}
+              exportError={exportError}
               canRejudge={canRejudge}
               onExportJson={handleExportJson}
               onRejudge={handleRejudge}

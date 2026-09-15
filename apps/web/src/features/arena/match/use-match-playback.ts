@@ -6,6 +6,14 @@ import { deriveMatchPlayback, type MatchPlaybackSnapshot } from "./match-playbac
 
 export interface MatchPlayback extends MatchPlaybackSnapshot {
   readonly advance: () => void;
+  readonly previous?: () => void;
+  readonly catchUpToLive?: () => void;
+}
+
+export function shouldIgnorePlaybackShortcutTarget(
+  target: Pick<HTMLElement, "closest"> | null,
+): boolean {
+  return Boolean(target?.closest("[role=\"dialog\"], input, textarea, select, [contenteditable=\"true\"]"));
 }
 
 /** Viewer controls for a stream that keeps generating independently. */
@@ -35,15 +43,36 @@ export function useMatchPlayback(state: DebateRuntimeState): MatchPlayback {
     setRequestedIndex((index) => deriveMatchPlayback(latestState.current, index).nextIndex ?? index);
   }, []);
 
+  const previous = useCallback(() => {
+    setRequestedIndex((index) => Math.max(0, index - 1));
+  }, []);
+
+  const catchUpToLive = useCallback(() => {
+    setRequestedIndex(() => {
+      const current = latestState.current;
+      if (current.status === "judging" || current.status === "finished") return current.panels.length;
+      return Math.max(0, current.panels.length - 1);
+    });
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || !snapshot.canAdvance) return;
-      event.preventDefault();
-      advance();
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (shouldIgnorePlaybackShortcutTarget(target)) return;
+      if (event.key === "Escape" && snapshot.canAdvance) {
+        event.preventDefault();
+        advance();
+      } else if (event.key === "ArrowLeft" && snapshot.canGoPrevious) {
+        event.preventDefault();
+        previous();
+      } else if (event.key === "ArrowRight" && snapshot.canAdvance) {
+        event.preventDefault();
+        advance();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [advance, snapshot.canAdvance]);
+  }, [advance, previous, snapshot.canAdvance, snapshot.canGoPrevious]);
 
-  return { ...snapshot, advance };
+  return { ...snapshot, advance, previous, catchUpToLive };
 }

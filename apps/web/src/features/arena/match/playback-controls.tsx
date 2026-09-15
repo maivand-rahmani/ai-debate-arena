@@ -10,26 +10,65 @@ interface PlaybackControlsProps {
 
 /** Clear, optional control between finished speeches — never pauses models. */
 export function PlaybackControls({ state, playback }: PlaybackControlsProps) {
-  if (!playback.focusedPanel?.sealed) return null;
+  const terminalPosition = playback.focusedPanel === null && playback.isTerminalFrame && playback.canGoPrevious;
+  if (!playback.focusedPanel?.sealed && !terminalPosition) return null;
 
-  if (playback.canAdvance) {
+  if (playback.canAdvance || playback.canGoPrevious || playback.canCatchUp) {
     const isLastResponse = playback.unseenTurns === 0;
-    const waitingLabel = isLastResponse
+    const waitingLabel = terminalPosition
+      ? "Verdict is live"
+      : isLastResponse
       ? "Last response is ready · the judge works in the background"
       : playback.unseenTurns === 1
         ? "1 response ready · the models continue in the background"
         : `${playback.unseenTurns} responses ready · the models continue in the background`;
+    const positionLabel = terminalPosition
+      ? `Live verdict · ${state.panels.length} speeches`
+      : `Speech ${playback.focusedIndex + 1} of ${Math.max(1, state.panels.length)}`;
     return (
-      <div className="playback-controls" aria-live="polite">
-        <span className="playback-controls__status">
-          {waitingLabel}
+      <nav className="playback-controls" aria-label="Speech playback controls">
+        <span className="playback-controls__status" aria-live="polite">
+          <strong>{positionLabel}</strong>
+          <span>{waitingLabel}</span>
         </span>
-        <button type="button" className="playback-controls__next" onClick={playback.advance}>
-          <span>{isLastResponse ? "Show next turn" : "Show next turn"}</span>
-          <kbd>Esc</kbd>
-          <span aria-hidden="true">→</span>
-        </button>
-      </div>
+        <span className="playback-controls__actions">
+          <button
+            type="button"
+            className="playback-controls__next playback-controls__previous"
+            onClick={() => playback.previous?.()}
+            disabled={!playback.canGoPrevious}
+            aria-label="Show previous speech"
+            aria-keyshortcuts="ArrowLeft"
+          >
+            <span aria-hidden="true">←</span>
+            <span>Previous</span>
+            <kbd>←</kbd>
+          </button>
+          {playback.canCatchUp && playback.catchUpToLive ? (
+            <button
+              type="button"
+              className="playback-controls__next playback-controls__catch-up"
+              onClick={() => playback.catchUpToLive?.()}
+              aria-label="Catch up to live"
+            >
+              <span>Catch up to live</span>
+            </button>
+          ) : null}
+          {playback.canAdvance ? (
+            <button
+              type="button"
+              className="playback-controls__next"
+              onClick={playback.advance}
+              aria-label={isLastResponse ? "Show judge" : "Show next speech"}
+              aria-keyshortcuts="ArrowRight Escape"
+            >
+              <span>{isLastResponse ? "Show judge" : "Next speech"}</span>
+              <kbd>→</kbd>
+              <span aria-hidden="true">→</span>
+            </button>
+          ) : null}
+        </span>
+      </nav>
     );
   }
 

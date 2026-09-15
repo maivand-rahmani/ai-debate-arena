@@ -8,7 +8,7 @@ import {
   MatchesApiError,
   type MatchRecord,
 } from "@/shared/api/matches";
-import { exportJsonBlob, MatchActions, type RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
+import { exportJsonBlob, MatchActions, type ExportStatus, type RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
 import { CriteriaView } from "@/features/run-debate/ui/match-history/criteria-view";
 import { formatMatchDate, TERMINAL_LABEL, WINNER_LABEL } from "@/features/run-debate/ui/match-history/format-helpers";
 import { TranscriptThread } from "@/features/arena/match/transcript-thread";
@@ -28,8 +28,12 @@ export default function MatchPage({ params }: MatchPageProps) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [record, setRecord] = useState<MatchRecord | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [rejudgeStatus, setRejudgeStatus] = useState<RejudgeStatus>("idle");
   const [rejudgeError, setRejudgeError] = useState<string | undefined>(undefined);
+  const [refreshError, setRefreshError] = useState<string | undefined>(undefined);
+  const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
+  const [exportError, setExportError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,26 +53,47 @@ export default function MatchPage({ params }: MatchPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
+
+  const retryLoad = useCallback(() => {
+    setErrorMessage(null);
+    setStatus("loading");
+    setReloadKey((key) => key + 1);
+  }, []);
 
   const handleExportJson = useCallback(() => {
     if (!record) return;
-    exportJsonBlob(record, record.matchId);
+    setExportStatus("flying");
+    setExportError(undefined);
+    try {
+      exportJsonBlob(record, record.matchId);
+      setExportStatus("idle");
+    } catch (reason) {
+      setExportStatus("error");
+      setExportError(reason instanceof Error ? reason.message : "Could not export this match.");
+    }
   }, [record]);
 
   const handleRejudge = useCallback(async () => {
     setRejudgeStatus("flying");
     setRejudgeError(undefined);
+    setRefreshError(undefined);
     try {
       await rejudgeMatch(id);
-      const next = await fetchMatch(id);
-      setRecord(next);
-      setRejudgeStatus("idle");
     } catch (reason) {
       setRejudgeStatus("error");
       setRejudgeError(
         reason instanceof Error ? reason.message : "Could not re-judge this match.",
       );
+      return;
+    }
+    try {
+      const next = await fetchMatch(id);
+      setRecord(next);
+      setRejudgeStatus("idle");
+    } catch (reason) {
+      setRejudgeStatus("idle");
+      setRefreshError(reason instanceof Error ? reason.message : "Could not refresh this match.");
     }
   }, [id]);
 
@@ -87,12 +112,15 @@ export default function MatchPage({ params }: MatchPageProps) {
             Loading match…
           </p>
         ) : status === "error" || !record ? (
-          <ErrorState message={errorMessage ?? "The match could not be loaded."} />
+          <ErrorState message={errorMessage ?? "The match could not be loaded."} onRetry={retryLoad} />
         ) : (
           <MatchBody
             record={record}
             rejudgeStatus={rejudgeStatus}
             rejudgeError={rejudgeError}
+            refreshError={refreshError}
+            exportStatus={exportStatus}
+            exportError={exportError}
             onExportJson={handleExportJson}
             onRejudge={handleRejudge}
           />
@@ -106,12 +134,18 @@ function MatchBody({
   record,
   rejudgeStatus,
   rejudgeError,
+  refreshError,
+  exportStatus,
+  exportError,
   onExportJson,
   onRejudge,
 }: {
   readonly record: MatchRecord;
   readonly rejudgeStatus: RejudgeStatus;
   readonly rejudgeError: string | undefined;
+  readonly refreshError: string | undefined;
+  readonly exportStatus: ExportStatus;
+  readonly exportError: string | undefined;
   readonly onExportJson: () => void;
   readonly onRejudge: () => void;
 }) {
@@ -178,6 +212,9 @@ function MatchBody({
             record={record}
             rejudgeStatus={rejudgeStatus}
             rejudgeError={rejudgeError}
+            refreshError={refreshError}
+            exportStatus={exportStatus}
+            exportError={exportError}
             canRejudge={canRejudge}
             onExportJson={onExportJson}
             onRejudge={onRejudge}
@@ -193,6 +230,9 @@ function MatchBody({
             record={record}
             rejudgeStatus={rejudgeStatus}
             rejudgeError={rejudgeError}
+            refreshError={refreshError}
+            exportStatus={exportStatus}
+            exportError={exportError}
             canRejudge={canRejudge}
             onExportJson={onExportJson}
             onRejudge={onRejudge}
@@ -230,6 +270,9 @@ function ArchiveActions({
   record,
   rejudgeStatus,
   rejudgeError,
+  refreshError,
+  exportStatus,
+  exportError,
   canRejudge,
   onExportJson,
   onRejudge,
@@ -237,6 +280,9 @@ function ArchiveActions({
   readonly record: MatchRecord;
   readonly rejudgeStatus: RejudgeStatus;
   readonly rejudgeError: string | undefined;
+  readonly refreshError: string | undefined;
+  readonly exportStatus: ExportStatus;
+  readonly exportError: string | undefined;
   readonly canRejudge: boolean;
   readonly onExportJson: () => void;
   readonly onRejudge: () => void;
@@ -251,6 +297,9 @@ function ArchiveActions({
         matchId={record.matchId}
         rejudgeStatus={rejudgeStatus}
         rejudgeError={rejudgeError}
+        refreshError={refreshError}
+        exportStatus={exportStatus}
+        exportError={exportError}
         canRejudge={canRejudge}
         onExportJson={() => onExportJson()}
         onRejudge={() => void onRejudge()}
@@ -259,12 +308,15 @@ function ArchiveActions({
   );
 }
 
-function ErrorState({ message }: { message: string }) {
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="match-page__error" role="alert">
       <p className="match-page__error-eyebrow">Match not found</p>
       <h1 className="match-page__error-title">We could not load that match.</h1>
       <p className="match-page__error-body">{message}</p>
+      <button type="button" className="match-page__error-retry" onClick={onRetry}>
+        Try again
+      </button>
       <Link href="/" className="match-page__error-link">
         ← Back to the arena
       </Link>

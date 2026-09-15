@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchMatchList, type MatchRecord, type MatchSummary, MatchesApiError } from "@/shared/api/matches";
 import { Modal, ModalBody, ModalFooter, ModalHeader } from "@/shared/ui/modal";
 import { MatchSummaryRow } from "@/features/run-debate/ui/match-history/match-summary-row";
@@ -31,25 +31,34 @@ function RecentMatchesModalBody({ onClose, onOpenMatch }: Omit<RecentMatchesModa
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [list, setList] = useState<readonly MatchSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const requestRef = useRef(0);
   const details = useMatchListDetails(list);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchMatchList()
+  const loadMatches = useCallback(() => {
+    const requestId = ++requestRef.current;
+    void fetchMatchList()
       .then((matches) => {
-        if (cancelled) return;
+        if (requestId !== requestRef.current) return;
         setList(matches);
         setStatus("ready");
       })
       .catch((reason: unknown) => {
-        if (cancelled) return;
+        if (requestId !== requestRef.current) return;
         setError(reason instanceof MatchesApiError ? reason.message : "Could not load recent matches.");
         setStatus("error");
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    loadMatches();
+    return () => { requestRef.current += 1; };
+  }, [loadMatches]);
+
+  const retry = () => {
+    setError(null);
+    setStatus("loading");
+    loadMatches();
+  };
 
   return (
     <>
@@ -65,6 +74,7 @@ function RecentMatchesModalBody({ onClose, onOpenMatch }: Omit<RecentMatchesModa
           <div className="recent-matches__error" role="alert">
             <p className="recent-matches__error-title">Could not load recent matches</p>
             <p className="recent-matches__error-body">{error ?? "The matches endpoint is unreachable."}</p>
+            <button type="button" className="modal__ghost" onClick={retry}>Try again</button>
           </div>
         ) : list.length === 0 ? (
           <p className="recent-matches__status">

@@ -40,7 +40,7 @@ export function CancelledPanel({ state, onNewMatch }: CancelledPanelProps) {
 
         <div className="flex flex-col items-center gap-4 sm:items-end">
           <button type="button" onClick={onNewMatch} className="start-button">
-            <span>Start match</span>
+            <span>Back to setup</span>
             <span aria-hidden="true" className="font-display text-base leading-none">↗</span>
           </button>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-left text-[11px] uppercase tracking-[0.18em] text-arena-300">

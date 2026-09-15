@@ -35,7 +35,7 @@ export function ErrorPanel({ state, onNewMatch }: ErrorPanelProps) {
         </div>
 
         <button type="button" onClick={onNewMatch} className="start-button">
-          <span>Start match</span>
+          <span>Try again</span>
           <span aria-hidden="true" className="font-display text-base leading-none">
             ↗
           </span>

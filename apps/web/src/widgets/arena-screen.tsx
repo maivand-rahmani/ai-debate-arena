@@ -14,9 +14,10 @@ import { toDebateRequest, type MatchDraft } from "@/features/create-debate/draft
 import { SIDE_POSITIONS } from "@/shared/config/sides";
 import { useDebateStream } from "@/features/run-debate/lib/use-debate-stream";
 import { isInMatch } from "@/features/run-debate/lib/reducer";
+import { performLiveRejudge } from "@/features/run-debate/lib/live-rejudge";
 import { MatchHistoryDrawer } from "@/features/run-debate/ui/match-history/match-history-drawer";
 import { exportJsonBlob } from "@/features/run-debate/ui/match-history/match-actions";
-import type { RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
+import type { ExportStatus, RejudgeStatus } from "@/features/run-debate/ui/match-history/match-actions";
 import { IdleHero, RecentMatchesModal, SetupModal } from "@/features/arena/idle";
 import { useMatchPlayback } from "@/features/arena/match/use-match-playback";
 import { ArenaFrame } from "@/widgets/broadcast-stage";
@@ -43,6 +44,9 @@ export default function ArenaScreen() {
   const [matchDraft, setMatchDraft] = useState<MatchDraft | null>(null);
   const [rejudgeStatus, setRejudgeStatus] = useState<RejudgeStatus>("idle");
   const [rejudgeError, setRejudgeError] = useState<string | undefined>(undefined);
+  const [refreshError, setRefreshError] = useState<string | undefined>(undefined);
+  const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
+  const [exportError, setExportError] = useState<string | undefined>(undefined);
   const [setupOpen, setSetupOpen] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
   const [recentCount, setRecentCount] = useState(0);
@@ -88,6 +92,9 @@ export default function ArenaScreen() {
       setMatchDraft(draft);
       setRejudgeStatus("idle");
       setRejudgeError(undefined);
+      setRefreshError(undefined);
+      setExportStatus("idle");
+      setExportError(undefined);
       start(toDebateRequest(draft));
     },
     [start],
@@ -98,6 +105,10 @@ export default function ArenaScreen() {
     setMatchDraft(null);
     setRejudgeStatus("idle");
     setRejudgeError(undefined);
+    setRefreshError(undefined);
+    setExportStatus("idle");
+    setExportError(undefined);
+    setSetupOpen(true);
   }, [reset]);
 
   const handleEndMatch = useCallback(() => {
@@ -106,6 +117,9 @@ export default function ArenaScreen() {
       setMatchDraft(null);
       setRejudgeStatus("idle");
       setRejudgeError(undefined);
+      setRefreshError(undefined);
+      setExportStatus("idle");
+      setExportError(undefined);
       return;
     }
     cancel();
@@ -113,12 +127,15 @@ export default function ArenaScreen() {
 
   const handleOpenHistory = useCallback(() => setDrawerOpen(true), []);
   const handleExportJson = useCallback(async (matchId: string) => {
+    setExportStatus("flying");
+    setExportError(undefined);
     try {
       const record = await fetchMatch(matchId);
       exportJsonBlob(record, matchId);
+      setExportStatus("idle");
     } catch (error) {
-      setRejudgeStatus("error");
-      setRejudgeError(messageFromError(error));
+      setExportStatus("error");
+      setExportError(messageFromError(error));
     }
   }, []);
 
@@ -126,23 +143,19 @@ export default function ArenaScreen() {
     async (matchId: string) => {
       setRejudgeStatus("flying");
       setRejudgeError(undefined);
-      try {
-        const result = await rejudgeMatch(matchId);
-        const record = await fetchMatch(matchId);
-        if (record.verdict) {
-          dispatch({
-            type: "rejudge-success",
-            verdict: record.verdict,
-            judgedAt: result.judgedAt,
-          });
-        }
-        setRejudgeStatus("idle");
-        return { judgedAt: result.judgedAt, winner: result.summary.winner };
-      } catch (error) {
-        setRejudgeStatus("error");
-        setRejudgeError(messageFromError(error));
-        throw error;
-      }
+      setRefreshError(undefined);
+      const result = await performLiveRejudge(matchId, {
+        rejudge: rejudgeMatch,
+        refresh: fetchMatch,
+        onVerdict: (verdict, judgedAt) =>
+          dispatch({ type: "rejudge-success", verdict, judgedAt }),
+        onRefreshFailure: (error) => setRefreshError(messageFromError(error)),
+        onFailure: (error) => setRejudgeError(messageFromError(error)),
+      });
+      setRejudgeStatus(result.ok ? "idle" : "error");
+      return result.ok
+        ? { judgedAt: result.judgedAt, winner: result.winner }
+        : undefined;
     },
     [dispatch],
   );
@@ -166,6 +179,9 @@ export default function ArenaScreen() {
         canRejudge: state.status === "finished" || state.status === "error" || state.status === "cancelled",
         rejudgeStatus,
         rejudgeError,
+        refreshError,
+        exportStatus,
+        exportError,
         judgedAt: state.judgedAt,
         onExportJson: handleExportJson,
         onRejudge: handleRejudge,
